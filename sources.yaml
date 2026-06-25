@@ -1,0 +1,941 @@
+# glb-news-rss 매체 카탈로그
+# 실행계획_v3.md §2 (총 74개 매체) 기준
+#
+# 구조:
+#   sources:
+#     - media_name: 표시명
+#       country: 주 국가 코드 (KR/US/CN/JP/ID/VN/KH/MM/IN/GLOBAL)
+#       language: 언어 코드
+#       tier: 1 또는 2
+#       categories: [GLOBAL_GENERAL, GLOBAL_ECONOMY, KR, US, ...]
+#       feeds:
+#         - section: business
+#           url: https://...
+#
+# 우회 전략: 직접 RSS가 404/403/timeout인 경우 Google News 검색 RSS로 대체
+#   영문: ?q=site:DOMAIN+when:1d&hl=en-US&gl=US&ceid=US:en
+#   한국어: ?q=site:DOMAIN+when:1d&hl=ko&gl=KR&ceid=KR:ko
+#   인도네시아어: ?q=site:DOMAIN+when:1d&hl=id&gl=ID&ceid=ID:id
+
+sources:
+  # ============================================================
+  # 글로벌 종합 (4): BBC, CNN, NYT, Guardian
+  # ============================================================
+  - media_name: BBC
+    country: GLOBAL
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL]
+    feeds:
+      - section: world
+        url: https://feeds.bbci.co.uk/news/world/rss.xml
+      - section: business
+        url: https://feeds.bbci.co.uk/news/business/rss.xml
+
+  - media_name: CNN
+    country: GLOBAL
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL]
+    feeds:
+      # 직접 RSS(rss.cnn.com)는 2017년 이후 업데이트 없음 → Google News 우회
+      - section: world
+        url: https://news.google.com/rss/search?q=site:cnn.com+world+when:1d&hl=en-US&gl=US&ceid=US:en
+      - section: business
+        url: https://news.google.com/rss/search?q=site:cnn.com+business+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: NYT
+    country: US
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL, US]
+    feeds:
+      - section: world
+        url: https://rss.nytimes.com/services/xml/rss/nyt/World.xml
+      - section: business
+        url: https://rss.nytimes.com/services/xml/rss/nyt/Business.xml
+      - section: economy
+        url: https://rss.nytimes.com/services/xml/rss/nyt/Economy.xml
+
+  - media_name: Guardian
+    country: GLOBAL
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL]
+    feeds:
+      - section: world
+        url: https://www.theguardian.com/world/rss
+      - section: business
+        url: https://www.theguardian.com/uk/business/rss
+
+  # ============================================================
+  # 통신사 (2): Reuters, AP
+  # ============================================================
+  - media_name: Reuters
+    country: GLOBAL
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL]
+    feeds:
+      # 공식 RSS는 2020년대에 사실상 폐쇄. Google News 우회 피드 사용.
+      - section: world
+        url: https://news.google.com/rss/search?q=site:reuters.com+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: AP
+    country: GLOBAL
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL]
+    feeds:
+      # AP도 공식 RSS 폐쇄. Google News 우회.
+      - section: world
+        url: https://news.google.com/rss/search?q=site:apnews.com+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  # ============================================================
+  # 경제 (4): WSJ, CNBC, Bloomberg, FT
+  # ============================================================
+  - media_name: WSJ
+    country: US
+    language: en
+    tier: 2
+    categories: [GLOBAL_ECONOMY, US]
+    feeds:
+      # feeds.a.dj.com RSS는 2025-01 이후 업데이트 없음 → Google News 우회
+      - section: world
+        url: https://news.google.com/rss/search?q=site:wsj.com+world+when:1d&hl=en-US&gl=US&ceid=US:en
+      - section: business
+        url: https://news.google.com/rss/search?q=site:wsj.com+business+when:1d&hl=en-US&gl=US&ceid=US:en
+      - section: markets
+        url: https://news.google.com/rss/search?q=site:wsj.com+markets+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: CNBC
+    country: US
+    language: en
+    tier: 1
+    categories: [GLOBAL_ECONOMY, US]
+    feeds:
+      - section: top
+        url: https://www.cnbc.com/id/100003114/device/rss/rss.html
+      - section: world
+        url: https://www.cnbc.com/id/100727362/device/rss/rss.html
+      - section: economy
+        url: https://www.cnbc.com/id/20910258/device/rss/rss.html
+
+  - media_name: Bloomberg
+    country: US
+    language: en
+    tier: 2
+    categories: [GLOBAL_ECONOMY, US]
+    feeds:
+      # Bloomberg 공식 RSS는 사실상 폐쇄. Google News 우회.
+      - section: business
+        url: https://news.google.com/rss/search?q=site:bloomberg.com+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: FT
+    country: GLOBAL
+    language: en
+    tier: 2
+    categories: [GLOBAL_ECONOMY]
+    feeds:
+      - section: home
+        url: https://www.ft.com/rss/home
+      - section: world
+        url: https://www.ft.com/world?format=rss
+
+  # ============================================================
+  # 아시아 (6): Al Jazeera, SCMP, CNA, Straits Times, Times of India, Nikkei Asia
+  # ============================================================
+  - media_name: Al Jazeera
+    country: GLOBAL
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL]
+    feeds:
+      - section: all
+        url: https://www.aljazeera.com/xml/rss/all.xml
+
+  - media_name: SCMP
+    country: CN
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL, CN]
+    feeds:
+      - section: hong-kong
+        url: https://www.scmp.com/rss/91/feed
+      - section: china
+        url: https://www.scmp.com/rss/4/feed
+      - section: business
+        url: https://www.scmp.com/rss/92/feed
+
+  - media_name: Channel News Asia
+    country: GLOBAL
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL]
+    feeds:
+      - section: latest
+        url: https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml
+      - section: business
+        url: https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml&category=6936
+
+  - media_name: Straits Times
+    country: GLOBAL
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL]
+    feeds:
+      - section: world
+        url: https://www.straitstimes.com/news/world/rss.xml
+      - section: business
+        url: https://www.straitstimes.com/news/business/rss.xml
+
+  - media_name: Times of India (Global)
+    country: IN
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL, IN]
+    feeds:
+      # 직접 RSS ConnectTimeout → Google News 우회
+      - section: world
+        url: https://news.google.com/rss/search?q=site:timesofindia.indiatimes.com+world+when:1d&hl=en-US&gl=US&ceid=US:en
+      - section: business
+        url: https://news.google.com/rss/search?q=site:timesofindia.indiatimes.com+business+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Nikkei Asia
+    country: JP
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL, JP]
+    feeds:
+      # 피드 자체에 pubDate 없음 → 기사는 수집되나 날짜 표시 안 됨 (정상)
+      - section: top
+        url: https://asia.nikkei.com/rss/feed/nar
+
+  # ============================================================
+  # 유럽 (2): DW, France 24
+  # ============================================================
+  - media_name: DW
+    country: GLOBAL
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL]
+    feeds:
+      - section: top
+        url: https://rss.dw.com/rdf/rss-en-all
+      - section: business
+        url: https://rss.dw.com/rdf/rss-en-bus
+
+  - media_name: France 24
+    country: GLOBAL
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL]
+    feeds:
+      - section: top
+        url: https://www.france24.com/en/rss
+      - section: business
+        url: https://www.france24.com/en/business/rss
+
+  # ============================================================
+  # 영국 / 런던 (5): Bank of England, FT UK, Telegraph, City A.M., Sky News
+  #   KB 런던지점 거점 모니터링용. 직접 RSS 불안정/페이월 → Google News 우회 통일.
+  # ============================================================
+  - media_name: Bank of England
+    country: GB
+    language: en
+    tier: 1
+    categories: [GB, GLOBAL_ECONOMY]
+    feeds:
+      # 영란은행 — 기준금리·MPC·인플레이션 (런던지점 핵심 소스). 직접 RSS 불안정 → Google News 우회
+      - section: policy
+        url: https://news.google.com/rss/search?q=site:bankofengland.co.uk+(rate+OR+policy+OR+inflation+OR+MPC+OR+statement)+when:7d&hl=en-GB&gl=GB&ceid=GB:en
+
+  - media_name: FT UK
+    country: GB
+    language: en
+    tier: 1
+    categories: [GB, GLOBAL_ECONOMY]
+    feeds:
+      # FT 런던 본사 — UK 경제·금융 (기존 GLOBAL FT와 별도, 페이월 → Google News 우회)
+      - section: uk
+        url: https://news.google.com/rss/search?q=site:ft.com+(UK+OR+London+OR+Britain+OR+BoE+OR+sterling)+when:1d&hl=en-GB&gl=GB&ceid=GB:en
+
+  - media_name: Telegraph
+    country: GB
+    language: en
+    tier: 1
+    categories: [GB]
+    feeds:
+      - section: business
+        url: https://news.google.com/rss/search?q=site:telegraph.co.uk+(business+OR+economy+OR+markets+OR+bank)+when:1d&hl=en-GB&gl=GB&ceid=GB:en
+
+  - media_name: City AM
+    country: GB
+    language: en
+    tier: 2
+    categories: [GB]
+    feeds:
+      # 런던 금융가 전문 일간지
+      - section: markets
+        url: https://news.google.com/rss/search?q=site:cityam.com+when:1d&hl=en-GB&gl=GB&ceid=GB:en
+
+  - media_name: Sky News UK
+    country: GB
+    language: en
+    tier: 2
+    categories: [GB]
+    feeds:
+      - section: business
+        url: https://news.google.com/rss/search?q=site:news.sky.com+(business+OR+economy+OR+money)+when:1d&hl=en-GB&gl=GB&ceid=GB:en
+
+  # ============================================================
+  # 시사·비즈니스 (2): Time, Forbes
+  # ============================================================
+  - media_name: Time
+    country: GLOBAL
+    language: en
+    tier: 2
+    categories: [GLOBAL_GENERAL]
+    feeds:
+      - section: top
+        url: https://time.com/feed/
+
+  - media_name: Forbes
+    country: GLOBAL
+    language: en
+    tier: 2
+    categories: [GLOBAL_ECONOMY]
+    feeds:
+      - section: business
+        url: https://www.forbes.com/business/feed/
+      # markets 섹션 피드 404 → Google News 우회
+      - section: markets
+        url: https://news.google.com/rss/search?q=site:forbes.com+markets+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  # ============================================================
+  # 미국: Washington Post, Politico
+  # (NYT/WSJ/CNBC/Bloomberg는 위 글로벌에서 정의됨)
+  # ============================================================
+  - media_name: Washington Post
+    country: US
+    language: en
+    tier: 1
+    categories: [US]
+    feeds:
+      # 직접 RSS ConnectTimeout → Google News 우회
+      - section: world
+        url: https://news.google.com/rss/search?q=site:washingtonpost.com+world+when:1d&hl=en-US&gl=US&ceid=US:en
+      - section: business
+        url: https://news.google.com/rss/search?q=site:washingtonpost.com+business+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Politico
+    country: US
+    language: en
+    tier: 2
+    categories: [US]
+    feeds:
+      # 직접 RSS 403 차단 → Google News 우회
+      - section: top
+        url: https://news.google.com/rss/search?q=site:politico.com+when:1d&hl=en-US&gl=US&ceid=US:en
+      - section: economy
+        url: https://news.google.com/rss/search?q=site:politico.com+economy+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  # ============================================================
+  # 중국 (6): Xinhua, Global Times, China Daily, SCMP(중복), Caixin, People's Daily
+  # ============================================================
+  - media_name: Xinhua
+    country: CN
+    language: en
+    tier: 1
+    categories: [CN]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=site:xinhuanet.com+OR+site:news.cn+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Global Times
+    country: CN
+    language: en
+    tier: 2
+    categories: [CN]
+    feeds:
+      # globaltimes.cn/rss/china.xml, /rss/business.xml → 404 → Google News 우회
+      - section: china
+        url: https://news.google.com/rss/search?q=site:globaltimes.cn+when:1d&hl=en-US&gl=US&ceid=US:en
+      - section: business
+        url: https://news.google.com/rss/search?q=site:globaltimes.cn+business+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: China Daily
+    country: CN
+    language: en
+    tier: 1
+    categories: [CN]
+    feeds:
+      # chinadaily.com.cn RSS는 2017년 이후 업데이트 없음 → Google News 우회
+      - section: china
+        url: https://news.google.com/rss/search?q=site:chinadaily.com.cn+when:1d&hl=en-US&gl=US&ceid=US:en
+      - section: business
+        url: https://news.google.com/rss/search?q=site:chinadaily.com.cn+business+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Caixin Global
+    country: CN
+    language: en
+    tier: 1
+    categories: [CN]
+    feeds:
+      # caixinglobal.com/rss/feed.xml → 404 → Google News 우회
+      - section: top
+        url: https://news.google.com/rss/search?q=site:caixinglobal.com+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: People's Daily
+    country: CN
+    language: en
+    tier: 2
+    categories: [CN]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=site:peoplesdaily.com.cn+OR+site:en.people.cn+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  # ============================================================
+  # 일본 (6): NHK World, Nikkei Asia(중복), Japan Times, Kyodo, Asahi, Mainichi
+  # ============================================================
+  - media_name: NHK World
+    country: JP
+    language: en
+    tier: 1
+    categories: [JP]
+    feeds:
+      # nhk.or.jp/nhkworld/en/news/feeds/ → 404 → Google News 우회
+      - section: top
+        url: https://news.google.com/rss/search?q=site:nhk.or.jp/nhkworld+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Japan Times
+    country: JP
+    language: en
+    tier: 1
+    categories: [JP]
+    feeds:
+      - section: top
+        url: https://www.japantimes.co.jp/feed/
+      # business 섹션 403 차단 → Google News 우회
+      - section: business
+        url: https://news.google.com/rss/search?q=site:japantimes.co.jp+business+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Kyodo News
+    country: JP
+    language: en
+    tier: 1
+    categories: [JP]
+    feeds:
+      # english.kyodonews.net/rss/news.xml → 404 → Google News 우회
+      - section: top
+        url: https://news.google.com/rss/search?q=site:english.kyodonews.net+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Asahi Shimbun
+    country: JP
+    language: en
+    tier: 1
+    categories: [JP]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=site:asahi.com/ajw+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Mainichi
+    country: JP
+    language: en
+    tier: 2
+    categories: [JP]
+    feeds:
+      # mainichi.jp/english/rss/etop.rss → 404 → Google News 우회
+      - section: top
+        url: https://news.google.com/rss/search?q=site:mainichi.jp/english+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  # ============================================================
+  # 인도네시아 (6): Antara, Jakarta Post, Bisnis, Kompas, Tempo, Detikcom
+  # ============================================================
+  - media_name: Antara News
+    country: ID
+    language: en
+    tier: 1
+    categories: [ID]
+    feeds:
+      - section: top
+        url: https://en.antaranews.com/rss/news.xml
+      # economics 섹션 404 → Google News 우회
+      - section: economics
+        url: https://news.google.com/rss/search?q=site:en.antaranews.com+economics+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: The Jakarta Post
+    country: ID
+    language: en
+    tier: 1
+    categories: [ID]
+    feeds:
+      # thejakartapost.com/rss → 404 → Google News 우회
+      - section: top
+        url: https://news.google.com/rss/search?q=site:thejakartapost.com+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Bisnis Indonesia
+    country: ID
+    language: id
+    tier: 2
+    categories: [ID]
+    feeds:
+      # bisnis.com/rss → 403 차단 → Google News 우회 (인도네시아어 로케일)
+      - section: top
+        url: https://news.google.com/rss/search?q=site:bisnis.com+when:1d&hl=id&gl=ID&ceid=ID:id
+
+  - media_name: Kompas
+    country: ID
+    language: id
+    tier: 1
+    categories: [ID]
+    feeds:
+      # kompas.com/rss → 404 → Google News 우회 (인도네시아어 로케일)
+      - section: top
+        url: https://news.google.com/rss/search?q=site:kompas.com+when:1d&hl=id&gl=ID&ceid=ID:id
+
+  - media_name: Tempo
+    country: ID
+    language: en
+    tier: 1
+    categories: [ID]
+    feeds:
+      # en.tempo.co/rss → 404 → Google News 우회
+      - section: top
+        url: https://news.google.com/rss/search?q=site:en.tempo.co+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Detikcom
+    country: ID
+    language: id
+    tier: 1
+    categories: [ID]
+    feeds:
+      # rss.detik.com → ConnectionError → Google News 우회 (인도네시아어 로케일)
+      - section: top
+        url: https://news.google.com/rss/search?q=site:detik.com+when:1d&hl=id&gl=ID&ceid=ID:id
+
+  # ============================================================
+  # 베트남 (6): VnExpress, Vietnam News, Tuoi Tre, Saigon Times, VietnamPlus, VTV
+  # ============================================================
+  - media_name: VnExpress International
+    country: VN
+    language: en
+    tier: 2
+    categories: [VN]
+    feeds:
+      - section: top
+        url: https://e.vnexpress.net/rss/news.rss
+      - section: business
+        url: https://e.vnexpress.net/rss/business.rss
+
+  - media_name: Vietnam News
+    country: VN
+    language: en
+    tier: 2
+    categories: [VN]
+    feeds:
+      # vietnamnews.vn/rss/all.rss → 200이나 기사 0개 → Google News 우회
+      - section: top
+        url: https://news.google.com/rss/search?q=site:vietnamnews.vn+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Vietnam Investment Review
+    country: VN
+    language: en
+    tier: 2
+    categories: [VN]
+    feeds:
+      # 베트남 투자·경제 전문지
+      - section: top
+        url: https://news.google.com/rss/search?q=site:vir.com.vn+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: VietnamPlus
+    country: VN
+    language: en
+    tier: 2
+    categories: [VN]
+    feeds:
+      - section: top
+        url: https://en.vietnamplus.vn/rss/home.rss
+
+  - media_name: VTV News
+    country: VN
+    language: en
+    tier: 2
+    categories: [VN]
+    feeds:
+      # 기존 쿼리 site:vtv.vn/en → 경로 필터 미지원으로 0건 → 도메인만 사용
+      - section: top
+        url: https://news.google.com/rss/search?q=site:vtv.vn+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  # ============================================================
+  # 캄보디아 (7) — Tier 2
+  # ============================================================
+  - media_name: Phnom Penh Post
+    country: KH
+    language: en
+    tier: 2
+    categories: [KH]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=site:phnompenhpost.com+when:2d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Khmer Times
+    country: KH
+    language: en
+    tier: 2
+    categories: [KH]
+    feeds:
+      # khmertimeskh.com/feed/ → 403 차단 → Google News 우회
+      - section: top
+        url: https://news.google.com/rss/search?q=site:khmertimeskh.com+when:2d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Cambodianess
+    country: KH
+    language: en
+    tier: 2
+    categories: [KH]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=site:cambodianess.com+when:2d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: AKP
+    country: KH
+    language: en
+    tier: 2
+    categories: [KH]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=site:akp.gov.kh+when:2d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Kiripost
+    country: KH
+    language: en
+    tier: 2
+    categories: [KH]
+    feeds:
+      # kiripost.com/rss.xml → XML invalid token 오류 → Google News 우회
+      - section: top
+        url: https://news.google.com/rss/search?q=site:kiripost.com+when:2d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: The Diplomat (Cambodia)
+    country: KH
+    language: en
+    tier: 1
+    categories: [KH]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=site:thediplomat.com+cambodia&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Nikkei Asia (Cambodia)
+    country: KH
+    language: en
+    tier: 1
+    categories: [KH]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=site:asia.nikkei.com+cambodia&hl=en-US&gl=US&ceid=US:en
+
+  # ============================================================
+  # 미얀마 (9) — Tier 2
+  # ============================================================
+  - media_name: The Irrawaddy
+    country: MM
+    language: en
+    tier: 2
+    categories: [MM]
+    feeds:
+      # irrawaddy.com/feed → 403 차단 → Google News 우회
+      - section: top
+        url: https://news.google.com/rss/search?q=site:irrawaddy.com+when:7d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Myanmar Now
+    country: MM
+    language: en
+    tier: 2
+    categories: [MM]
+    feeds:
+      - section: top
+        url: https://myanmar-now.org/en/feed/
+
+  - media_name: Mizzima
+    country: MM
+    language: en
+    tier: 2
+    categories: [MM]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=site:mizzima.com+when:7d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Eleven Media
+    country: MM
+    language: en
+    tier: 2
+    categories: [MM]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=site:elevenmyanmar.com+when:7d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: DVB English
+    country: MM
+    language: en
+    tier: 2
+    categories: [MM]
+    feeds:
+      - section: top
+        url: https://english.dvb.no/feed/
+
+  - media_name: The Diplomat (Myanmar)
+    country: MM
+    language: en
+    tier: 1
+    categories: [MM]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=site:thediplomat.com+myanmar&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Nikkei Asia (Myanmar)
+    country: MM
+    language: en
+    tier: 1
+    categories: [MM]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=site:asia.nikkei.com+myanmar&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: RFA Myanmar
+    country: MM
+    language: en
+    tier: 1
+    categories: [MM]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=site:rfa.org+myanmar+economy&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: BBC Myanmar
+    country: MM
+    language: en
+    tier: 1
+    categories: [MM]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=site:bbc.com+myanmar+economy&hl=en-US&gl=US&ceid=US:en
+
+  # ============================================================
+  # 인도 (6): Times of India(중복), Hindustan Times, The Hindu, Economic Times, Mint, Business Standard
+  # ============================================================
+  - media_name: Hindustan Times
+    country: IN
+    language: en
+    tier: 1
+    categories: [IN]
+    feeds:
+      - section: world
+        url: https://www.hindustantimes.com/feeds/rss/world-news/rssfeed.xml
+      - section: business
+        url: https://www.hindustantimes.com/feeds/rss/business/rssfeed.xml
+
+  - media_name: The Hindu
+    country: IN
+    language: en
+    tier: 1
+    categories: [IN]
+    feeds:
+      - section: top
+        url: https://www.thehindu.com/feeder/default.rss
+      - section: business
+        url: https://www.thehindu.com/business/feeder/default.rss
+
+  - media_name: Economic Times
+    country: IN
+    language: en
+    tier: 1
+    categories: [IN]
+    feeds:
+      # 직접 RSS ConnectTimeout → Google News 우회
+      - section: top
+        url: https://news.google.com/rss/search?q=site:economictimes.indiatimes.com+when:1d&hl=en-US&gl=US&ceid=US:en
+      - section: markets
+        url: https://news.google.com/rss/search?q=site:economictimes.indiatimes.com+markets+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Mint
+    country: IN
+    language: en
+    tier: 1
+    categories: [IN]
+    feeds:
+      - section: top
+        url: https://www.livemint.com/rss/news
+      - section: markets
+        url: https://www.livemint.com/rss/markets
+
+  - media_name: Business Standard
+    country: IN
+    language: en
+    tier: 1
+    categories: [IN]
+    feeds:
+      # 직접 RSS 403 차단 → Google News 우회
+      - section: top
+        url: https://news.google.com/rss/search?q=site:business-standard.com+when:1d&hl=en-US&gl=US&ceid=US:en
+      - section: economy
+        url: https://news.google.com/rss/search?q=site:business-standard.com+economy+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  # ============================================================
+  # 공식 기관 Tier 0 — 수집 비활성화 (active: false)
+  # RSS 품질 문제(노이즈·로그인 페이지·환율공시 등)로 수집 중단.
+  # 기존 DB 데이터는 유지. 재활성화 시 active: true로 변경 후 init 실행.
+  # ============================================================
+
+  # --- 미국 ---
+  - media_name: Federal Reserve
+    country: US
+    language: en
+    tier: 0
+    active: false
+    categories: [US, OFFICIAL]
+    feeds:
+      - section: monetary_policy
+        url: https://www.federalreserve.gov/feeds/press_monetary.xml
+
+  # --- 일본 ---
+  - media_name: Bank of Japan (Official)
+    country: JP
+    language: en
+    tier: 0
+    active: false
+    categories: [JP, OFFICIAL]
+    feeds:
+      - section: press_releases
+        url: https://news.google.com/rss/search?q=site:boj.or.jp+when:7d&hl=en-US&gl=US&ceid=US:en
+
+  # --- 인도 ---
+  - media_name: Reserve Bank of India (Official)
+    country: IN
+    language: en
+    tier: 0
+    active: false
+    categories: [IN, OFFICIAL]
+    feeds:
+      - section: press_releases
+        url: https://news.google.com/rss/search?q=site:rbi.org.in+(monetary+policy+OR+rate+OR+inflation+OR+regulation+OR+circular)+when:7d&hl=en-US&gl=US&ceid=US:en
+
+  # --- 인도네시아 ---
+  - media_name: Bank Indonesia (Official)
+    country: ID
+    language: en
+    tier: 0
+    active: false
+    categories: [ID, OFFICIAL]
+    feeds:
+      - section: press_releases
+        url: https://news.google.com/rss/search?q=site:bi.go.id+(monetary+OR+rate+OR+inflation+OR+policy+OR+rupiah)+when:7d&hl=en-US&gl=US&ceid=US:en
+
+  # --- 베트남 ---
+  - media_name: State Bank of Vietnam (Official)
+    country: VN
+    language: en
+    tier: 0
+    active: false
+    categories: [VN, OFFICIAL]
+    feeds:
+      - section: press_releases
+        url: https://news.google.com/rss/search?q=site:sbv.gov.vn+when:7d&hl=en-US&gl=US&ceid=US:en
+
+  # --- 캄보디아 ---
+  - media_name: National Bank of Cambodia (Official)
+    country: KH
+    language: en
+    tier: 0
+    active: false
+    categories: [KH, OFFICIAL]
+    feeds:
+      - section: press_releases
+        url: https://news.google.com/rss/search?q=site:nbc.gov.kh+when:7d&hl=en-US&gl=US&ceid=US:en
+
+  # --- 중국 ---
+  - media_name: PBOC (Official)
+    country: CN
+    language: en
+    tier: 0
+    active: false
+    categories: [CN, OFFICIAL]
+    feeds:
+      - section: press_releases
+        url: https://news.google.com/rss/search?q=site:pbc.gov.cn+when:7d&hl=en-US&gl=US&ceid=US:en
+
+  # ============================================================
+  # 한국 공식 기관 Tier 0 — 수집 비활성화
+  # ============================================================
+  - media_name: 한국은행 (Official)
+    country: KR
+    language: ko
+    tier: 0
+    active: false
+    categories: [KR, OFFICIAL]
+    feeds:
+      - section: press_releases
+        url: https://news.google.com/rss/search?q=site:bok.or.kr+when:7d&hl=ko&gl=KR&ceid=KR:ko
+
+  - media_name: 기획재정부 (Official)
+    country: KR
+    language: ko
+    tier: 0
+    active: false
+    categories: [KR, OFFICIAL]
+    feeds:
+      - section: press_releases
+        url: https://news.google.com/rss/search?q=site:moef.go.kr+when:7d&hl=ko&gl=KR&ceid=KR:ko
+
+  - media_name: 금융위원회 (Official)
+    country: KR
+    language: ko
+    tier: 0
+    active: false
+    categories: [KR, OFFICIAL]
+    feeds:
+      - section: press_releases
+        url: https://news.google.com/rss/search?q=site:fsc.go.kr+when:7d&hl=ko&gl=KR&ceid=KR:ko
+
+  # ============================================================
+  # 국제기구 (4): IMF, World Bank, ADB, BIS
+  # 금융기관 해외사업 담당자가 최우선 참고하는 공신력 있는 자료.
+  # when:7d — 보고서·성명은 일별이 아닌 주별로 발행
+  # ============================================================
+  - media_name: IMF
+    country: GLOBAL
+    language: en
+    tier: 1
+    categories: [GLOBAL_ECONOMY]
+    feeds:
+      # 보도자료·성명 키워드 한정 (단순 웹페이지 노이즈 방지)
+      - section: news
+        url: https://news.google.com/rss/search?q=site:imf.org+(report+OR+statement+OR+outlook+OR+policy+OR+debt)+when:7d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: World Bank
+    country: GLOBAL
+    language: en
+    tier: 1
+    categories: [GLOBAL_ECONOMY]
+    feeds:
+      - section: news
+        url: https://news.google.com/rss/search?q=site:worldbank.org+(report+OR+outlook+OR+economy+OR+growth+OR+development)+when:7d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: ADB
+    country: GLOBAL
+    language: en
+    tier: 1
+    categories: [GLOBAL_ECONOMY]
+    feeds:
+      # 아시아개발은행 — 동남아 대상 대출·보고서 핵심 소스
+      - section: news
+        url: https://news.google.com/rss/search?q=site:adb.org+(report+OR+outlook+OR+loan+OR+finance+OR+economy)+when:7d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: BIS
+    country: GLOBAL
+    language: en
+    tier: 1
+    categories: [GLOBAL_ECONOMY]
+    feeds:
+      # 국제결제은행 — 직접 RSS 404 → Google News 우회
+      - section: news
+        url: https://news.google.com/rss/search?q=site:bis.org+(speech+OR+press+OR+report+OR+statement)+when:7d&hl=en-US&gl=US&ceid=US:en
