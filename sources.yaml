@@ -335,7 +335,7 @@ sources:
     country: HK
     language: en
     tier: 1
-    categories: [GLOBAL_GENERAL, HK, CN]
+    categories: [GLOBAL_GENERAL, HK]
     feeds:
       - section: hong-kong
         url: https://www.scmp.com/rss/91/feed
