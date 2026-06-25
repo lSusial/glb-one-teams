@@ -154,24 +154,11 @@ sources:
       - section: all
         url: https://www.aljazeera.com/xml/rss/all.xml
 
-  - media_name: SCMP
-    country: CN
-    language: en
-    tier: 1
-    categories: [GLOBAL_GENERAL, CN]
-    feeds:
-      - section: hong-kong
-        url: https://www.scmp.com/rss/91/feed
-      - section: china
-        url: https://www.scmp.com/rss/4/feed
-      - section: business
-        url: https://www.scmp.com/rss/92/feed
-
   - media_name: Channel News Asia
-    country: GLOBAL
+    country: SG
     language: en
     tier: 1
-    categories: [GLOBAL_GENERAL]
+    categories: [GLOBAL_GENERAL, SG]
     feeds:
       - section: latest
         url: https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml
@@ -179,10 +166,10 @@ sources:
         url: https://www.channelnewsasia.com/api/v1/rss-outbound-feed?_format=xml&category=6936
 
   - media_name: Straits Times
-    country: GLOBAL
+    country: SG
     language: en
     tier: 1
-    categories: [GLOBAL_GENERAL]
+    categories: [GLOBAL_GENERAL, SG]
     feeds:
       - section: world
         url: https://www.straitstimes.com/news/world/rss.xml
@@ -341,7 +328,77 @@ sources:
         url: https://news.google.com/rss/search?q=site:politico.com+economy+when:1d&hl=en-US&gl=US&ceid=US:en
 
   # ============================================================
-  # 중국 (6): Xinhua, Global Times, China Daily, SCMP(중복), Caixin, People's Daily
+  # 홍콩 (4): SCMP, RTHK, HK Free Press + HKMA(비활성)
+  #   KB 홍콩지점 거점 모니터링용
+  # ============================================================
+  - media_name: SCMP
+    country: HK
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL, HK, CN]
+    feeds:
+      - section: hong-kong
+        url: https://www.scmp.com/rss/91/feed
+      - section: china
+        url: https://www.scmp.com/rss/4/feed
+      - section: business
+        url: https://www.scmp.com/rss/92/feed
+
+  - media_name: RTHK
+    country: HK
+    language: en
+    tier: 1
+    categories: [HK]
+    feeds:
+      # 홍콩 공영방송 — 직접 RSS 확인됨
+      - section: top
+        url: https://rthk.hk/rthk/news/rss/e_expressnews_latest.xml
+
+  - media_name: HK Free Press
+    country: HK
+    language: en
+    tier: 2
+    categories: [HK]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=site:hongkongfp.com+when:1d&hl=en-US&gl=HK&ceid=HK:en
+
+  - media_name: HKMA (Official)
+    country: HK
+    language: en
+    tier: 0
+    active: false
+    categories: [HK, OFFICIAL]
+    feeds:
+      - section: press_releases
+        url: https://news.google.com/rss/search?q=site:hkma.gov.hk+(press+OR+statement+OR+rate+OR+policy)+when:7d&hl=en-US&gl=HK&ceid=HK:en
+
+  # ============================================================
+  # 싱가포르 (3): Straits Times(이동), CNA(이동), Business Times + MAS(비활성)
+  #   KB 싱가포르지점 거점 모니터링용
+  # ============================================================
+  - media_name: Business Times
+    country: SG
+    language: en
+    tier: 1
+    categories: [SG, GLOBAL_ECONOMY]
+    feeds:
+      # 싱가포르 경제·금융 전문지
+      - section: top
+        url: https://news.google.com/rss/search?q=site:businesstimes.com.sg+when:1d&hl=en-SG&gl=SG&ceid=SG:en
+
+  - media_name: MAS (Official)
+    country: SG
+    language: en
+    tier: 0
+    active: false
+    categories: [SG, OFFICIAL]
+    feeds:
+      - section: press_releases
+        url: https://news.google.com/rss/search?q=site:mas.gov.sg+(press+OR+statement+OR+rate+OR+policy+OR+regulation)+when:7d&hl=en-SG&gl=SG&ceid=SG:en
+
+  # ============================================================
+  # 중국 (6): Xinhua, Global Times, China Daily, Caixin, People's Daily
   # ============================================================
   - media_name: Xinhua
     country: CN
