@@ -1,0 +1,64 @@
+# taxonomy.yaml — 주제 분류(축 C) + 화면 라우팅(축 D) 단일 정의
+#
+# 설계: 데이터_AI_카테고리_설계.md §3
+# 수집기·AI·UI가 공유한다. 카테고리 추가/변경 시 이 파일만 수정.
+#
+# 사용처:
+#   - llm_ranker.py : AI가 topics 컬럼을 채울 때 허용 코드 집합 + 시드 후보
+#   - export_json.py: UI 필터(ui) 매핑
+#   - UI            : c(category) 필터 버튼과 1:1 (멀티라벨, includes 부분일치)
+
+# ── 주제 코드(축 C) ──────────────────────────────────────────────
+# code : AI topics 출력에 쓰는 표준 코드 (대문자)
+# ui   : UI 현지언론 필터 버튼 키 (finance/digital/esg/risk)
+# label: 화면 표시용 라벨 (ko/en)
+# seeds: 1차 후보 매칭용 키워드 (keyword_filter.FINANCE_KEYWORDS 그룹 재사용)
+topics:
+  - code: MARKET
+    ui: finance
+    label: { ko: "시장·경제", en: "Market·Economy" }
+    seeds: [interest rate, exchange rate, bond, yield, gdp, inflation,
+            monetary policy, central bank, fx, treasury, rate hike, rate cut]
+  - code: BANKING
+    ui: finance
+    label: { ko: "금융산업", en: "Banking" }
+    seeds: [bank, banking, lending, loan, deposit, npl, capital ratio,
+            basel, net interest margin, syndicated loan, microfinance]
+  - code: DIGITAL
+    ui: digital
+    label: { ko: "디지털", en: "Digital" }
+    seeds: [fintech, digital banking, payment, mobile banking, upi,
+            wallet, blockchain, ai, super app, open banking]
+  - code: ESG
+    ui: esg
+    label: { ko: "ESG", en: "ESG" }
+    seeds: [esg, sustainable finance, green bond, carbon, net zero,
+            climate, supply chain due diligence, transition finance]
+  - code: RISK
+    ui: risk
+    label: { ko: "규제·리스크", en: "Regulation·Risk" }
+    seeds: [regulation, supervision, compliance, sanction, fine, fraud,
+            default, money laundering, aml, stress test, bank failure]
+
+# ── 멀티라벨 규칙 ────────────────────────────────────────────────
+# 한 기사에 복수 코드 허용. UI는 c:'esg risk' 처럼 소문자 ui 키를 공백 연결해
+# includes() 부분일치로 필터링한다. (예: topics=[ESG,RISK] → c="esg risk")
+multilabel: true
+max_topics_per_article: 3
+
+# ── 화면 라우팅(축 D) ────────────────────────────────────────────
+# 분류·소스 메타 → 어느 화면(JSON)으로 보낼지. export_json.py가 참조.
+routing:
+  regulations:                 # 규제·금융기관 화면
+    source_category_any: [OFFICIAL]
+    topic_any: [RISK]
+  subsidiaries:                # 국외연결자회사 화면
+    country_any: [ID, KH]
+    source_type: IR
+  countries:                   # 현지언론 Intelligence 화면 (기본)
+    source_type: local_media
+    min_ai_score: 60           # config.AI_SCORE_ACTIVE_THRESHOLD 와 동일하게 유지
+  topics:                      # Topic Watch 화면
+    min_cluster_size: 2
+  brief:                       # 글로벌 동향 화면
+    weekly_top_cluster: true

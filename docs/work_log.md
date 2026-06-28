@@ -46,6 +46,60 @@
 #### 추가 파일
 - `sync_to_server.sh` — 맥북→서버 rsync 동기화 스크립트
 
+### 세션 4 (2026-06-27)
+
+#### 새 UI 레퍼런스 분석
+- 샘플 화면: https://uandix-kaneiko.github.io/global_One_Team/
+- 단일 HTML SPA(바닐라 JS), 콘텐츠 전량 하드코딩. 6개 탭(글로벌동향/현지언론/자회사/TopicWatch/규제/참여)
+- 화면이 요구하는 기사 필드: 매체·날짜·제목·요약(q)·KB시사점(k)·원문URL + 카테고리(c)
+- 메모: 샘플엔 오클랜드(NZ)가 추가됨(관리국 11개엔 없음) → 포함 여부 결정 필요
+
+#### 설계 문서 2종 작성
+- `화면분석_개발가이드.md` — 화면별 항목·콘텐츠 + 데이터 연동 로드맵
+- `데이터_AI_카테고리_설계.md` — 수집 데이터 / AI 산출물 / 3축 카테고리 설계
+
+#### 핵심 발견
+- `schema.sql`이 이미 AI 파이프라인 컬럼 예약: `llm_prefilter`, `ai_score`, `summary_ko`, `topics`, `ai_model` + `country_briefings` 테이블
+- 단, 이 레포엔 AI 모듈 없음(`requirements.txt`에 AI 라이브러리 없음). 실제 모듈은 prototype 레포에
+- UI 'KB 시사점(k)' 담을 컬럼 `kb_implication` **부재** → 신규 필요
+- "카테고리"가 3축 혼재: 지역(sources.yaml) / 관련성게이트(keyword_filter) / 주제(AI topics, 미구현)
+
+### 세션 5 (2026-06-27) — AI 레이어 구현 (코드 생성, 미실행)
+
+#### 신규 모듈
+- `taxonomy.yaml` + `taxonomy.py` — 주제코드 5종(MARKET/BANKING/DIGITAL/ESG/RISK), 시드매칭·검증·UI매핑
+- `config.py` / `db.py` — 공통 경로·임계값·모델, 연결·마이그레이션 헬퍼 (리팩토링)
+- `llm_provider.py` — 프로바이더 추상화 + Anthropic(실제)·OpenAI(스캐폴드)·Stub(오프라인) + 팩토리
+- `kb_network.py` — KB 거점 정의(시사점 맥락 주입용)
+- `llm_prefilter.py` — LLM 1차 관문(keep/drop)
+- `llm_ranker.py` — ai_score / summary_ko / topics / kb_implication 생성
+- `briefing.py` — 국가별 country_briefings 생성
+- `export_json.py` — DB → data/export/countries.json (UI 데이터 계약)
+
+#### 변경
+- `schema.sql` — articles_raw에 `kb_implication` 컬럼 추가
+- `requirements.txt` — anthropic 추가
+- `main.py` — config/db 사용, 서브커맨드 prefilter/rank/brief/ai/export 추가 (run은 수집 전용 유지)
+
+#### 상태
+- py_compile + 순수 헬퍼 검증 통과. **실제 실행·API 호출은 안 함** (ANTHROPIC_API_KEY 필요)
+- 모델 분리: prefilter=haiku, rank/brief=sonnet (config.py에서 조정)
+
+### 세션 6 (2026-06-27) — 수집·필터 점검 + 리팩토링
+
+#### 리팩토링 (동작 보존)
+- `config.py` — 수집 튜닝 상수(USER_AGENT·타임아웃·병렬수·재시도·GNews 해소) 일원화
+- `collector.py` — 위 상수 config 참조, `init_db`를 `db.open_conn` 경유(PRAGMA 일관)
+- `keyword_filter.py` — `ensure_filter_columns`/`ensure_dedup_column`을 `db.ensure_columns`로 위임(중복 제거)
+
+#### 점검 발견·수정 (필터 커버리지 갭)
+- 관리국 11개 중 **GB·HK·SG 누락** — `COUNTRY_KEYWORDS`/`KOREAN_COUNTRY_KEYWORDS`에 추가
+- GB/HK/SG **금융 신호(hang seng·ftse·hkma·MAS·gbp/hkd/sgd 등)가 `FINANCE_KEYWORDS`에도 누락** → 추가
+- 효과: 영국/홍콩/싱가포르 현지 금융기사 정상 통과(오프라인 테스트 확인). 스포츠·무관 거부 동작 보존
+
+#### 검증
+- py_compile + 필터 오프라인 단위테스트(합성 입력). 실제 네트워크 수집·AI 호출 미실행
+
 ---
 
 ## 현재 관리 국가 (KB 거점 기준)
@@ -82,7 +136,20 @@ python main.py run
 ---
 
 ## 다음 과제
-- [ ] 화면 구성 / 새 UI 설계 (glb-one-teams 기반)
+
+### 설계 (문서화 완료, 구현 대기) — 상세: `데이터_AI_카테고리_설계.md`
+- [ ] `taxonomy.yaml` 신설 — 주제코드 5종(MARKET/BANKING/DIGITAL/ESG/RISK) ↔ UI 필터 1:1 **(1순위)**
+- [ ] `articles_raw.kb_implication` 컬럼 추가 (UI KB 시사점) **(2순위)**
+- [ ] `llm_prefilter.py` / `llm_ranker.py` 이식 + 프로바이더 추상화 계층
+- [ ] AI 분류·요약 평가셋 구축 (프로바이더 비교 기준)
+
+### 수집원 보강
+- [ ] `OFFICIAL`/tier0 당국 피드 활성화 (규제 화면)
+- [ ] ID·KH 자회사 IR·공시 수집원 추가 (자회사 화면)
+- [ ] 거시지표(금리·환율) 피드 — 빅넘버용
+
+### 기타
+- [ ] 새 UI 데이터 연동 (현지언론 화면부터 엔드투엔드) — 상세: `화면분석_개발가이드.md`
 - [ ] AI 프로바이더 실험 (Anthropic 외)
 - [ ] 정기 수집 자동화 (맥북 cron 또는 스케줄러)
 - [ ] RTHK 피드 XML 오류 수정 (SAXParseException)

@@ -33,6 +33,8 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 
+import db
+
 log = logging.getLogger("keyword_filter")
 
 # ---------------------------------------------------------------------------
@@ -100,13 +102,18 @@ FINANCE_KEYWORDS: list[str] = [
     "rupee", "inr", "rupiah", "idr",
     "dong", "vnd", "riel", "khr", "kyat", "mmk",
     "us dollar", "usd",
+    "pound sterling", "sterling", "gbp",
+    "hong kong dollar", "hkd", "singapore dollar", "sgd",
     # 주요 주가지수·거래소
     "nikkei", "topix", "sensex", "nifty", "kospi", "kosdaq", "ihsg",
     "nasdaq", "s&p 500", "dow jones",
+    "hang seng", "straits times index", "ftse", "ftse 100", "hkex", "sgx",
     # 중앙은행·금융감독 (약어)
     "the fed", "federal reserve", "pboc", "boj", "rbi", "sebi",
     "bank of japan", "bank indonesia", "ojk",
     "people's bank of china", "reserve bank of india",
+    "bank of england", "boe", "hkma", "hong kong monetary authority",
+    "monetary authority of singapore",
     # 에너지·원자재·EV
     "oil price", "oil market", "crude oil", "natural gas", "gas price",
     "commodit",
@@ -182,7 +189,7 @@ FINANCE_KEYWORDS: list[str] = [
 ]
 
 # ---------------------------------------------------------------------------
-# ② 9개국 지명·기관·통화·인명 키워드
+# ② KB 거점국 지명·기관·통화·인명 키워드 (관리국 11개와 동기화)
 # ---------------------------------------------------------------------------
 COUNTRY_KEYWORDS: dict[str, list[str]] = {
     "KR": [
@@ -247,6 +254,24 @@ COUNTRY_KEYWORDS: dict[str, list[str]] = {
         "reserve bank of india", "rbi", "narendra modi", "sebi",
         "sensex", "nifty", "bse", "nse",
     ],
+    # ── 거점 추가국 (세션3 HK 분리·SG 추가 시 키워드 미동기화 → 점검에서 보완) ──
+    "GB": [
+        "united kingdom", "britain", "british", "england", "london",
+        "pound sterling", "sterling", "gbp",
+        "bank of england", "boe", "ftse",
+        "city of london", "downing street", "keir starmer",
+    ],
+    "HK": [
+        "hong kong", "hongkong", "hksar",
+        "hong kong dollar", "hkd", "hang seng", "hkex",
+        "hkma", "hong kong monetary authority", "john lee",
+    ],
+    "SG": [
+        "singapore", "singaporean",
+        "singapore dollar", "sgd", "straits times index", "sgx",
+        "monetary authority of singapore", "mas",
+        "temasek", "gic", "lawrence wong",
+    ],
 }
 
 # ---------------------------------------------------------------------------
@@ -296,6 +321,9 @@ KOREAN_COUNTRY_KEYWORDS: dict[str, list[str]] = {
     "KH": ["캄보디아", "캄보디아 경제"],
     "MM": ["미얀마", "미얀마 경제"],
     "KR": ["한국", "한국은행", "기재부", "금융위", "코스피", "원화"],
+    "GB": ["영국", "영란은행", "파운드", "런던"],
+    "HK": ["홍콩", "홍콩달러", "항셍"],
+    "SG": ["싱가포르", "싱가포르달러", "싱가포르 통화청"],
 }
 
 # ---------------------------------------------------------------------------
@@ -383,8 +411,7 @@ EXCLUSION_KEYWORDS: list[str] = [
 # DB 마이그레이션
 # ---------------------------------------------------------------------------
 def ensure_filter_columns(conn: sqlite3.Connection) -> None:
-    existing = {row["name"] for row in conn.execute("PRAGMA table_info(articles_raw)")}
-    migrations = [
+    db.ensure_columns(conn, "articles_raw", [
         ("filter_stage",
          "ALTER TABLE articles_raw ADD COLUMN filter_stage    INTEGER NOT NULL DEFAULT 0"),
         ("filter_decision",
@@ -393,25 +420,14 @@ def ensure_filter_columns(conn: sqlite3.Connection) -> None:
          "ALTER TABLE articles_raw ADD COLUMN filter_reason   TEXT"),
         ("filter_score",
          "ALTER TABLE articles_raw ADD COLUMN filter_score    INTEGER"),
-    ]
-    added = []
-    for col, sql in migrations:
-        if col not in existing:
-            conn.execute(sql)
-            added.append(col)
-    if added:
-        conn.commit()
-        log.info("마이그레이션 완료: articles_raw 컬럼 추가 %s", added)
+    ])
 
 
 def ensure_dedup_column(conn: sqlite3.Connection) -> None:
-    existing = {row["name"] for row in conn.execute("PRAGMA table_info(articles_raw)")}
-    if "duplicate_of" not in existing:
-        conn.execute(
-            "ALTER TABLE articles_raw ADD COLUMN duplicate_of INTEGER REFERENCES articles_raw(article_id)"
-        )
-        conn.commit()
-        log.info("마이그레이션 완료: duplicate_of 컬럼 추가")
+    db.ensure_columns(conn, "articles_raw", [
+        ("duplicate_of",
+         "ALTER TABLE articles_raw ADD COLUMN duplicate_of INTEGER REFERENCES articles_raw(article_id)"),
+    ])
 
 
 # ---------------------------------------------------------------------------

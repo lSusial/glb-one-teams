@@ -27,14 +27,14 @@ import feedparser
 import requests
 import yaml
 
-# 한국 일부 매체는 봇 UA를 403으로 차단하므로 일반 브라우저 UA 사용.
-USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-)
-REQUEST_TIMEOUT_SEC = 20
-MAX_PARALLEL_FETCH = 8
-RETRY_DELAYS = (1, 3)  # 실패 시 재시도 대기(초): 1회→1s, 2회→3s
+import config
+import db
+
+# 수집 튜닝 상수는 config.py 로 일원화 (이름 유지 — 본문 참조 호환).
+USER_AGENT          = config.USER_AGENT
+REQUEST_TIMEOUT_SEC = config.REQUEST_TIMEOUT_SEC
+MAX_PARALLEL_FETCH  = config.MAX_PARALLEL_FETCH
+RETRY_DELAYS        = config.RETRY_DELAYS
 
 # certifi 번들을 명시적으로 사용 — macOS 시스템 Python의 SSL 인증서 미설치 회피.
 _CA_BUNDLE = certifi.where()
@@ -59,9 +59,8 @@ class FetchResult:
 # DB 초기화 & sources.yaml 동기화
 # ---------------------------------------------------------------------------
 def init_db(db_path: Path, schema_path: Path) -> sqlite3.Connection:
-    db_path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_path)
-    conn.row_factory = sqlite3.Row
+    """표준 PRAGMA(db.open_conn)를 적용한 연결에 스키마를 실행한다."""
+    conn = db.open_conn(db_path)
     with open(schema_path, "r", encoding="utf-8") as f:
         conn.executescript(f.read())
     conn.commit()
@@ -265,8 +264,8 @@ def fetch_feed(feed_id: int, source_id: int, url: str) -> tuple[FetchResult, lis
 # Google News 리다이렉트 URL 해소
 # ---------------------------------------------------------------------------
 _GNEWS_PREFIX = "https://news.google.com/"
-_URL_RESOLVE_WORKERS = 30
-_URL_RESOLVE_TIMEOUT = 5
+_URL_RESOLVE_WORKERS = config.GNEWS_RESOLVE_WORKERS
+_URL_RESOLVE_TIMEOUT = config.GNEWS_RESOLVE_TIMEOUT
 
 
 def _resolve_single_url(url: str) -> str:

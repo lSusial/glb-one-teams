@@ -2,3 +2,7 @@ feedparser>=6.0.10
 PyYAML>=6.0
 certifi>=2024.2.2
 requests>=2.31.0
+
+# AI 레이어 (llm_provider.py). 미설치여도 수집·필터 단계는 동작.
+anthropic>=0.40.0
+# openai>=1.0.0   # OpenAI 어댑터 사용 시 주석 해제

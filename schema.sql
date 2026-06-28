@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS articles_raw (
     summary_ko        TEXT,
     ai_model          TEXT,
     topics            TEXT,
+    kb_implication    TEXT,   -- KB 시사점 (UI 'k') — llm_ranker.py 생성
     FOREIGN KEY (feed_id)   REFERENCES media_source_feeds(feed_id) ON DELETE CASCADE,
     FOREIGN KEY (source_id) REFERENCES media_sources(source_id) ON DELETE CASCADE,
     UNIQUE (content_hash)

@@ -56,7 +56,19 @@ python main.py list    # 최근 기사 확인
 - RTHK 피드: XML SAXParseException 오류로 수집 실패 (피드 자체 문제)
 - Google News 피드: 서버에서 직접 수집 시 503 → 맥북 수집 후 rsync로 해결
 
-## 다음 과제
-- 화면 구성 / 새 UI 설계
-- AI 프로바이더 실험 (Anthropic 외)
-- 정기 수집 자동화
+## 새 UI 레퍼런스 · 설계 문서
+- **UI 레퍼런스(샘플):** https://uandix-kaneiko.github.io/global_One_Team/ — 단일 HTML SPA, 콘텐츠 하드코딩, 6탭 구조
+- **설계 문서:**
+  - `화면분석_개발가이드.md` — 화면별 구성·콘텐츠 + 데이터 연동 로드맵
+  - `데이터_AI_카테고리_설계.md` — 수집 데이터 / AI 산출물 / 3축 카테고리 설계
+- **AI 레이어 현황:** `schema.sql`에 AI 컬럼(`llm_prefilter`, `ai_score`, `summary_ko`, `topics`) + `country_briefings` 예약돼 있으나 이 레포는 **미구현**(모듈은 prototype에). UI 'KB 시사점'용 `kb_implication` 컬럼은 신규 필요
+- **카테고리 3축:** 지역(`sources.yaml`) / 관련성게이트(`keyword_filter.py`) / 주제(AI `topics`, 미구현). UI 필터 = 주제축 → `taxonomy.yaml`로 표준화 예정
+
+## 다음 과제 (우선순위)
+1. `taxonomy.yaml` 신설 — 주제코드 5종(MARKET/BANKING/DIGITAL/ESG/RISK) ↔ UI 필터 1:1
+2. `articles_raw.kb_implication` 컬럼 추가 (KB 시사점)
+3. `llm_prefilter.py` / `llm_ranker.py` 이식 + 프로바이더 추상화
+4. 수집원 보강 — OFFICIAL/tier0 활성화(규제), 자회사 IR(ID·KH), 거시지표 피드
+5. 새 UI 데이터 연동(현지언론 화면부터), 정기 수집 자동화
+
+> 상세 계획은 위 설계 문서 및 `docs/work_log.md` 참조
