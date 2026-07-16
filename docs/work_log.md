@@ -100,6 +100,27 @@
 #### 검증
 - py_compile + 필터 오프라인 단위테스트(합성 입력). 실제 네트워크 수집·AI 호출 미실행
 
+### 세션 7 (2026-07-16) — 기획 확정안 반영 · 필터 품질 개선 · 관리자 페이지
+
+#### 기획·문서
+- 사내 확정본 「글로벌 One Team 뉴스데일리 구축(안)」(2026-07-13) 반영 → `PLAN.md`·`STATUS.md` 신규(이 레포 기준: 11거점·6탭 UI·3축 카테고리). `CLAUDE.md`에 참조·현재 진행 범위 추가.
+- **이번 진행 범위 확정**: 뉴스 분석으로 도출 가능한 항목 포함(현지언론+AI·온도계·Key-man 인사동향·규제 화면), 비-뉴스 소스(IR·OFFICIAL 원천·거시지표)·재미요소는 보류.
+
+#### 수집·필터 품질 (진단→개선→측정)
+- 평가셋 `eval/eval_set.jsonl`(70건 라벨) 구축.
+- `keyword_filter.py` 개선: **복수형 매칭**(`_kw_pattern` s? 허용), 금융어 보강(opec·fed chair·insurance·stock·net loss 등), 내비게이션 페이지 제외.
+- 결과: 정밀도 54→66% · 재현율 60→92% · **F1 57→77%**. 리포트 `docs/수집필터_품질진단.md`.
+
+#### 코드/CLI
+- `main.py` **복구**(HEAD에 있었으나 워킹트리 삭제 상태) + `export --passed`(Phase1 AI-free) · `admin` 서브커맨드 추가.
+- `export_json.py`: `active_only` 파라미터 추가(AI 없이 passed 기사 export). Phase 1 `countries.json` 생성 검증(9개국 140건).
+- **관리자 페이지** 신규: `web/admin.html`(템플릿) + `admin_export.py` → `data/export/admin.html`(개요·기사·소스 3탭, 오프라인 열람).
+
+#### 미해결 / 다음
+- **최신 재수집 필요**(맥북): 현재 DB는 2026-06-22 스냅샷 — 구 필터 판정·HK/SG 0건. 개선 필터+HK/SG 반영은 재수집 후 `filter --refilter`·`admin`·`export --passed` 재실행.
+- `ai_score` 스케일: 구 DB는 1~5, 코드는 0~100(임계 60) → `export`(ACTIVE) 0건. Phase 2에서 재랭킹·표기 통일.
+- Phase 2 AI(taxonomy 태깅·요약·kb_implication) + LLM 프리필터(정치성 노이즈).
+
 ---
 
 ## 현재 관리 국가 (KB 거점 기준)

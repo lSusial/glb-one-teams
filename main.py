@@ -16,7 +16,9 @@ AI 레이어(별도 — ANTHROPIC_API_KEY 필요, 미설정 시 즉시 안내 �
   python main.py rank              # AI 분석 (score/summary/topics/kb_implication)
   python main.py brief             # 국가별 브리핑 생성
   python main.py ai                # prefilter → rank → brief 한 번에
-  python main.py export            # DB → data/export/*.json (UI 데이터 계약)
+  python main.py export            # DB → data/export/countries.json (ACTIVE)
+  python main.py export --passed   # AI 없이 필터 통과 기사로 export (Phase 1)
+  python main.py admin             # 관리자 페이지 생성 (data/export/admin.html)
 """
 from __future__ import annotations
 
@@ -185,11 +187,20 @@ def cmd_ai(_args):
     print(f"   written={s3['written']}")
 
 
-def cmd_export(_args):
+def cmd_export(args):
     import export_json
     conn = db.open_conn()
-    s = export_json.export_countries(conn)
-    print(f"[export] countries={s['countries']}  articles={s['articles']}  → {s['path']}")
+    active_only = not getattr(args, "passed", False)
+    s = export_json.export_countries(conn, active_only=active_only)
+    mode = "ACTIVE(ai_score≥임계)" if active_only else "passed(AI 없음)"
+    print(f"[export] mode={mode}  countries={s['countries']}  articles={s['articles']}  → {s['path']}")
+
+
+def cmd_admin(_args):
+    import admin_export
+    conn = db.open_conn()
+    r = admin_export.export_admin(conn)
+    print(f"[admin] articles={r['articles']}  sources={r['sources']}  → {r['html'] or r['json']}")
 
 
 # ---------------------------------------------------------------------------
@@ -222,14 +233,17 @@ def main():
     brf = sub.add_parser("brief", help="국가별 브리핑 생성")
     brf.add_argument("--type", default="weekly", help="브리핑 유형 (weekly|daily)")
     sub.add_parser("ai",        help="prefilter → rank → brief 일괄")
-    sub.add_parser("export",    help="DB → data/export/*.json (UI 데이터)")
+    exp = sub.add_parser("export", help="DB → data/export/*.json (UI 데이터)")
+    exp.add_argument("--passed", action="store_true",
+                     help="AI 점수 없이 필터 통과 기사로 export (Phase 1)")
+    sub.add_parser("admin",     help="관리자 페이지 데이터 생성 (data/export/admin.html)")
 
     args = p.parse_args()
     {
         "init": cmd_init, "fetch": cmd_fetch, "filter": cmd_filter,
         "dedup": cmd_dedup, "run": cmd_run, "report": cmd_report, "list": cmd_list,
         "prefilter": cmd_prefilter, "rank": cmd_rank, "brief": cmd_brief,
-        "ai": cmd_ai, "export": cmd_export,
+        "ai": cmd_ai, "export": cmd_export, "admin": cmd_admin,
     }[args.cmd](args)
 
 

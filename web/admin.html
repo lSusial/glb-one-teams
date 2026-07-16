@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>글로벌 One Team — 수집 데이터 관리자</title>
+<!-- 데이터는 admin_export.py 가 아래 스크립트에 주입(오프라인 열람 가능). 없으면 admin.json fetch. -->
+<script id="admin-data" type="application/json">null</script>
+<style>
+  :root{
+    --kb-yellow:#FFBC00; --kb-dark:#545045; --kb-gold:#85754E; --kb-silver:#8A8D8F;
+    --ink:#2b2926; --line:#e7e4de; --paper:#faf9f7; --card:#ffffff; --sub:#6f6a63;
+    --pass:#2e7d32; --rej:#b23b3b; --pend:#9a7d00;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;
+       color:var(--ink);background:var(--paper);font-size:14px}
+  header{background:var(--kb-dark);color:#fff;padding:14px 22px;display:flex;align-items:center;gap:14px}
+  header .logo{background:var(--kb-yellow);color:var(--kb-dark);font-weight:800;padding:4px 10px;border-radius:5px;letter-spacing:.5px}
+  header h1{font-size:16px;margin:0;font-weight:700}
+  header .meta{margin-left:auto;font-size:12px;color:#d7d3cc}
+  nav{display:flex;gap:2px;background:#fff;border-bottom:1px solid var(--line);padding:0 16px;position:sticky;top:0;z-index:5}
+  nav button{border:0;background:none;padding:12px 16px;font-size:14px;color:var(--sub);cursor:pointer;border-bottom:3px solid transparent;font-weight:600}
+  nav button.active{color:var(--ink);border-bottom-color:var(--kb-yellow)}
+  main{padding:20px 22px;max-width:1280px;margin:0 auto}
+  .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .card .k{font-size:12px;color:var(--sub);margin-bottom:6px}
+  .card .v{font-size:22px;font-weight:800;color:var(--kb-dark)}
+  .card .v small{font-size:12px;font-weight:600;color:var(--sub)}
+  h2{font-size:14px;margin:22px 0 10px;color:var(--kb-dark);border-left:4px solid var(--kb-yellow);padding-left:9px}
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;align-items:center}
+  .toolbar input,.toolbar select{padding:7px 10px;border:1px solid var(--line);border-radius:7px;font-size:13px;background:#fff}
+  .toolbar input[type=search]{min-width:240px;flex:1}
+  .count{font-size:12px;color:var(--sub);margin-left:auto}
+  .tablewrap{overflow:auto;border:1px solid var(--line);border-radius:10px;background:#fff;max-height:70vh}
+  table{border-collapse:collapse;width:100%;font-size:13px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{position:sticky;top:0;background:#f4f2ee;cursor:pointer;user-select:none;font-weight:700;color:var(--kb-dark);z-index:1}
+  th:hover{background:#eee9e0}
+  td.title{white-space:normal;min-width:340px;max-width:520px}
+  td.num{text-align:right;font-variant-numeric:tabular-nums}
+  tr:hover td{background:#fcfbf9}
+  .badge{display:inline-block;padding:1px 7px;border-radius:20px;font-size:11px;font-weight:700}
+  .b-pass{background:#e7f2e8;color:var(--pass)} .b-rej{background:#f6e7e7;color:var(--rej)} .b-pend{background:#f7efd6;color:var(--pend)}
+  .bar{height:7px;border-radius:4px;background:#eee;overflow:hidden;min-width:60px}
+  .bar>span{display:block;height:100%;background:var(--kb-yellow)}
+  a{color:#1665c0;text-decoration:none} a:hover{text-decoration:underline}
+  .muted{color:var(--sub)}
+  .tab{display:none} .tab.active{display:block}
+  .note{font-size:12px;color:var(--sub);margin:6px 0 0}
+</style>
+</head>
+<body>
+<header>
+  <span class="logo">KB</span>
+  <h1>글로벌 One Team — 수집 데이터 관리자</h1>
+  <span class="meta" id="meta"></span>
+</header>
+<nav>
+  <button data-tab="overview" class="active">개요</button>
+  <button data-tab="articles">기사</button>
+  <button data-tab="sources">소스</button>
+</nav>
+<main>
+  <section id="overview" class="tab active">
+    <div class="cards" id="ovCards"></div>
+    <h2>국가별 수집·통과 현황</h2>
+    <div class="tablewrap"><table id="ovCountry"></table></div>
+    <p class="note" id="ovNote"></p>
+  </section>
+
+  <section id="articles" class="tab">
+    <div class="toolbar">
+      <input type="search" id="q" placeholder="제목 검색…"/>
+      <select id="fCountry"><option value="">전체 국가</option></select>
+      <select id="fDecision">
+        <option value="">전체 판정</option>
+        <option value="passed">통과</option>
+        <option value="rejected">거부</option>
+        <option value="pending">대기</option>
+      </select>
+      <span class="count" id="artCount"></span>
+    </div>
+    <div class="tablewrap"><table id="artTable"></table></div>
+    <p class="note" id="artNote"></p>
+  </section>
+
+  <section id="sources" class="tab">
+    <div class="toolbar">
+      <input type="search" id="qSrc" placeholder="매체 검색…"/>
+      <span class="count" id="srcCount"></span>
+    </div>
+    <div class="tablewrap"><table id="srcTable"></table></div>
+  </section>
+</main>
+
+<script>
+(async function(){
+  // ── 데이터 로드: 주입된 __ADMIN_DATA__ 우선, 없으면 admin.json fetch ──
+  let DATA = null;
+  try { DATA = JSON.parse(document.getElementById('admin-data').textContent); } catch(e){}
+  if(!DATA){ try { DATA = await (await fetch('admin.json')).json(); } catch(e){} }
+  if(!DATA){ document.querySelector('main').innerHTML='<p class="muted">데이터가 없습니다. <code>python admin_export.py</code> 로 생성하세요.</p>'; return; }
+
+  const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const pct=(n,d)=>d? Math.round(n/d*100):0;
+  document.getElementById('meta').textContent = '생성: '+(DATA.generated_at||'').slice(0,19).replace('T',' ')+' · DB '+ (DATA.overview.total||0).toLocaleString()+'건';
+
+  // ── 개요 ──
+  const ov=DATA.overview;
+  const cards=[
+    ['총 수집', (ov.total||0).toLocaleString()],
+    ['통과', (ov.passed||0).toLocaleString(), pct(ov.passed,ov.total)+'%'],
+    ['거부', (ov.rejected||0).toLocaleString(), pct(ov.rejected,ov.total)+'%'],
+    ['중복 표시', (ov.duplicates||0).toLocaleString(), pct(ov.duplicates,ov.total)+'%'],
+    ['AI 분석', (ov.ai_scored||0).toLocaleString()],
+    ['수집 소스', (DATA.sources||[]).length],
+  ];
+  document.getElementById('ovCards').innerHTML = cards.map(c=>
+    `<div class="card"><div class="k">${c[0]}</div><div class="v">${c[1]} ${c[2]?`<small>${c[2]}</small>`:''}</div></div>`).join('');
+  document.getElementById('ovNote').textContent = '수집 기간: '+(ov.date_min||'—')+' ~ '+(ov.date_max||'—');
+
+  const ct=DATA.countries||[];
+  const maxRaw=Math.max(1,...ct.map(c=>c.raw));
+  document.getElementById('ovCountry').innerHTML =
+    '<thead><tr><th>국가</th><th class="num">수집</th><th class="num">통과</th><th class="num">통과율</th><th>수집량</th></tr></thead><tbody>'+
+    ct.map(c=>`<tr><td><b>${esc(c.cc||'∅')}</b></td><td class="num">${c.raw.toLocaleString()}</td>
+      <td class="num">${c.passed.toLocaleString()}</td><td class="num">${pct(c.passed,c.raw)}%</td>
+      <td><div class="bar"><span style="width:${c.raw/maxRaw*100}%"></span></div></td></tr>`).join('')+'</tbody>';
+
+  // ── 정렬 유틸 ──
+  function makeSortable(table, getRows, render){
+    let sortKey=null, dir=1;
+    table.addEventListener('click', e=>{
+      const th=e.target.closest('th'); if(!th||!th.dataset.k) return;
+      if(sortKey===th.dataset.k) dir*=-1; else {sortKey=th.dataset.k; dir=1;}
+      render(sortKey,dir);
+    });
+  }
+
+  // ── 기사 ──
+  const arts=DATA.articles||[];
+  const decBadge=d=>({passed:'<span class="badge b-pass">통과</span>',rejected:'<span class="badge b-rej">거부</span>',pending:'<span class="badge b-pend">대기</span>'}[d]||esc(d));
+  const fc=document.getElementById('fCountry');
+  [...new Set(arts.map(a=>a.cc).filter(Boolean))].sort().forEach(cc=>{const o=document.createElement('option');o.value=cc;o.textContent=cc;fc.appendChild(o);});
+  let artSort='date', artDir=-1;
+  function renderArts(key,d){
+    if(key){artSort=key;artDir=d;}
+    const q=document.getElementById('q').value.toLowerCase();
+    const cc=fc.value, dec=document.getElementById('fDecision').value;
+    let rows=arts.filter(a=>(!q||(a.t||'').toLowerCase().includes(q))&&(!cc||a.cc===cc)&&(!dec||a.decision===dec));
+    rows.sort((a,b)=>{let x=a[artSort],y=b[artSort];if(x==null)x='';if(y==null)y='';return (x>y?1:x<y?-1:0)*artDir;});
+    document.getElementById('artCount').textContent=rows.length.toLocaleString()+' 건';
+    const h=['cc|국가','src|매체','date|날짜','t|제목','decision|판정','score|점수','ai|AI','topics|토픽'];
+    document.getElementById('artTable').innerHTML=
+      '<thead><tr>'+h.map(c=>{const[k,l]=c.split('|');return `<th data-k="${k}">${l}${artSort===k?(artDir>0?' ▲':' ▼'):''}</th>`}).join('')+'</tr></thead><tbody>'+
+      rows.slice(0,1500).map(a=>`<tr>
+        <td>${esc(a.cc)}</td><td>${esc(a.src)}</td><td class="muted">${esc(a.date)}</td>
+        <td class="title">${a.url?`<a href="${esc(a.url)}" target="_blank" rel="noopener">${esc(a.t)}</a>`:esc(a.t)}</td>
+        <td>${decBadge(a.decision)}</td><td class="num">${a.score??''}</td><td class="num">${a.ai??''}</td>
+        <td class="muted">${esc(a.topics)}</td></tr>`).join('')+'</tbody>';
+  }
+  makeSortable(document.getElementById('artTable'));
+  document.getElementById('artTable').addEventListener('click',e=>{const th=e.target.closest('th');if(th&&th.dataset.k){renderArts(th.dataset.k, artSort===th.dataset.k?-artDir:1);}});
+  ['q','fCountry','fDecision'].forEach(id=>document.getElementById(id).addEventListener('input',()=>renderArts()));
+  document.getElementById('artNote').textContent='최근 '+arts.length.toLocaleString()+'건 표본 (전체는 DB). 최대 1,500행 표시.';
+  renderArts();
+
+  // ── 소스 ──
+  const srcs=DATA.sources||[];
+  let srcSort='raw', srcDir=-1;
+  function renderSrc(key,d){
+    if(key){srcSort=key;srcDir=d;}
+    const q=document.getElementById('qSrc').value.toLowerCase();
+    let rows=srcs.filter(s=>!q||(s.media||'').toLowerCase().includes(q));
+    rows.sort((a,b)=>{let x=a[srcSort],y=b[srcSort];if(x==null)x='';if(y==null)y='';return (x>y?1:x<y?-1:0)*srcDir;});
+    document.getElementById('srcCount').textContent=rows.length+' 매체';
+    const h=['media|매체','cc|국가','tier|Tier','raw|수집','passed|통과','rate|통과율'];
+    document.getElementById('srcTable').innerHTML=
+      '<thead><tr>'+h.map(c=>{const[k,l]=c.split('|');return `<th data-k="${k}">${l}${srcSort===k?(srcDir>0?' ▲':' ▼'):''}</th>`}).join('')+'</tr></thead><tbody>'+
+      rows.map(s=>`<tr><td>${esc(s.media)}</td><td>${esc(s.cc)}</td><td class="num">${s.tier}</td>
+        <td class="num">${(s.raw||0).toLocaleString()}</td><td class="num">${(s.passed||0).toLocaleString()}</td>
+        <td class="num">${pct(s.passed,s.raw)}%</td></tr>`).join('')+'</tbody>';
+  }
+  srcs.forEach(s=>s.rate=pct(s.passed,s.raw));
+  document.getElementById('srcTable').addEventListener('click',e=>{const th=e.target.closest('th');if(th&&th.dataset.k){renderSrc(th.dataset.k, srcSort===th.dataset.k?-srcDir:1);}});
+  document.getElementById('qSrc').addEventListener('input',()=>renderSrc());
+  renderSrc();
+
+  // ── 탭 ──
+  document.querySelectorAll('nav button').forEach(b=>b.addEventListener('click',()=>{
+    document.querySelectorAll('nav button').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    b.classList.add('active'); document.getElementById(b.dataset.tab).classList.add('active');
+  }));
+})();
+</script>
+</body>
+</html>

@@ -56,19 +56,25 @@ python main.py list    # 최근 기사 확인
 - RTHK 피드: XML SAXParseException 오류로 수집 실패 (피드 자체 문제)
 - Google News 피드: 서버에서 직접 수집 시 503 → 맥북 수집 후 rsync로 해결
 
+## 기획·현황 문서 (2026-07-13 확정안 반영)
+- `PLAN.md` — 기획 확정안·제품 구조(새 6탭 UI)·11개 거점·로드맵 (기획 레이어)
+- `STATUS.md` — 확정안 대비 구현 현황·두 레포 관계 (기술 브리지)
+
 ## 새 UI 레퍼런스 · 설계 문서
 - **UI 레퍼런스(샘플):** https://uandix-kaneiko.github.io/global_One_Team/ — 단일 HTML SPA, 콘텐츠 하드코딩, 6탭 구조
 - **설계 문서:**
   - `화면분석_개발가이드.md` — 화면별 구성·콘텐츠 + 데이터 연동 로드맵
   - `데이터_AI_카테고리_설계.md` — 수집 데이터 / AI 산출물 / 3축 카테고리 설계
-- **AI 레이어 현황:** `schema.sql`에 AI 컬럼(`llm_prefilter`, `ai_score`, `summary_ko`, `topics`) + `country_briefings` 예약돼 있으나 이 레포는 **미구현**(모듈은 prototype에). UI 'KB 시사점'용 `kb_implication` 컬럼은 신규 필요
+- **AI 레이어 현황:** `schema.sql`에 AI 컬럼(`llm_prefilter`, `ai_score`, `summary_ko`, `topics`, `kb_implication`) + `country_briefings` 준비됨. 모듈(`llm_prefilter.py`·`llm_ranker.py`·`briefing.py`·`llm_provider.py`)은 이 레포에 이식 완료이나 **미실행**(`ANTHROPIC_API_KEY` 필요, py_compile만 검증)
 - **카테고리 3축:** 지역(`sources.yaml`) / 관련성게이트(`keyword_filter.py`) / 주제(AI `topics`, 미구현). UI 필터 = 주제축 → `taxonomy.yaml`로 표준화 예정
 
 ## 다음 과제 (우선순위)
-1. `taxonomy.yaml` 신설 — 주제코드 5종(MARKET/BANKING/DIGITAL/ESG/RISK) ↔ UI 필터 1:1
-2. `articles_raw.kb_implication` 컬럼 추가 (KB 시사점)
-3. `llm_prefilter.py` / `llm_ranker.py` 이식 + 프로바이더 추상화
-4. 수집원 보강 — OFFICIAL/tier0 활성화(규제), 자회사 IR(ID·KH), 거시지표 피드
-5. 새 UI 데이터 연동(현지언론 화면부터), 정기 수집 자동화
+1. ✅ `taxonomy.yaml` — 주제코드 5종(MARKET/BANKING/DIGITAL/ESG/RISK) ↔ UI 필터 1:1 (정의 완료)
+2. ✅ `articles_raw.kb_implication` 컬럼 (KB 시사점) — `schema.sql` 반영 완료
+3. ✅ `llm_prefilter.py`·`llm_ranker.py`·`briefing.py` 이식 + 프로바이더 추상화(`llm_provider.py`) — 코드 이식 완료, **미실행**
+4. 새 UI 데이터 연동(현지언론 화면부터, `export_json`→`countries.json`), AI 레이어 실제 실행·평가셋 검증
+5. 수집원 보강 — OFFICIAL/tier0 활성화(규제), 자회사 IR(ID·KH), 거시지표 피드
+6. 정기 수집 자동화
 
-> 상세 계획은 위 설계 문서 및 `docs/work_log.md` 참조
+> ⛔ **현재 진행 범위(2026-07-14):** 원칙 = **뉴스 분석으로 도출 가능한 항목 포함 / 비-뉴스 소스 필요 항목 보류.** 포함: 현지언론+AI(요약·시사점·분류)·Global Pulse 온도계·Key-man 인사동향(뉴스)·규제 화면(뉴스). 보류: 재미요소·참여형, 자회사 IR 링크, OFFICIAL 당국 원천 피드, 거시지표 빅넘버. 상세는 `PLAN.md`의 '이번 진행 범위'.
+> 상세 계획·로드맵은 `PLAN.md`(11장)·`STATUS.md` 및 위 설계 문서·`docs/work_log.md` 참조

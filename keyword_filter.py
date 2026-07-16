@@ -186,6 +186,13 @@ FINANCE_KEYWORDS: list[str] = [
     "upi", "neft", "rtgs", "pli scheme",
     # 사회보험·국부펀드 약어
     "cpf", "epf",
+    # 증시·실적·에너지·보험 보강 (2026-07 평가셋 기반)
+    "stock", "shares", "equities",
+    "opec", "oil production", "oil output", "oil shock",
+    "fed chair", "fed chairman", "fomc", "rate decision",
+    "insurance", "insurer", "reinsurance",
+    "net loss", "net profit", "quarterly results", "quarterly profit",
+    "multibagger",
 ]
 
 # ---------------------------------------------------------------------------
@@ -398,6 +405,10 @@ EXCLUSION_KEYWORDS: list[str] = [
     "sports betting", "betting odds", "bookmaker",
     # 연예·엔터테인먼트 (추가)
     "celebrity couple", "celebrity divorce", "box office hit",
+    # 내비게이션·집계 페이지 (기사 아님 — 정밀도 보강, 2026-07)
+    "live updates", "latest videos", "transcripts for",
+    "ifsc code", "micr code", "more business stories", "more commentary stories",
+    "photo gallery", "live blog", "live | ", "tags ",
     "music chart", "chart position", "streaming hit",
     # 선거 유세 (경제 내용 없는 정치 기사)
     "election rally", "campaign rally", "campaign trail",
@@ -456,8 +467,10 @@ def _kw_pattern(kw: str) -> re.Pattern:
     """
     if kw not in _PATTERN_CACHE:
         if re.fullmatch(r"[a-z0-9 ]+", kw):
+            # 끝에 선택적 복수형 s 허용: 'import'→'imports', 'stock'→'stocks'
+            # (헤드라인은 복수형이 많아 단수만 매칭하면 재현율 손실)
             _PATTERN_CACHE[kw] = re.compile(
-                r"(?<![a-z0-9])" + re.escape(kw) + r"(?![a-z0-9])"
+                r"(?<![a-z0-9])" + re.escape(kw) + r"s?(?![a-z0-9])"
             )
         else:
             _PATTERN_CACHE[kw] = re.compile(re.escape(kw))
