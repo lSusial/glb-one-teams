@@ -38,24 +38,33 @@ def ensure_columns(conn) -> None:
     ])
 
 
-def run_prefilter(conn, provider: LLMProvider | None = None, limit: int | None = None) -> dict:
-    """prefilter 미처리(passed·비중복) 기사를 LLM으로 keep/drop 판정."""
+def run_prefilter(conn, provider: LLMProvider | None = None,
+                  limit: int | None = None, days: int | None = None) -> dict:
+    """prefilter 미처리(passed·비중복) 기사를 LLM으로 keep/drop 판정.
+
+    days: 지정 시 최근 N일 게시 기사만 처리(전체 백로그 대신 최신치만 — 비용 절감).
+    """
     ensure_columns(conn)
     provider = provider or get_provider("fast")
     limit = limit or config.PREFILTER_LIMIT
 
+    date_clause, params = "", []
+    if days:
+        date_clause = " AND substr(a.published_at, 1, 10) >= date('now', ?)"
+        params.append(f"-{int(days)} days")
+
     rows = conn.execute(
-        """
+        f"""
         SELECT a.article_id, a.title, a.summary, m.primary_country_code AS cc
         FROM articles_raw a
         JOIN media_sources m ON m.source_id = a.source_id
         WHERE a.filter_decision = 'passed'
           AND a.duplicate_of IS NULL
-          AND a.llm_prefilter IS NULL
+          AND a.llm_prefilter IS NULL{date_clause}
         ORDER BY a.filter_score DESC
         LIMIT ?
         """,
-        (limit,),
+        (*params, limit),
     ).fetchall()
 
     stats = dict(total=len(rows), keep=0, drop=0)

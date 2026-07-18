@@ -1,0 +1,193 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>KB 글로벌 데일리 브리핑 — 현지언론 Intelligence</title>
+<!-- 데이터: export_json 이 아래 스크립트에 주입(오프라인). 없으면 countries.json fetch. -->
+<script id="countries-data" type="application/json">null</script>
+<style>
+  :root{
+    --kb-yellow:#FFBC00; --kb-dark:#545045; --kb-gold:#85754E; --kb-silver:#8A8D8F;
+    --ink:#2b2926; --line:#e8e4dd; --card:#fff; --sub:#7a746c; --page:#dcd8d2;
+    --c-fin:#2b5f9e; --c-dig:#6a3fb5; --c-esg:#2f7d4f; --c-risk:#b23b3b;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);
+       font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:14px}
+  .wrap{max-width:760px;margin:0 auto;padding:22px 16px 0}
+
+  /* ── 마스트헤드 ── */
+  .mast{position:relative;overflow:hidden;border-radius:14px;padding:20px 24px 22px;color:#fff;
+        background:linear-gradient(135deg,#5c574f 0%,#4a453e 100%)}
+  .mast .kbwm{position:absolute;right:-6px;top:-26px;font-size:132px;font-weight:900;color:rgba(255,255,255,.05);letter-spacing:-6px}
+  .mast .row{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+  .mast .kb{font-weight:800}
+  .mast .kb b{color:var(--kb-yellow)}
+  .mast .kb span{color:#d9d4cc;font-weight:600;margin-left:4px}
+  .mast .rt{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:12px;color:#cfc9c0}
+  .mast .en{border:1px solid rgba(255,188,0,.6);color:var(--kb-yellow);border-radius:20px;padding:2px 10px;font-weight:700;cursor:default}
+  .mast .en .off{color:#a49c8f}
+  .mast h1{position:relative;z-index:1;font-size:26px;font-weight:800;margin:14px 0 8px;line-height:1.2}
+  .mast .sub{position:relative;z-index:1;font-size:12.5px;color:#cfc9c0}
+  .nav{display:flex;gap:8px;margin:14px 0 0}
+  .nav a{font-size:13px;font-weight:700;color:var(--sub);text-decoration:none;padding:8px 14px;border-radius:20px;border:1px solid var(--line);background:#fff}
+  .nav a.on{background:var(--kb-dark);color:#fff;border-color:var(--kb-dark)}
+
+  /* ── 섹션 카드 ── */
+  .sec{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-top:14px}
+  .sec.accent{border-top:3px solid var(--kb-yellow)}
+  .sec-h{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
+  .num{flex:none;width:26px;height:26px;border-radius:7px;color:#fff;font-weight:800;font-size:13px;
+       display:flex;align-items:center;justify-content:center}
+  .num.g{background:var(--kb-gold)} .num.y{background:var(--kb-yellow);color:var(--kb-dark)}
+  .sec-h .tt{font-size:15px;font-weight:800}
+  .sec-h .ds{font-size:12px;color:var(--sub);margin-top:2px}
+  .sec-h .rt{margin-left:auto;font-size:12px;color:var(--sub)}
+
+  /* ── 커버리지 ── */
+  .cov{display:flex;flex-wrap:wrap;gap:7px}
+  .cc{display:flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;background:#fdfcfa;cursor:pointer}
+  .cc:hover{border-color:var(--kb-silver)}
+  .cc.sel{border-color:var(--kb-dark);box-shadow:inset 0 0 0 1px var(--kb-dark)}
+  .cc .st{font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px}
+  .cc .act{background:#e7f2e8;color:#2f7d4f} .cc .watch{background:#efece7;color:#8a8d8f}
+
+  /* ── 필터 ── */
+  .fil{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 13px;font-size:13px;cursor:pointer;font-weight:700;color:var(--sub)}
+  .chip.on{background:var(--kb-dark);color:#fff;border-color:var(--kb-dark)}
+  .chip .n{opacity:.55;font-weight:500;margin-left:4px}
+  .fil .sp{flex:1}.cnt{font-size:12px;color:var(--sub)}
+
+  /* ── 기사 카드 ── */
+  .feed{display:flex;flex-direction:column;gap:9px;margin-top:12px}
+  .art{border:1px solid var(--line);border-radius:10px;padding:13px 15px;cursor:pointer;background:#fff;transition:box-shadow .1s}
+  .art:hover{box-shadow:0 3px 12px rgba(0,0,0,.07)}
+  .art .top{font-size:12px;color:var(--sub);display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:5px}
+  .art .flag{font-size:15px}
+  .badge{font-size:10.5px;font-weight:800;padding:1px 8px;border-radius:20px;color:#fff}
+  .b-finance{background:var(--c-fin)}.b-digital{background:var(--c-dig)}.b-esg{background:var(--c-esg)}.b-risk{background:var(--c-risk)}
+  .art .score{margin-left:auto;font-weight:800;color:var(--kb-gold)}
+  .art .t{font-size:15px;font-weight:700;line-height:1.35;margin:2px 0 6px}
+  .art .q{color:#463f37;line-height:1.55}
+  .art .k{margin-top:8px;background:#fffdf4;border:1px solid #f1e7c8;border-left:3px solid var(--kb-yellow);border-radius:6px;padding:7px 11px;font-size:13px;line-height:1.55}
+  .art .k b{color:var(--kb-gold)}
+  .empty{color:var(--sub);text-align:center;padding:34px;font-size:13px}
+
+  /* ── 푸터 ── */
+  footer{text-align:center;color:var(--kb-silver);font-size:11.5px;letter-spacing:.5px;padding:22px 0 34px}
+  footer .tag{color:var(--kb-gold);font-weight:800;letter-spacing:1px}
+
+  /* ── 모달 ── */
+  .ov{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:20px;z-index:20}
+  .ov.on{display:flex}
+  .modal{background:#fff;border-radius:12px;max-width:640px;width:100%;max-height:85vh;overflow:auto;padding:22px}
+  .modal .x{float:right;cursor:pointer;color:var(--sub);font-size:22px;line-height:1}
+  .modal .mt{font-size:12px;color:var(--sub);margin-bottom:6px}
+  .modal h2{font-size:18px;margin:0 0 12px;line-height:1.35}
+  .modal .s{margin:12px 0}.modal .s h3{font-size:12px;color:var(--kb-gold);margin:0 0 4px;font-weight:800}
+  .modal .lk{display:inline-block;margin-top:10px;color:var(--c-fin);font-weight:600}
+  a{color:var(--c-fin);text-decoration:none}a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="mast">
+    <div class="kbwm">KB</div>
+    <div class="row">
+      <span class="kb"><b>KB</b><span>국민은행</span></span>
+      <span class="rt"><span class="en">KR<span class="off"> / EN</span></span><span id="date"></span></span>
+    </div>
+    <h1>현지언론 Intelligence</h1>
+    <div class="sub">현지 주요언론 기사를 AI가 선별·요약하고 KB 거점 관점의 시사점을 제시합니다</div>
+    <div class="nav"><a href="brief.html">Global Pulse</a><a class="on" href="countries.html">현지언론</a><a href="keyman.html">Key-man</a></div>
+  </div>
+
+  <section class="sec" id="secCov">
+    <div class="sec-h"><div class="num g">01</div>
+      <div><div class="tt">거점 커버리지</div><div class="ds">거점별 현지언론 분석 현황 · 클릭 시 해당 거점만 보기</div></div>
+      <div class="rt" id="covRt"></div></div>
+    <div class="cov" id="cov"></div>
+  </section>
+
+  <section class="sec accent" id="secFeed">
+    <div class="sec-h"><div class="num y">02</div>
+      <div><div class="tt">현지언론 피드</div><div class="ds">AI 중요도 순 · 매체·날짜·요약·KB 시사점·원문</div></div></div>
+    <div class="fil" id="cats"></div>
+    <div class="fil" style="margin-top:8px"><span class="sp"></span><span class="cnt" id="count"></span></div>
+    <div class="feed" id="feed"></div>
+  </section>
+
+  <footer><div class="tag">CONNECTING PEOPLE, CREATING GLOBAL VALUE</div><div id="gen"></div></footer>
+</div>
+
+<div class="ov" id="ov"><div class="modal" id="modal"></div></div>
+
+<script>
+(async function(){
+  let DATA=null;
+  try{ DATA=JSON.parse(document.getElementById('countries-data').textContent);}catch(e){}
+  if(!DATA){ try{ DATA=await (await fetch('countries.json')).json(); }catch(e){} }
+  if(!DATA){ document.querySelector('.wrap').innerHTML='<p class="empty">countries.json 이 없습니다. <code>python main.py export</code> 로 생성하세요.</p>'; return; }
+
+  const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const NAMES={GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아'};
+  const CATS=[['','전체'],['finance','금융'],['digital','디지털'],['esg','ESG'],['risk','리스크']];
+  const gen=(DATA.generated_at||'').slice(0,16).replace('T',' ');
+  document.getElementById('date').textContent=gen.slice(0,10);
+  document.getElementById('gen').textContent='업데이트 '+gen+(DATA.mode?(' · '+DATA.mode):'');
+
+  const arts=[]; (DATA.countries||[]).forEach(c=>(c.articles||[]).forEach(a=>arts.push({...a,cc:c.cc,flag:c.flag})));
+  const nActive=(DATA.countries||[]).filter(c=>c.status==='ACTIVE').length;
+  document.getElementById('covRt').textContent=`ACTIVE ${nActive} / ${(DATA.countries||[]).length}개 거점`;
+
+  let fCat='', fCC='';
+  const catCount=k=>k?arts.filter(a=>(a.c||'').includes(k)).length:arts.length;
+
+  document.getElementById('cats').innerHTML=CATS.map(([k,l])=>
+    `<span class="chip${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
+  document.getElementById('cats').onclick=e=>{const c=e.target.closest('.chip');if(!c)return;fCat=c.dataset.k;render();};
+
+  document.getElementById('cov').innerHTML=(DATA.countries||[]).map(c=>{
+    const act=c.status==='ACTIVE';
+    return `<span class="cc" data-cc="${c.cc}"><span>${c.flag||''}</span>${NAMES[c.cc]||c.cc}
+      <span class="st ${act?'act':'watch'}">${act?'ACTIVE '+c.count:'WATCH'}</span></span>`;}).join('');
+  document.getElementById('cov').onclick=e=>{const c=e.target.closest('.cc');if(!c)return;fCC=(fCC===c.dataset.cc?'':c.dataset.cc);render();};
+
+  const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{
+    const lab={finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'}[k]; if(!lab)return'';
+    return `<span class="badge b-${k}">${lab}</span>`;}).join(' ');
+
+  function render(){
+    document.querySelectorAll('#cats .chip').forEach(c=>c.classList.toggle('on',c.dataset.k===fCat));
+    document.querySelectorAll('#cov .cc').forEach(c=>c.classList.toggle('sel',c.dataset.cc===fCC));
+    let rows=arts.filter(a=>(!fCat||(a.c||'').includes(fCat))&&(!fCC||a.cc===fCC));
+    document.getElementById('count').textContent=rows.length+' 건'+(fCC?(' · '+(NAMES[fCC]||fCC)):'');
+    const feed=document.getElementById('feed');
+    if(!rows.length){feed.innerHTML='<div class="empty">해당 조건의 기사가 없습니다. (AI 분석 전이거나 SOURCE WATCH 상태)</div>';feed._rows=[];return;}
+    feed.innerHTML=rows.map((a,i)=>`<div class="art" data-i="${i}">
+      <div class="top"><span class="flag">${a.flag||''}</span> <b>${NAMES[a.cc]||a.cc}</b> · ${esc(a.src)} · ${esc(a.d)} ${badges(a.c)}
+        ${a.score!=null?`<span class="score">${a.score}</span>`:''}</div>
+      <div class="t">${esc(a.t)}</div>
+      ${a.q?`<div class="q">${esc(a.q)}</div>`:''}
+      ${a.k?`<div class="k"><b>KB 시사점</b> ${esc(a.k)}</div>`:''}</div>`).join('');
+    feed._rows=rows;
+  }
+  document.getElementById('feed').onclick=e=>{
+    const el=e.target.closest('.art'); if(!el||e.target.tagName==='A')return;
+    const a=document.getElementById('feed')._rows[+el.dataset.i];
+    document.getElementById('modal').innerHTML=`<span class="x" id="mx">×</span>
+      <div class="mt">${a.flag||''} ${NAMES[a.cc]||a.cc} · ${esc(a.src)} · ${esc(a.d)} ${badges(a.c)}</div>
+      <h2>${esc(a.t)}</h2>
+      ${a.q?`<div class="s"><h3>요약</h3><div>${esc(a.q)}</div></div>`:''}
+      ${a.k?`<div class="s"><h3>KB 시사점</h3><div>${esc(a.k)}</div></div>`:''}
+      ${a.u?`<a class="lk" href="${esc(a.u)}" target="_blank" rel="noopener">원문 보기 ↗</a>`:''}`;
+    document.getElementById('ov').classList.add('on');
+  };
+  document.getElementById('ov').onclick=e=>{if(e.target.id==='ov'||e.target.id==='mx')document.getElementById('ov').classList.remove('on');};
+  render();
+})();
+</script>
+</body>
+</html>

@@ -120,6 +120,7 @@
 - **최신 재수집 필요**(맥북): 현재 DB는 2026-06-22 스냅샷 — 구 필터 판정·HK/SG 0건. 개선 필터+HK/SG 반영은 재수집 후 `filter --refilter`·`admin`·`export --passed` 재실행.
 - `ai_score` 스케일: 구 DB는 1~5, 코드는 0~100(임계 60) → `export`(ACTIVE) 0건. Phase 2에서 재랭킹·표기 통일.
 - Phase 2 AI(taxonomy 태깅·요약·kb_implication) + LLM 프리필터(정치성 노이즈).
+- **[검토] Phase 2 비용 최적화**: rank가 Sonnet이라 레거시(Haiku) 대비 토큰 비용↑ (+ kb_implication 출력 추가, 1호출=1기사). prompt caching은 시스템 프롬프트 177토큰(<1024 최소치)이라 무효. 레버 — ① `rank --fast`(Haiku) 토글 추가해 품질 A/B, ② N건/호출 배치(시스템 프롬프트 분할, 출력비용은 그대로). 물량은 `--days`로 이미 축소. **미구현 — 필요 시 진행.**
 
 ---
 

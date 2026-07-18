@@ -54,24 +54,33 @@ def _system_prompt() -> str:
     )
 
 
-def run_rank(conn, provider: LLMProvider | None = None, limit: int | None = None) -> dict:
-    """prefilter keep·미분석 기사를 LLM으로 분석."""
+def run_rank(conn, provider: LLMProvider | None = None,
+             limit: int | None = None, days: int | None = None) -> dict:
+    """prefilter keep·미분석 기사를 LLM으로 분석.
+
+    days: 지정 시 최근 N일 게시 기사만 처리(전체 백로그 대신 최신치만 — 비용 절감).
+    """
     ensure_columns(conn)
     provider = provider or get_provider("smart")
     limit = limit or config.RANK_LIMIT
     system = _system_prompt()
 
+    date_clause, params = "", []
+    if days:
+        date_clause = " AND substr(a.published_at, 1, 10) >= date('now', ?)"
+        params.append(f"-{int(days)} days")
+
     rows = conn.execute(
-        """
+        f"""
         SELECT a.article_id, a.title, a.summary, m.primary_country_code AS cc, m.media_name
         FROM articles_raw a
         JOIN media_sources m ON m.source_id = a.source_id
         WHERE a.llm_prefilter = 'keep'
-          AND a.ai_score IS NULL
+          AND a.ai_score IS NULL{date_clause}
         ORDER BY a.filter_score DESC
         LIMIT ?
         """,
-        (limit,),
+        (*params, limit),
     ).fetchall()
 
     stats = dict(total=len(rows), ranked=0, active=0)

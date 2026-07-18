@@ -12,10 +12,10 @@ glb-one-teams 파이프라인 CLI
   python main.py list [--limit N]  # 최근 수집 기사 출력
 
 AI 레이어(별도 — ANTHROPIC_API_KEY 필요, 미설정 시 즉시 안내 후 중단):
-  python main.py prefilter         # LLM 1차 관문 (keep/drop)
-  python main.py rank              # AI 분석 (score/summary/topics/kb_implication)
-  python main.py brief             # 국가별 브리핑 생성
-  python main.py ai                # prefilter → rank → brief 한 번에
+  python main.py prefilter [--days N]  # LLM 1차 관문 (keep/drop)
+  python main.py rank [--days N]       # AI 분석 (score/summary/topics/kb_implication)
+  python main.py brief                 # 국가별 브리핑 생성
+  python main.py ai [--days N]         # prefilter → rank → brief 한 번에 (--days: 최근 N일만)
   python main.py export            # DB → data/export/countries.json (ACTIVE)
   python main.py export --passed   # AI 없이 필터 통과 기사로 export (Phase 1)
   python main.py admin             # 관리자 페이지 생성 (data/export/admin.html)
@@ -146,17 +146,17 @@ def _ai_guard(fn, label):
         sys.exit(2)
 
 
-def cmd_prefilter(_args):
+def cmd_prefilter(args):
     import llm_prefilter
     conn = db.open_conn()
-    s = _ai_guard(lambda: llm_prefilter.run_prefilter(conn), "prefilter")
+    s = _ai_guard(lambda: llm_prefilter.run_prefilter(conn, days=getattr(args, "days", None)), "prefilter")
     print(f"[prefilter] 처리={s['total']}  keep={s['keep']}  drop={s['drop']}")
 
 
-def cmd_rank(_args):
+def cmd_rank(args):
     import llm_ranker
     conn = db.open_conn()
-    s = _ai_guard(lambda: llm_ranker.run_rank(conn), "rank")
+    s = _ai_guard(lambda: llm_ranker.run_rank(conn, days=getattr(args, "days", None)), "rank")
     print(f"[rank] 처리={s['ranked']}  ACTIVE={s['active']}")
 
 
@@ -170,17 +170,18 @@ def cmd_brief(args):
     print(f"[brief] 국가={s['countries']}  작성={s['written']}")
 
 
-def cmd_ai(_args):
+def cmd_ai(args):
     """prefilter → rank → brief 순서 실행."""
     import briefing
     import llm_prefilter
     import llm_ranker
     conn = db.open_conn()
+    days = getattr(args, "days", None)
     print("▶ [1/3] LLM 프리필터...")
-    s1 = _ai_guard(lambda: llm_prefilter.run_prefilter(conn), "ai")
+    s1 = _ai_guard(lambda: llm_prefilter.run_prefilter(conn, days=days), "ai")
     print(f"   keep={s1['keep']} drop={s1['drop']}")
     print("▶ [2/3] AI 분석...")
-    s2 = _ai_guard(lambda: llm_ranker.run_rank(conn), "ai")
+    s2 = _ai_guard(lambda: llm_ranker.run_rank(conn, days=days), "ai")
     print(f"   ranked={s2['ranked']} ACTIVE={s2['active']}")
     print("▶ [3/3] 국가 브리핑...")
     s3 = _ai_guard(lambda: briefing.run_briefing(conn), "ai")
@@ -194,6 +195,10 @@ def cmd_export(args):
     s = export_json.export_countries(conn, active_only=active_only)
     mode = "ACTIVE(ai_score≥임계)" if active_only else "passed(AI 없음)"
     print(f"[export] mode={mode}  countries={s['countries']}  articles={s['articles']}  → {s['path']}")
+    p = export_json.export_pulse(conn)
+    print(f"[export] pulse categories={p['categories']}  → {p['path']}")
+    k = export_json.export_keyman(conn)
+    print(f"[export] keyman articles={k['articles']}  → {k['path']}")
 
 
 def cmd_admin(_args):
@@ -228,11 +233,14 @@ def main():
     lst.add_argument("--limit", type=int, default=20)
 
     # AI 단계
-    sub.add_parser("prefilter", help="LLM 1차 관문 (keep/drop)")
-    sub.add_parser("rank",      help="AI 분석 (score/summary/topics/kb_implication)")
+    pre = sub.add_parser("prefilter", help="LLM 1차 관문 (keep/drop)")
+    pre.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
+    rnk = sub.add_parser("rank",      help="AI 분석 (score/summary/topics/kb_implication)")
+    rnk.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
     brf = sub.add_parser("brief", help="국가별 브리핑 생성")
     brf.add_argument("--type", default="weekly", help="브리핑 유형 (weekly|daily)")
-    sub.add_parser("ai",        help="prefilter → rank → brief 일괄")
+    aip = sub.add_parser("ai",        help="prefilter → rank → brief 일괄")
+    aip.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
     exp = sub.add_parser("export", help="DB → data/export/*.json (UI 데이터)")
     exp.add_argument("--passed", action="store_true",
                      help="AI 점수 없이 필터 통과 기사로 export (Phase 1)")
