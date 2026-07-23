@@ -39,17 +39,19 @@ def ensure_columns(conn) -> None:
     ])
 
 
-def _translate(provider, target, summary, kb):
-    user = f"summary: {(summary or '')[:1500]}\nkb_implication: {(kb or '')[:1000]}"
-    data = provider.complete_json(_SYS[target], user, max_tokens=600)
-    return str(data.get("summary") or "")[:1500], str(data.get("kb_implication") or "")[:1000]
+def _user(summary, kb):
+    return f"summary: {(summary or '')[:1500]}\nkb_implication: {(kb or '')[:1000]}"
 
 
 def run_translate(conn, provider: LLMProvider | None = None,
-                  limit: int | None = None, days: int | None = None) -> dict:
-    """표시분(ACTIVE) 중 한쪽 언어가 비어있는 기사를 번역해 양 언어를 채운다."""
+                  limit: int | None = None, days: int | None = None,
+                  use_batch: bool | None = None) -> dict:
+    """표시분(ACTIVE) 중 한쪽 언어가 비어있는 기사를 번역해 양 언어를 채운다.
+
+    use_batch: None=배치(50% 할인, 기본) / False=동기 호출(디버깅).
+    """
     ensure_columns(conn)
-    provider = provider or get_provider("fast")   # 저비용(Haiku)
+    provider = provider or get_provider("fast", use_batch=use_batch)   # 저비용(Haiku)
     limit = limit or 200
 
     date_clause, params = "", []
@@ -72,23 +74,39 @@ def run_translate(conn, provider: LLMProvider | None = None,
     ).fetchall()
 
     stats = dict(total=len(rows), ko=0, en=0)
-    cur = conn.cursor()
-    for r in rows:
+
+    # 요청 일괄 구성(방향은 custom_id 에 인코딩) → 배치 제출(50% 할인) 또는 동기 폴백
+    requests, meta = [], {}
+    for i, r in enumerate(rows):
         has_en = bool((r["summary_en"] or "").strip())
         has_ko = bool((r["summary_ko"] or "").strip())
         if has_en and not has_ko:                       # EN(기준본) → KO
-            s, k = _translate(provider, "ko", r["summary_en"], r["kb_implication_en"])
-            if s or k:
-                cur.execute("UPDATE articles_raw SET summary_ko=?, kb_implication=? WHERE article_id=?",
-                            (s, k, r["article_id"]))
-                stats["ko"] += 1
+            cid, target, src_s, src_k = str(i), "ko", r["summary_en"], r["kb_implication_en"]
         elif has_ko and not has_en:                     # KO(레거시) → EN
-            s, k = _translate(provider, "en", r["summary_ko"], r["kb_implication"])
-            if s or k:
-                cur.execute("UPDATE articles_raw SET summary_en=?, kb_implication_en=? WHERE article_id=?",
-                            (s, k, r["article_id"]))
-                stats["en"] += 1
-        conn.commit()   # 증분 커밋
+            cid, target, src_s, src_k = str(i), "en", r["summary_ko"], r["kb_implication"]
+        else:
+            continue
+        requests.append((cid, _SYS[target], _user(src_s, src_k), 600))
+        meta[cid] = (r["article_id"], target)
+
+    results = provider.complete_json_batch(requests) if requests else {}
+
+    cur = conn.cursor()
+    for cid, (article_id, target) in meta.items():
+        data = results.get(cid) or {}
+        s = str(data.get("summary") or "")[:1500]
+        k = str(data.get("kb_implication") or "")[:1000]
+        if not (s or k):
+            continue
+        if target == "ko":
+            cur.execute("UPDATE articles_raw SET summary_ko=?, kb_implication=? WHERE article_id=?",
+                        (s, k, article_id))
+            stats["ko"] += 1
+        else:
+            cur.execute("UPDATE articles_raw SET summary_en=?, kb_implication_en=? WHERE article_id=?",
+                        (s, k, article_id))
+            stats["en"] += 1
+    conn.commit()
 
     log.info("번역 완료 — 대상=%d  KO채움=%d  EN채움=%d", stats["total"], stats["ko"], stats["en"])
     return stats

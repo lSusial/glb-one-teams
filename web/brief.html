@@ -46,11 +46,11 @@
   .cap .n{color:var(--kb-silver)}
   .badge{font-size:10.5px;font-weight:800;padding:1px 8px;border-radius:20px;color:#fff}
   .b-finance{background:#2b5f9e}.b-digital{background:#6a3fb5}.b-esg{background:#3a8a6a}.b-risk{background:#b23b3b}
-  .flow{display:flex;gap:10px;padding:11px 0;border-top:1px solid var(--line);align-items:flex-start}
+  .flow{padding:11px 0;border-top:1px solid var(--line)}
   .flow:first-child{border-top:0;padding-top:2px}
-  .flow .fb{flex:none;margin-top:1px}
-  .flow .ft{font-weight:700;font-size:13.5px;line-height:1.4}
+  .flow .ft{font-weight:700;font-size:13.5px;line-height:1.6}
   .flow .ft .fg{font-size:14px}
+  .flow .ft .badge{vertical-align:middle;margin-right:3px}
   .flow .fs{color:#463f37;font-size:12.5px;line-height:1.5;margin-top:3px}
   .news{display:flex;flex-direction:column;gap:9px}
   .nc{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fff}
@@ -127,8 +127,8 @@
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l={finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'}[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
   const LANG=P.get('lang')==='en'?'en':'ko';
-  const tq=a=>LANG==='en'?(a.q_en||a.q):a.q, tk=a=>LANG==='en'?(a.k_en||a.k):a.k;
-  const tf=f=>LANG==='en'?(f.summary_en||f.summary):f.summary;
+  const tq=a=>LANG==='en'?(a.q_en||a.q):(a.q||a.q_en), tk=a=>LANG==='en'?(a.k_en||a.k):(a.k||a.k_en);
+  const tf=f=>LANG==='en'?(f.summary_en||f.summary):(f.summary||f.summary_en);
   const enEl=document.querySelector('.en');
   if(enEl){ enEl.style.cursor='pointer';
     enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
@@ -136,9 +136,9 @@
   document.querySelectorAll('.nav a').forEach(a=>{ a.href=a.getAttribute('href').split('?')[0]+location.search; });
 
   document.getElementById('flows').innerHTML=(D.key_flows||[]).map(f=>`
-    <div class="flow"><span class="fb">${badges(f.c)}</span>
-      <div><div class="ft"><span class="fg">${f.flag||''}</span> ${esc(f.title)}</div>
-      <div class="fs">${esc(tf(f))}</div></div></div>`).join('')
+    <div class="flow">
+      <div class="ft"><span class="fg">${f.flag||''}</span> ${badges(f.c)} ${esc(f.title)}</div>
+      <div class="fs">${esc(tf(f))}</div></div>`).join('')
     || '<div style="color:var(--sub);font-size:13px;padding:6px 0">데이터 없음 (AI 분석 필요)</div>';
 
   document.getElementById('news').innerHTML=(D.top_news||[]).map(a=>`

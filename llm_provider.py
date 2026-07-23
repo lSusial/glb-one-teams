@@ -50,12 +50,26 @@ class LLMProvider(abc.ABC):
         raw = self.complete(system, user, **kw)
         return _extract_json(raw)
 
+    # -- 일괄 처리 ---------------------------------------------------------
+    # requests: list[(custom_id, system, user, max_tokens)]  →  {custom_id: text}
+    # 기본 구현은 동기 순차 호출(폴백). 배치를 지원하는 어댑터는 오버라이드한다.
+    def complete_batch(self, requests, *, temperature: float = 0.0) -> dict:
+        out = {}
+        for cid, system, user, mt in requests:
+            out[cid] = self.complete(system, user, max_tokens=mt, temperature=temperature)
+        return out
+
+    def complete_json_batch(self, requests, *, temperature: float = 0.0) -> dict:
+        """requests → {custom_id: parsed_dict}. 배치 어댑터가 있으면 50% 할인 경로 사용."""
+        return {cid: _extract_json(txt)
+                for cid, txt in self.complete_batch(requests, temperature=temperature).items()}
+
 
 # ---------------------------------------------------------------------------
 # Anthropic (실제 호출)
 # ---------------------------------------------------------------------------
 class AnthropicProvider(LLMProvider):
-    def __init__(self, model: str, api_key: str | None = None):
+    def __init__(self, model: str, api_key: str | None = None, use_batch: bool | None = None):
         try:
             import anthropic  # 지연 임포트 — 미설치 환경 보호
         except ImportError as e:  # pragma: no cover
@@ -71,6 +85,7 @@ class AnthropicProvider(LLMProvider):
         self._client = anthropic.Anthropic(api_key=key)
         self.model = model
         self.model_id = f"anthropic:{model}"
+        self.use_batch = config.LLM_USE_BATCH if use_batch is None else use_batch
 
     def complete(self, system, user, *, max_tokens=1024, temperature=0.0) -> str:
         last_err: Exception | None = None
@@ -94,6 +109,63 @@ class AnthropicProvider(LLMProvider):
                                 attempt + 1, config.LLM_MAX_RETRIES, wait, e)
                     time.sleep(wait)
         raise RuntimeError(f"Anthropic 호출 실패: {last_err!r}")
+
+    def complete_batch(self, requests, *, temperature=0.0) -> dict:
+        """Message Batches API — 토큰 50% 할인. 비실시간 일괄 처리.
+
+        요청을 한 번에 제출하고 완료까지 폴링 후 custom_id 로 결과를 수거한다.
+        use_batch=False 이거나 요청 수가 LLM_BATCH_MIN 미만이면 동기 순차 호출로 폴백.
+        """
+        requests = list(requests)
+        if not self.use_batch or len(requests) < config.LLM_BATCH_MIN:
+            return super().complete_batch(requests, temperature=temperature)
+
+        out: dict[str, str] = {}
+        for chunk in _chunks(requests, config.LLM_BATCH_CHUNK):
+            batch_reqs = [
+                {
+                    "custom_id": cid,
+                    "params": {
+                        "model": self.model,
+                        "max_tokens": mt,
+                        "temperature": temperature,
+                        "system": system,
+                        "messages": [{"role": "user", "content": user}],
+                    },
+                }
+                for cid, system, user, mt in chunk
+            ]
+            batch = self._client.messages.batches.create(requests=batch_reqs)
+            log.info("배치 제출 — id=%s  요청=%d  (24h 내 완료, 50%% 할인)", batch.id, len(chunk))
+
+            waited = 0
+            while True:
+                b = self._client.messages.batches.retrieve(batch.id)
+                if b.processing_status == "ended":
+                    break
+                if waited >= config.LLM_BATCH_MAX_WAIT_SEC:
+                    raise RuntimeError(f"배치 {batch.id} 대기 초과({waited}s)")
+                time.sleep(config.LLM_BATCH_POLL_SEC)
+                waited += config.LLM_BATCH_POLL_SEC
+                counts = getattr(b, "request_counts", None)
+                if counts is not None:
+                    log.info("배치 진행 — 처리중=%s 성공=%s 실패=%s (%ds 경과)",
+                             getattr(counts, "processing", "?"), getattr(counts, "succeeded", "?"),
+                             getattr(counts, "errored", "?"), waited)
+
+            errs = 0
+            for res in self._client.messages.batches.results(batch.id):
+                r = res.result
+                if getattr(r, "type", "") == "succeeded":
+                    msg = r.message
+                    out[res.custom_id] = "".join(
+                        blk.text for blk in msg.content if getattr(blk, "type", "") == "text"
+                    )
+                else:
+                    errs += 1
+                    out[res.custom_id] = ""
+            log.info("배치 수거 — id=%s  성공=%d  실패=%d", batch.id, len(chunk) - errs, errs)
+        return out
 
 
 # ---------------------------------------------------------------------------
@@ -143,18 +215,31 @@ class StubProvider(LLMProvider):
 # ---------------------------------------------------------------------------
 # 팩토리
 # ---------------------------------------------------------------------------
-def get_provider(role: str = "smart", name: str | None = None) -> LLMProvider:
-    """role: 'fast'|'smart'. name 미지정 시 config.DEFAULT_PROVIDER 사용."""
+def get_provider(role: str = "smart", name: str | None = None,
+                 use_batch: bool | None = None) -> LLMProvider:
+    """role: 'fast'|'smart'. name 미지정 시 config.DEFAULT_PROVIDER 사용.
+
+    use_batch: Anthropic 전용. None=config 기본(True), False=동기 호출(디버깅).
+    """
     name = (name or config.DEFAULT_PROVIDER).lower()
     if name == "anthropic":
         model = config.ANTHROPIC_MODEL_FAST if role == "fast" else config.ANTHROPIC_MODEL_SMART
-        return AnthropicProvider(model=model)
+        return AnthropicProvider(model=model, use_batch=use_batch)
     if name == "openai":
         model = config.OPENAI_MODEL_FAST if role == "fast" else config.OPENAI_MODEL_SMART
         return OpenAIProvider(model=model)
     if name == "stub":
         return StubProvider(role=role)
     raise ValueError(f"알 수 없는 LLM 프로바이더: {name!r} (anthropic|openai|stub)")
+
+
+# ---------------------------------------------------------------------------
+# 유틸
+# ---------------------------------------------------------------------------
+def _chunks(seq, n):
+    """seq 를 최대 n 개씩 끊어 반환."""
+    for i in range(0, len(seq), n):
+        yield seq[i : i + n]
 
 
 # ---------------------------------------------------------------------------

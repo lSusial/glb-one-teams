@@ -61,9 +61,37 @@ def _ensure_ai_columns(conn) -> None:
     ])
 
 
+def _daily_briefs(conn) -> dict:
+    """country_briefings(daily) 최신본을 {cc: {ko, en, date}} 로 반환. 없으면 {}."""
+    try:
+        cols = [c[1] for c in conn.execute("PRAGMA table_info(country_briefings)")]
+    except Exception:
+        return {}
+    if "cc" not in cols:
+        return {}
+    has_en = "summary_en" in cols
+    sel = "cc, summary, briefing_date" + (", summary_en" if has_en else "")
+    rows = conn.execute(
+        f"SELECT {sel} FROM country_briefings WHERE briefing_type='daily' "
+        "ORDER BY briefing_date DESC, generated_at DESC"
+    ).fetchall()
+    out = {}
+    for r in rows:
+        cc = r["cc"]
+        if cc in out:            # 국가별 최신 1건만
+            continue
+        out[cc] = {
+            "ko": r["summary"] or "",
+            "en": (r["summary_en"] if has_en else "") or "",
+            "date": r["briefing_date"],
+        }
+    return out
+
+
 def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     _ensure_ai_columns(conn)
     dc, dparams = _date_clause(days)   # 현지언론 = 전일+당일 (max-1일 이후)
+    briefs = _daily_briefs(conn)
     """국가별 기사를 UI 데이터 계약(countries.json)으로 내보낸다.
 
     active_only=True  (기본, AI 실행 후): ai_score >= AI_SCORE_ACTIVE_THRESHOLD 인 ACTIVE 기사만.
@@ -116,6 +144,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
             "flag": flag,
             "status": "ACTIVE" if articles else "SOURCE WATCH",
             "count": len(articles),
+            "brief": briefs.get(cc),            # 전일+당일 AI 브리핑(한/영) — 없으면 null
             "articles": articles,
         })
 

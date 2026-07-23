@@ -74,7 +74,14 @@
   .art .q{color:#463f37;line-height:1.55}
   .art .k{margin-top:8px;background:#fffdf4;border:1px solid #f1e7c8;border-left:3px solid var(--kb-yellow);border-radius:6px;padding:7px 11px;font-size:13px;line-height:1.55}
   .art .k b{color:var(--kb-gold)}
-  .empty{color:var(--sub);text-align:center;padding:34px;font-size:13px}
+  .empty{color:var(--sub);text-align:center;padding:34px;font-size:13px;line-height:1.7}
+  /* ── 일일 브리핑 박스 ── */
+  .brief{background:#fbf8ef;border:1px solid #efe6cf;border-left:3px solid var(--kb-yellow);border-radius:8px;padding:12px 14px;margin-bottom:12px}
+  .brief .bh{font-size:12px;font-weight:800;color:var(--kb-gold);margin-bottom:6px;letter-spacing:.3px;display:flex;align-items:center;gap:6px}
+  .brief .bh .bd{margin-left:auto;font-weight:600;color:var(--sub)}
+  .brief .bt{font-size:13px;line-height:1.7;color:#3a352e}
+  .brief .bt.bempty{color:var(--sub);font-weight:400}
+  .brief .bt code{background:#efe7d2;padding:1px 5px;border-radius:4px;font-size:12px}
 
   /* ── 푸터 ── */
   footer{text-align:center;color:var(--kb-silver);font-size:11.5px;letter-spacing:.5px;padding:22px 0 34px}
@@ -114,7 +121,8 @@
 
   <section class="sec accent" id="secFeed">
     <div class="sec-h"><div class="num y">02</div>
-      <div><div class="tt">현지언론 피드</div><div class="ds">AI 중요도 순 · 매체·날짜·요약·KB 시사점·원문</div></div></div>
+      <div><div class="tt">현지언론 피드</div><div class="ds">거점 선택 시 · 전일+당일 AI 브리핑 + 기사(중요도순)</div></div></div>
+    <div id="brief" class="brief" style="display:none"></div>
     <div class="fil" id="cats"></div>
     <div class="fil" style="margin-top:8px"><span class="sp"></span><span class="cnt" id="count"></span></div>
     <div class="feed" id="feed"></div>
@@ -162,7 +170,7 @@
     return `<span class="badge b-${k}">${lab}</span>`;}).join(' ');
 
   const LANG=P.get('lang')==='en'?'en':'ko';
-  const tq=a=>LANG==='en'?(a.q_en||a.q):a.q, tk=a=>LANG==='en'?(a.k_en||a.k):a.k;
+  const tq=a=>LANG==='en'?(a.q_en||a.q):(a.q||a.q_en), tk=a=>LANG==='en'?(a.k_en||a.k):(a.k||a.k_en);
   const enEl=document.querySelector('.en');
   if(enEl){ enEl.style.cursor='pointer';
     enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
@@ -170,11 +178,32 @@
   document.querySelectorAll('.nav a').forEach(a=>{ a.href=a.getAttribute('href').split('?')[0]+location.search; });
 
   function render(){
-    document.getElementById('cats').innerHTML=CATS.map(([k,l])=>`<span class="chip${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
     document.querySelectorAll('#cov .cc').forEach(c=>c.classList.toggle('sel',c.dataset.cc===fCC));
-    let rows=arts.filter(a=>(!fCat||(a.c||'').includes(fCat))&&(!fCC||a.cc===fCC));
-    document.getElementById('count').textContent=rows.length+' 건'+(fCC?(' · '+(NAMES[fCC]||fCC)):'');
-    const feed=document.getElementById('feed');
+    const catsEl=document.getElementById('cats'), bx=document.getElementById('brief'), feed=document.getElementById('feed');
+
+    // 국가 미선택 → 목록·브리핑 숨기고 안내
+    if(!fCC){
+      bx.style.display='none'; catsEl.style.display='none';
+      document.getElementById('count').textContent='';
+      feed.innerHTML='<div class="empty">위 <b>거점 커버리지</b>에서 국가를 선택하면<br>해당 거점의 <b>일일 브리핑</b>과 기사가 표시됩니다.</div>';
+      feed._rows=[]; return;
+    }
+
+    catsEl.style.display='';
+    catsEl.innerHTML=CATS.map(([k,l])=>`<span class="chip${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
+
+    // 일일 브리핑 박스 (전일+당일 AI 종합)
+    const co=(DATA.countries||[]).find(c=>c.cc===fCC), br=co&&co.brief;
+    const btxt=br?(LANG==='en'?(br.en||br.ko):(br.ko||br.en)):'';
+    const label=LANG==='en'?'Daily Briefing':'일일 브리핑';
+    const bd=br&&br.date?`<span class="bd">${esc(br.date)}</span>`:'';
+    bx.style.display='';
+    bx.innerHTML=`<div class="bh">${NAMES[fCC]||fCC} · ${label}${bd}</div>`+
+      (btxt?`<div class="bt">${esc(btxt)}</div>`
+           :`<div class="bt bempty">${LANG==='en'?'No briefing generated yet.':'아직 브리핑이 생성되지 않았습니다. 맥북에서 <code>python main.py brief --type daily</code> 실행 후 export.'}</div>`);
+
+    let rows=arts.filter(a=>(!fCat||(a.c||'').includes(fCat))&&a.cc===fCC);
+    document.getElementById('count').textContent=rows.length+' 건 · '+(NAMES[fCC]||fCC);
     if(!rows.length){feed.innerHTML='<div class="empty">해당 조건의 기사가 없습니다. (AI 분석 전이거나 SOURCE WATCH 상태)</div>';feed._rows=[];return;}
     feed.innerHTML=rows.map((a,i)=>`<div class="art" data-i="${i}">
       <div class="top"><span class="flag">${a.flag||''}</span> <b>${NAMES[a.cc]||a.cc}</b> · ${esc(a.src)} · ${esc(a.d)} ${badges(a.c)}

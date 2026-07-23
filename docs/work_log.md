@@ -120,7 +120,34 @@
 - **최신 재수집 필요**(맥북): 현재 DB는 2026-06-22 스냅샷 — 구 필터 판정·HK/SG 0건. 개선 필터+HK/SG 반영은 재수집 후 `filter --refilter`·`admin`·`export --passed` 재실행.
 - `ai_score` 스케일: 구 DB는 1~5, 코드는 0~100(임계 60) → `export`(ACTIVE) 0건. Phase 2에서 재랭킹·표기 통일.
 - Phase 2 AI(taxonomy 태깅·요약·kb_implication) + LLM 프리필터(정치성 노이즈).
-- **[검토] Phase 2 비용 최적화**: rank가 Sonnet이라 레거시(Haiku) 대비 토큰 비용↑ (+ kb_implication 출력 추가, 1호출=1기사). prompt caching은 시스템 프롬프트 177토큰(<1024 최소치)이라 무효. 레버 — ① `rank --fast`(Haiku) 토글 추가해 품질 A/B, ② N건/호출 배치(시스템 프롬프트 분할, 출력비용은 그대로). 물량은 `--days`로 이미 축소. **미구현 — 필요 시 진행.**
+- **[검토] Phase 2 비용 최적화**: rank가 Sonnet이라 레거시(Haiku) 대비 토큰 비용↑ (+ kb_implication 출력 추가, 1호출=1기사). prompt caching은 시스템 프롬프트 177토큰(<1024 최소치)이라 무효. 레버 — ① `rank --fast`(Haiku) 토글 추가해 품질 A/B, ② N건/호출 배치(시스템 프롬프트 분할, 출력비용은 그대로). 물량은 `--days`로 이미 축소. → **세션 8에서 모델 Haiku 전환 + Message Batches API(50% 할인) 적용 완료.**
+
+### 세션 8 (2026-07-23) — 비용 최적화 · UI 개편 · 현지언론 일일 브리핑
+
+#### AI 비용 최적화
+- **모델 Haiku 전환**: `config.ANTHROPIC_MODEL_SMART` = `claude-haiku-4-5`(rank/brief도 Haiku). 토큰 절약.
+- **Message Batches API 적용(토큰 50% 할인)** — 비실시간 일괄 처리라 일일 파이프라인에 최적(완료 최대 24h·보통 수분).
+  - `llm_provider.py`: `complete_batch`/`complete_json_batch` 추가. `AnthropicProvider`가 배치 제출→폴링→`custom_id` 수거. Stub/OpenAI는 동기 폴백.
+  - `llm_prefilter.py`·`llm_ranker.py`·`llm_translate.py`·`briefing.py`: 기사별 순차 호출 → "요청 일괄 구성→배치→결과 반영"으로 전환.
+  - `config.py`: `LLM_USE_BATCH`(기본 on)·`LLM_BATCH_MIN/CHUNK/POLL_SEC/MAX_WAIT_SEC`.
+  - `main.py`: prefilter/rank/translate/brief/ai에 **`--sync`**(배치 끄고 동기, 디버깅용). SDK 표면(create/retrieve/results, request_counts, result.type) 확인.
+
+#### UI/데이터 개편
+- **규제·정책 → TopicWatch 흡수** (5탭→**4탭**): `web/regulations.html` nav 제거·생성 중단, TopicWatch `_ISSUES`에 **규제·감독 클러스터** 추가.
+- **ai_score ACTIVE 임계 60→55**: 임계 바로 아래(50~59)에 준수한 거시·금융 뉴스가 몰려 노출 폭 확대. export만 재실행하면 반영(AI 재호출 X).
+- **Global Pulse '오늘의 핵심 흐름' 배지 인라인화**: 왼쪽 고정폭 배지 컬럼 제거 → `[국기][배지] 제목` 한 줄, 본문 시작점 정렬.
+- **KO/EN 폴백**: 표시 언어가 비면 반대 언어로 폴백(`tq/tk/tf`) — 미번역분도 빈칸 없이 노출. 4개 화면 적용.
+
+#### 현지언론 화면 재구성
+- **국가 선택 게이팅**: 국가 미선택 시 목록 숨김·안내만. 커버리지에서 거점 클릭 시 브리핑+기사 노출.
+- **일일 브리핑 박스**(목록 상단): 선택 거점의 **전일+당일** 뉴스를 AI가 4~5문장 한/영 동시 종합.
+  - `briefing.py`: `--type daily`(전일+당일, `summary`+`summary_en` 한/영, 배치) 추가. `country_briefings.summary_en` 컬럼 보강.
+  - `export_json.py`: `_daily_briefs()` → 국가별 최신 daily 브리핑을 `countries.json`의 국가별 `brief`{ko,en,date} 필드로 주입.
+  - `main.py ai` 4단계가 이제 **일일 브리핑** 생성.
+
+#### 운영 메모
+- 실제 AI 실행은 맥북(ANTHROPIC_API_KEY): `python main.py ai --days 2`(4단계=일일 브리핑 포함) → `python main.py export`.
+- 임계 55 하향 후 55~59 신규 노출분 KO 미번역 소수 → `translate --days 2`로 채움(당장은 EN 폴백으로 노출).
 
 ---
 

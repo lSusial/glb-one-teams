@@ -59,13 +59,15 @@ def _system_prompt() -> str:
 
 
 def run_rank(conn, provider: LLMProvider | None = None,
-             limit: int | None = None, days: int | None = None) -> dict:
+             limit: int | None = None, days: int | None = None,
+             use_batch: bool | None = None) -> dict:
     """prefilter keep·미분석 기사를 LLM으로 분석.
 
     days: 지정 시 최근 N일 게시 기사만 처리(전체 백로그 대신 최신치만 — 비용 절감).
+    use_batch: None=배치(50% 할인, 기본) / False=동기 호출(디버깅).
     """
     ensure_columns(conn)
-    provider = provider or get_provider("smart")
+    provider = provider or get_provider("smart", use_batch=use_batch)
     limit = limit or config.RANK_LIMIT
     system = _system_prompt()
 
@@ -88,8 +90,11 @@ def run_rank(conn, provider: LLMProvider | None = None,
     ).fetchall()
 
     stats = dict(total=len(rows), ranked=0, active=0)
-    cur = conn.cursor()
-    for r in rows:
+
+    # 요청 일괄 구성 → 배치 제출(50% 할인) 또는 동기 폴백
+    requests, row_by_id = [], {}
+    for i, r in enumerate(rows):
+        cid = str(i)
         ctx = kb_network.context_for(r["cc"])
         user = (
             f"[거점 맥락: {ctx}]\n"
@@ -97,8 +102,14 @@ def run_rank(conn, provider: LLMProvider | None = None,
             f"제목: {r['title']}\n"
             f"요약: {(r['summary'] or '')[:1200]}"
         )
-        data = provider.complete_json(system, user, max_tokens=600)
+        requests.append((cid, system, user, 600))
+        row_by_id[cid] = r
 
+    results = provider.complete_json_batch(requests) if requests else {}
+
+    cur = conn.cursor()
+    for cid, r in row_by_id.items():
+        data = results.get(cid) or {}
         # ── 폴백 포함 파싱 ──
         try:
             score = max(0, min(100, int(data.get("ai_score"))))
@@ -116,10 +127,10 @@ def run_rank(conn, provider: LLMProvider | None = None,
                WHERE article_id = ?""",
             (score, summary_en, ",".join(topics), kb_impl_en, provider.model_id, r["article_id"]),
         )
-        conn.commit()
         stats["ranked"] += 1
         if score >= config.AI_SCORE_ACTIVE_THRESHOLD:
             stats["active"] += 1
+    conn.commit()
 
     log.info(
         "랭킹 완료 — 처리=%d  ACTIVE(>=%d)=%d",

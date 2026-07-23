@@ -65,7 +65,7 @@ python main.py list    # 최근 기사 확인
 - **설계 문서:**
   - `화면분석_개발가이드.md` — 화면별 구성·콘텐츠 + 데이터 연동 로드맵
   - `데이터_AI_카테고리_설계.md` — 수집 데이터 / AI 산출물 / 3축 카테고리 설계
-- **AI 레이어 현황:** `schema.sql`에 AI 컬럼(`llm_prefilter`, `ai_score`, `summary_ko`, `topics`, `kb_implication`) + `country_briefings` 준비됨. 모듈(`llm_prefilter.py`·`llm_ranker.py`·`briefing.py`·`llm_provider.py`)은 이 레포에 이식 완료이나 **미실행**(`ANTHROPIC_API_KEY` 필요, py_compile만 검증)
+- **AI 레이어 현황:** `schema.sql`에 AI 컬럼(`llm_prefilter`, `ai_score`, `summary_ko`, `topics`, `kb_implication`) + `country_briefings` 준비됨. 모듈(`llm_prefilter.py`·`llm_ranker.py`·`llm_translate.py`·`briefing.py`·`llm_provider.py`) 이식·**실제 실행 완료**(맥북). 모델=Haiku, **Message Batches API(50% 할인) 기본**(`--sync`로 동기 전환). ai_score ACTIVE 임계=**55**. 화면=**4탭**(규제·정책은 TopicWatch로 흡수).
 - **카테고리 3축:** 지역(`sources.yaml`) / 관련성게이트(`keyword_filter.py`) / 주제(AI `topics`, 미구현). UI 필터 = 주제축 → `taxonomy.yaml`로 표준화 예정
 
 ## 다음 과제 (우선순위)
@@ -76,5 +76,5 @@ python main.py list    # 최근 기사 확인
 5. 수집원 보강 — OFFICIAL/tier0 활성화(규제), 자회사 IR(ID·KH), 거시지표 피드
 6. 정기 수집 자동화
 
-> ⛔ **현재 진행 범위(2026-07-14):** 원칙 = **뉴스 분석으로 도출 가능한 항목 포함 / 비-뉴스 소스 필요 항목 보류.** 포함: 현지언론+AI(요약·시사점·분류)·Global Pulse 온도계·Key-man 인사동향(뉴스)·규제 화면(뉴스). 보류: 재미요소·참여형, 자회사 IR 링크, OFFICIAL 당국 원천 피드, 거시지표 빅넘버. 상세는 `PLAN.md`의 '이번 진행 범위'.
+> ⛔ **현재 진행 범위(2026-07-23 갱신):** 원칙 = **뉴스 분석으로 도출 가능한 항목 포함 / 비-뉴스 소스 필요 항목 보류.** 포함: 현지언론+AI(요약·시사점·분류·**국가 일일 브리핑**)·Global Pulse 온도계·Key-man 인사동향(뉴스)·**TopicWatch(규제·감독 클러스터 포함, 규제 화면 흡수)**. 보류: 재미요소·참여형, 자회사 IR 링크, OFFICIAL 당국 원천 피드, 거시지표 빅넘버. 상세는 `PLAN.md`의 '이번 진행 범위' + `docs/work_log.md` 세션 8.
 > 상세 계획·로드맵은 `PLAN.md`(11장)·`STATUS.md` 및 위 설계 문서·`docs/work_log.md` 참조

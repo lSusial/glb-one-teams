@@ -35,12 +35,21 @@ OPENAI_MODEL_SMART = "gpt-4o"
 LLM_MAX_RETRIES = 2
 LLM_RETRY_BASE_SEC = 2.0
 
+# ── Message Batches API (비실시간 일괄 처리 → 토큰 50% 할인) ─────────
+# 일일 파이프라인은 지연에 둔감하므로 배치가 기본. --sync 또는 LLM_USE_BATCH=0 로 끄면 동기 호출.
+LLM_USE_BATCH        = os.environ.get("LLM_USE_BATCH", "1") not in ("0", "false", "False")
+LLM_BATCH_MIN        = 2       # 요청 수가 이보다 적으면 배치 안 함(오버헤드 방지 → 동기)
+LLM_BATCH_CHUNK      = 10000   # 배치당 최대 요청 수(API 한도)
+LLM_BATCH_POLL_SEC   = 10      # 완료 폴링 간격(초)
+LLM_BATCH_MAX_WAIT_SEC = 24 * 3600   # 배치 최대 대기(초, API SLA=24h)
+
 # ── AI 파이프라인 파라미터 ───────────────────────────────────────
 PREFILTER_LIMIT = 300        # 한 번 실행에 처리할 최대 기사 수(prefilter)
 RANK_LIMIT      = 150        # 한 번 실행에 처리할 최대 기사 수(ranker)
 
 # ai_score(0~100) 가 이 값 이상이면 UI에서 ACTIVE(노출), 미만은 SOURCE WATCH
-AI_SCORE_ACTIVE_THRESHOLD = 60
+# 60→55: 임계 바로 아래(50~59)에 준수한 거시·금융 뉴스가 몰려 있어 노출 폭을 넓힘
+AI_SCORE_ACTIVE_THRESHOLD = 55
 
 # 국가 브리핑에 투입할 기사 상한(국가·기간당)
 BRIEFING_MAX_ARTICLES = 25

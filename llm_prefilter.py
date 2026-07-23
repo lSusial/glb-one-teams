@@ -39,13 +39,15 @@ def ensure_columns(conn) -> None:
 
 
 def run_prefilter(conn, provider: LLMProvider | None = None,
-                  limit: int | None = None, days: int | None = None) -> dict:
+                  limit: int | None = None, days: int | None = None,
+                  use_batch: bool | None = None) -> dict:
     """prefilter 미처리(passed·비중복) 기사를 LLM으로 keep/drop 판정.
 
     days: 지정 시 최근 N일 게시 기사만 처리(전체 백로그 대신 최신치만 — 비용 절감).
+    use_batch: None=배치(50% 할인, 기본) / False=동기 호출(디버깅).
     """
     ensure_columns(conn)
-    provider = provider or get_provider("fast")
+    provider = provider or get_provider("fast", use_batch=use_batch)
     limit = limit or config.PREFILTER_LIMIT
 
     date_clause, params = "", []
@@ -68,14 +70,24 @@ def run_prefilter(conn, provider: LLMProvider | None = None,
     ).fetchall()
 
     stats = dict(total=len(rows), keep=0, drop=0)
-    cur = conn.cursor()
-    for r in rows:
+
+    # 요청 일괄 구성 → 배치 제출(50% 할인) 또는 동기 폴백
+    requests, row_by_id = [], {}
+    for i, r in enumerate(rows):
+        cid = str(i)
         user = (
             f"[국가:{r['cc']}] 제목: {r['title']}\n"
             f"요약: {(r['summary'] or '')[:600]}"
         )
-        data = provider.complete_json(_SYSTEM, user, max_tokens=200)
-        keep = bool(data.get("keep", True))  # 폴백: 불확실하면 보존
+        requests.append((cid, _SYSTEM, user, 200))
+        row_by_id[cid] = r
+
+    results = provider.complete_json_batch(requests) if requests else {}
+
+    cur = conn.cursor()
+    for cid, r in row_by_id.items():
+        data = results.get(cid) or {}
+        keep = bool(data.get("keep", True))  # 폴백: 불확실/누락이면 보존
         reason = str(data.get("reason", ""))[:300]
         decision = "keep" if keep else "drop"
         stats[decision] += 1
@@ -83,7 +95,7 @@ def run_prefilter(conn, provider: LLMProvider | None = None,
             "UPDATE articles_raw SET llm_prefilter = ?, llm_reject_reason = ? WHERE article_id = ?",
             (decision, None if keep else reason, r["article_id"]),
         )
-        conn.commit()  # 증분 커밋 — 중단되어도 진행분 보존
+    conn.commit()
 
     log.info("프리필터 완료 — 전체=%d  keep=%d  drop=%d", stats["total"], stats["keep"], stats["drop"])
     return stats
