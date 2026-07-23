@@ -189,7 +189,7 @@ def _compute_pulse(conn, days: int | None = None) -> list[dict]:
 
 
 _FLAGS_ALL = {"GB":"🇬🇧","US":"🇺🇸","JP":"🇯🇵","HK":"🇭🇰","SG":"🇸🇬","CN":"🇨🇳",
-              "VN":"🇻🇳","IN":"🇮🇳","MM":"🇲🇲","ID":"🇮🇩","KH":"🇰🇭"}
+              "VN":"🇻🇳","IN":"🇮🇳","MM":"🇲🇲","ID":"🇮🇩","KH":"🇰🇭","GLOBAL":"🌐"}
 
 
 def _date_clause(days, alias="a"):
@@ -383,3 +383,80 @@ def export_regulations(conn, days: int | None = None) -> dict:
         (config.EXPORT_DIR / "regulations.html").write_text(html, encoding="utf-8")
     log.info("regulations.json 작성 — 기사=%d", len(payload["articles"]))
     return {"articles": len(payload["articles"]), "path": str(config.EXPORT_DIR / "regulations.json")}
+
+
+# ---------------------------------------------------------------------------
+# TopicWatch — 주제별 횡단 이슈 (같은 테마가 여러 거점에 걸쳐 나타나는가)
+# ---------------------------------------------------------------------------
+_TOPICS_TEMPLATE = config.ROOT / "web" / "topics.html"
+
+_ISSUES = [
+    ("미국 연준·금리",   "US Fed / Rates",        ["fed", "fomc", "federal reserve", "rate cut", "rate hike"]),
+    ("일본은행·엔화",     "BOJ / Yen",             ["boj", "bank of japan", "yen", "jgb"]),
+    ("중국 경제·부양",    "China Economy",         ["pboc", "china's economic", "china economic", "stimulus", "yuan"]),
+    ("유가·에너지",       "Oil / Energy",          ["oil", "crude", "opec", "brent"]),
+    ("인플레이션·물가",   "Inflation",             ["inflation", "cpi", "ppi"]),
+    ("홍콩 금융",         "Hong Kong Finance",     ["hkma", "hang seng"]),
+    ("인도 시장",         "India Markets",         ["rbi", "rupee", "sensex", "nifty"]),
+    ("무역·관세·제재",    "Trade / Sanctions",     ["tariff", "sanction", "trade war", "export control"]),
+    ("ESG·기후",         "ESG / Climate",         ["esg", "carbon", "climate", "green bond", "net zero"]),
+    ("디지털·AI·반도체",  "Digital / AI / Chips",  ["artificial intelligence", "semiconductor", "fintech"]),
+    ("부동산·모기지",     "Property / Mortgage",   ["property", "real estate", "mortgage", "home price"]),
+]
+
+
+def _compute_topics(conn, days: int | None = None, max_per: int = 6) -> list[dict]:
+    """이슈 키워드로 ACTIVE 기사를 클러스터링 → 거점 횡단 주제. 거점 수 많은 순."""
+    dc, params = _date_clause(days)
+    rows = conn.execute(
+        f"""SELECT a.ai_score, a.title, a.summary, a.summary_ko, a.kb_implication,
+                   a.summary_en, a.kb_implication_en, a.topics, a.link, a.published_at,
+                   m.primary_country_code cc, m.media_name
+            FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
+            WHERE a.ai_score >= ? AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'{dc}
+            ORDER BY a.ai_score DESC""",
+        (config.AI_SCORE_ACTIVE_THRESHOLD, *params),
+    ).fetchall()
+
+    clusters = []
+    for label, label_en, kws in _ISSUES:
+        pats = [re.compile(r"\b" + re.escape(k) + r"\b", re.I) for k in kws]
+        arts, ccs = [], set()
+        for r in rows:
+            hay = (r["title"] or "") + " " + (r["summary"] or "")
+            if any(p.search(hay) for p in pats):
+                codes = [c for c in (r["topics"] or "").split(",") if c]
+                arts.append(dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""), src=r["media_name"],
+                                 d=(r["published_at"] or "")[:10], t=r["title"], q=r["summary_ko"] or "",
+                                 k=r["kb_implication"] or "", q_en=r["summary_en"] or "",
+                                 k_en=r["kb_implication_en"] or "", c=taxonomy.ui_string(codes),
+                                 score=r["ai_score"], u=r["link"]))
+                ccs.add(r["cc"])
+                if len(arts) >= max_per:
+                    break
+        if len(arts) >= 2:
+            clusters.append(dict(label=label, label_en=label_en, ccs=sorted(ccs),
+                                 flags=[_FLAGS_ALL.get(x, "") for x in sorted(ccs)],
+                                 count=len(arts), articles=arts))
+    clusters.sort(key=lambda c: (-len(c["ccs"]), -c["count"]))
+    return clusters
+
+
+def export_topics(conn, days: int | None = None) -> dict:
+    """topics.json + topics.html(TopicWatch 화면) 생성."""
+    config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "snapshot_date": _snapshot_date(),
+        "days": days,
+        "clusters": _compute_topics(conn, days=days),
+    }
+    _write_json("topics", payload)
+    if _TOPICS_TEMPLATE.exists():
+        data_js = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
+        html = _TOPICS_TEMPLATE.read_text(encoding="utf-8").replace(
+            '<script id="topics-data" type="application/json">null</script>',
+            f'<script id="topics-data" type="application/json">{data_js}</script>')
+        (config.EXPORT_DIR / "topics.html").write_text(html, encoding="utf-8")
+    log.info("topics.json 작성 — 클러스터=%d", len(payload["clusters"]))
+    return {"clusters": len(payload["clusters"]), "path": str(config.EXPORT_DIR / "topics.json")}

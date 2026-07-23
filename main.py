@@ -213,6 +213,8 @@ def cmd_export(args):
     print(f"[export] keyman articles={k['articles']}  → {k['path']}")
     g = export_json.export_regulations(conn)
     print(f"[export] regulations articles={g['articles']}  → {g['path']}")
+    t = export_json.export_topics(conn)
+    print(f"[export] topics clusters={t['clusters']}  → {t['path']}")
 
 
 def cmd_admin(_args):

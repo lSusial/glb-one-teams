@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>KB 글로벌 데일리 브리핑 — Key-man 인사동향</title>
-<script id="keyman-data" type="application/json">null</script>
+<title>KB 글로벌 데일리 브리핑 — TopicWatch</title>
+<script id="topics-data" type="application/json">null</script>
 <style>
   :root{--kb-yellow:#FFBC00;--kb-dark:#545045;--kb-gold:#85754E;--kb-silver:#8A8D8F;
         --ink:#2b2926;--line:#e8e4dd;--card:#fff;--sub:#7a746c;--page:#dcd8d2;}
@@ -24,21 +24,21 @@
   .nav{display:flex;gap:8px;margin:14px 0 0;flex-wrap:wrap}
   .nav a{font-size:13px;font-weight:700;color:var(--sub);text-decoration:none;padding:8px 14px;border-radius:20px;border:1px solid var(--line);background:#fff}
   .nav a.on{background:var(--kb-dark);color:#fff;border-color:var(--kb-dark)}
-  .sec{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-top:14px}
-  .sec-h{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
-  .num{flex:none;width:26px;height:26px;border-radius:7px;color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;background:var(--kb-gold)}
-  .sec-h .tt{font-size:15px;font-weight:800}.sec-h .ds{font-size:12px;color:var(--sub);margin-top:2px}
-  .sec-h .rt{margin-left:auto;font-size:12px;color:var(--sub)}
-  .badge{font-size:10.5px;font-weight:800;padding:1px 8px;border-radius:20px;color:#fff}
+  .cluster{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-top:12px}
+  .ch{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding-bottom:9px;border-bottom:1px solid var(--line)}
+  .ch .clabel{font-size:15px;font-weight:800}
+  .ch .cflags{font-size:15px;letter-spacing:1px}
+  .ch .cmeta{margin-left:auto;font-size:11.5px;color:var(--sub);font-weight:700}
+  .ca{padding:9px 0;border-top:1px dashed var(--line)}
+  .ca:first-child{border-top:0}
+  .ca .cat{font-size:11.5px;color:var(--sub);display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:3px}
+  .ca .flag{font-size:14px}.ca .score{margin-left:auto;font-weight:800;color:var(--kb-gold)}
+  .ca .ctt{font-size:14px;font-weight:700;line-height:1.35}
+  .ca .cq{color:#463f37;line-height:1.5;font-size:13px;margin-top:3px}
+  .ca .ck{margin-top:5px;background:#fffdf4;border-left:3px solid var(--kb-yellow);border-radius:5px;padding:5px 9px;font-size:12.5px;line-height:1.5}
+  .ca .ck b{color:var(--kb-gold)}
+  .badge{font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;color:#fff}
   .b-finance{background:#2b5f9e}.b-digital{background:#6a3fb5}.b-esg{background:#3a8a6a}.b-risk{background:#b23b3b}
-  .feed{display:flex;flex-direction:column;gap:9px}
-  .art{border:1px solid var(--line);border-radius:10px;padding:13px 15px;background:#fff}
-  .art .top{font-size:12px;color:var(--sub);display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:5px}
-  .art .flag{font-size:15px}.art .score{margin-left:auto;font-weight:800;color:var(--kb-gold)}
-  .art .t{font-size:15px;font-weight:700;line-height:1.35;margin:2px 0 6px}
-  .art .q{color:#463f37;line-height:1.55}
-  .art .k{margin-top:8px;background:#fffdf4;border:1px solid #f1e7c8;border-left:3px solid var(--kb-yellow);border-radius:6px;padding:7px 11px;font-size:13px;line-height:1.55}
-  .art .k b{color:var(--kb-gold)}
   .empty{color:var(--sub);text-align:center;padding:30px;font-size:13px;line-height:1.6}
   footer{text-align:center;color:var(--kb-silver);font-size:11.5px;letter-spacing:.5px;padding:22px 0 34px}
   footer .tag{color:var(--kb-gold);font-weight:800;letter-spacing:1px}
@@ -53,18 +53,11 @@
       <span class="kb"><b>KB</b><span>국민은행</span></span>
       <span class="rt"><span class="en">KR<span class="off"> / EN</span></span><select id="dsel" class="dsel"></select></span>
     </div>
-    <h1>Key-man 인사동향</h1>
-    <div class="sub">각국 중앙은행·감독당국·금융기관의 정책 결정자 인사·리더십 변화</div>
-    <div class="nav"><a href="brief.html">Global Pulse</a><a href="countries.html">현지언론</a><a class="on" href="keyman.html">Key-man</a><a href="regulations.html">규제·정책</a><a href="topics.html">TopicWatch</a></div>
+    <h1>TopicWatch</h1>
+    <div class="sub">같은 이슈가 여러 거점에서 어떻게 나타나는지 — 주제별 횡단 딥다이브</div>
+    <div class="nav"><a href="brief.html">Global Pulse</a><a href="countries.html">현지언론</a><a href="keyman.html">Key-man</a><a href="regulations.html">규제·정책</a><a class="on" href="topics.html">TopicWatch</a></div>
   </div>
-
-  <section class="sec">
-    <div class="sec-h"><div class="num">★</div>
-      <div><div class="tt">인사·리더십 동향</div><div class="ds">임명·취임·사임 등 Key-man 이동 (뉴스 기반 추출)</div></div>
-      <div class="rt" id="cnt"></div></div>
-    <div class="feed" id="feed"></div>
-  </section>
-
+  <div id="feed"></div>
   <footer><div class="tag">CONNECTING PEOPLE, CREATING GLOBAL VALUE</div><div id="gen"></div></footer>
 </div>
 
@@ -72,12 +65,13 @@
 (async function(){
   const P=new URLSearchParams(location.search), QD=P.get('date');
   let D=null;
-  if(QD){ try{ D=await (await fetch('archive/'+QD+'/keyman.json')).json(); }catch(e){} }
-  try{ if(!D) D=JSON.parse(document.getElementById('keyman-data').textContent);}catch(e){}
-  if(!D){ try{ D=await (await fetch('keyman.json')).json(); }catch(e){} }
-  if(!D){ document.querySelector('.wrap').innerHTML='<p class="empty">keyman.json 이 없습니다. <code>python main.py export</code> 로 생성하세요.</p>'; return; }
+  if(QD){ try{ D=await (await fetch('archive/'+QD+'/topics.json')).json(); }catch(e){} }
+  try{ if(!D) D=JSON.parse(document.getElementById('topics-data').textContent);}catch(e){}
+  if(!D){ try{ D=await (await fetch('topics.json')).json(); }catch(e){} }
+  if(!D){ document.getElementById('feed').innerHTML='<div class="empty">topics.json 이 없습니다. <code>python main.py export</code> 로 생성하세요.</div>'; return; }
+
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const NAMES={GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아'};
+  const NAMES={GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',GLOBAL:'글로벌'};
   const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l={finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'}[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
   const LANG=P.get('lang')==='en'?'en':'ko';
   const tq=a=>LANG==='en'?(a.q_en||a.q):a.q, tk=a=>LANG==='en'?(a.k_en||a.k):a.k;
@@ -85,18 +79,23 @@
   if(enEl){ enEl.style.cursor='pointer';
     enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
     enEl.onclick=()=>{ P.set('lang',LANG==='en'?'ko':'en'); location.search=P.toString(); }; }
-  const gen=(D.generated_at||'').slice(0,16).replace('T',' ');
-  document.getElementById('gen').textContent='업데이트 '+gen;
-  const arts=D.articles||[];
-  document.getElementById('cnt').textContent=arts.length+' 건';
+
+  document.getElementById('gen').textContent='업데이트 '+(D.generated_at||'').slice(0,16).replace('T',' ');
+  const cl=D.clusters||[];
   const feed=document.getElementById('feed');
-  if(!arts.length){feed.innerHTML='<div class="empty">아직 감지된 인사동향이 없습니다.<br>AI 랭킹이 더 진행되면 채워집니다. (뉴스 기반 키워드 추출)</div>';return;}
-  feed.innerHTML=arts.map(a=>`<div class="art">
-    <div class="top"><span class="flag">${a.flag||''}</span> <b>${NAMES[a.cc]||a.cc||''}</b> · ${esc(a.src)} · ${esc(a.d)} ${badges(a.c)}
-      ${a.score!=null?`<span class="score">${a.score}</span>`:''}</div>
-    <div class="t">${a.u?`<a href="${esc(a.u)}" target="_blank" rel="noopener">${esc(a.t)}</a>`:esc(a.t)}</div>
-    ${tq(a)?`<div class="q">${esc(tq(a))}</div>`:''}
-    ${tk(a)?`<div class="k"><b>KB 시사점</b> ${esc(tk(a))}</div>`:''}</div>`).join('');
+  if(!cl.length){feed.innerHTML='<div class="empty">횡단 이슈가 아직 없습니다.<br>AI 랭킹이 더 진행되면 채워집니다.</div>';return;}
+  feed.innerHTML=cl.map(c=>`<div class="cluster">
+    <div class="ch"><span class="clabel">${esc(LANG==='en'?(c.label_en||c.label):c.label)}</span>
+      <span class="cflags">${(c.flags||[]).join('')}</span>
+      <span class="cmeta">${(c.ccs||[]).length}개 거점 · ${c.count}건</span></div>
+    ${(c.articles||[]).map(a=>`<div class="ca">
+      <div class="cat"><span class="flag">${a.flag||''}</span> <b>${NAMES[a.cc]||a.cc||''}</b> · ${esc(a.src)} · ${esc(a.d)} ${badges(a.c)}
+        ${a.score!=null?`<span class="score">${a.score}</span>`:''}</div>
+      <div class="ctt">${a.u?`<a href="${esc(a.u)}" target="_blank" rel="noopener">${esc(a.t)}</a>`:esc(a.t)}</div>
+      ${tq(a)?`<div class="cq">${esc(tq(a))}</div>`:''}
+      ${tk(a)?`<div class="ck"><b>KB 시사점</b> ${esc(tk(a))}</div>`:''}</div>`).join('')}
+  </div>`).join('');
+
   try{
     const dates=await (await fetch('archive/dates.json')).json();
     const sel=document.getElementById('dsel');
