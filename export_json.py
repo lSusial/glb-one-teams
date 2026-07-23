@@ -23,10 +23,10 @@ log = logging.getLogger("export_json")
 
 _TEMPLATE = config.ROOT / "web" / "countries.html"   # 현지언론 화면 템플릿
 
-# 현지언론 화면 대상 거점 9개 (자회사 ID·KH 는 subsidiaries 화면으로 분리)
+# 현지언론 화면 대상 거점 11개 (ID·KH 자회사의 IR/공시는 향후 자회사 화면, 현지언론 뉴스는 여기 포함)
 _FLAGS = {
     "GB": "🇬🇧", "US": "🇺🇸", "JP": "🇯🇵", "HK": "🇭🇰", "SG": "🇸🇬",
-    "CN": "🇨🇳", "VN": "🇻🇳", "IN": "🇮🇳", "MM": "🇲🇲",
+    "CN": "🇨🇳", "VN": "🇻🇳", "IN": "🇮🇳", "MM": "🇲🇲", "ID": "🇮🇩", "KH": "🇰🇭",
 }
 
 
@@ -61,8 +61,9 @@ def _ensure_ai_columns(conn) -> None:
     ])
 
 
-def export_countries(conn, active_only: bool = True) -> dict:
+def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     _ensure_ai_columns(conn)
+    dc, dparams = _date_clause(days)   # 현지언론 = 전일+당일 (max-1일 이후)
     """국가별 기사를 UI 데이터 계약(countries.json)으로 내보낸다.
 
     active_only=True  (기본, AI 실행 후): ai_score >= AI_SCORE_ACTIVE_THRESHOLD 인 ACTIVE 기사만.
@@ -87,11 +88,11 @@ def export_countries(conn, active_only: bool = True) -> dict:
             FROM articles_raw a
             JOIN media_sources m ON m.source_id = a.source_id
             WHERE m.primary_country_code = ?
-              AND {where}
+              AND {where}{dc}
             ORDER BY {order}
             LIMIT 20
             """,
-            (cc, *params_tail),
+            (cc, *params_tail, *dparams),
         ).fetchall()
 
         articles = []
@@ -160,10 +161,7 @@ def _compute_pulse(conn, days: int | None = None) -> list[dict]:
 
     온도 = 0.6×평균중요도 + 0.4×상대물량  (주목도=강도+빈도). days 지정 시 최근 N일만.
     """
-    date_clause, params = "", []
-    if days:
-        date_clause = " AND substr(published_at, 1, 10) >= date('now', ?)"
-        params.append(f"-{int(days)} days")
+    date_clause, params = _date_clause(days, alias="")
     rows = conn.execute(
         f"SELECT ai_score, topics FROM articles_raw "
         f"WHERE ai_score IS NOT NULL AND topics IS NOT NULL AND topics <> ''{date_clause}",
@@ -193,30 +191,33 @@ _FLAGS_ALL = {"GB":"🇬🇧","US":"🇺🇸","JP":"🇯🇵","HK":"🇭🇰","S
 
 
 def _date_clause(days, alias="a"):
-    if days:
-        return f" AND substr({alias}.published_at, 1, 10) >= date('now', ?)", [f"-{int(days)} days"]
-    return "", []
+    """최신 데이터일 기준 최근 N일 창 (스냅샷·실시간 모두 안전). days 없으면 전체."""
+    if not days:
+        return "", []
+    p = (alias + ".") if alias else ""
+    anchor = "(SELECT MAX(substr(published_at,1,10)) FROM articles_raw)"
+    return f" AND substr({p}published_at, 1, 10) >= date({anchor}, ?)", [f"-{int(days)} days"]
 
 
-def _compute_key_flows(conn, days: int | None = None) -> list[dict]:
-    """카테고리별 최고 중요도 기사 1건 = '오늘의 핵심 흐름'."""
+def _compute_key_flows(conn, days: int | None = None, limit: int = 6) -> list[dict]:
+    """중요도 상위 기사 = '오늘의 핵심 흐름' (카테고리 무관·국가 무관, 카테고리는 배지로만 표시).
+
+    한 카테고리가 여러 개여도 OK(경제 2~3, 금융사고 4…), 없는 카테고리는 노출 안 함.
+    """
     dc, params = _date_clause(days)
-    flows, used = [], set()
-    for code, label, color in _PULSE_CATS:
-        rows = conn.execute(
-            f"""SELECT a.article_id, a.ai_score, a.title, a.summary_ko, a.summary_en, m.primary_country_code cc
-                FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
-                WHERE a.ai_score IS NOT NULL AND a.topics LIKE ?{dc}
-                ORDER BY a.ai_score DESC LIMIT 6""",
-            (f"%{code}%", *params),
-        ).fetchall()
-        pick = next((r for r in rows if r["article_id"] not in used), None)  # 카테고리 간 중복 제거
-        if pick:
-            used.add(pick["article_id"])
-            flows.append(dict(code=code, label=label, color=color, cc=pick["cc"],
-                              flag=_FLAGS_ALL.get(pick["cc"], ""), title=pick["title"],
-                              summary=(pick["summary_ko"] or "")[:170],
-                              summary_en=(pick["summary_en"] or "")[:170]))
+    rows = conn.execute(
+        f"""SELECT a.ai_score, a.title, a.summary_ko, a.summary_en, a.topics, m.primary_country_code cc
+            FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
+            WHERE a.ai_score >= ? AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'{dc}
+            ORDER BY a.ai_score DESC LIMIT ?""",
+        (config.AI_SCORE_ACTIVE_THRESHOLD, *params, limit),
+    ).fetchall()
+    flows = []
+    for r in rows:
+        codes = [c for c in (r["topics"] or "").split(",") if c]
+        flows.append(dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""), title=r["title"],
+                          summary=(r["summary_ko"] or "")[:170], summary_en=(r["summary_en"] or "")[:170],
+                          c=taxonomy.ui_string(codes), score=r["ai_score"]))
     return flows
 
 
@@ -243,6 +244,7 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 5) -> list[dic
 
 def export_pulse(conn, days: int | None = None) -> dict:
     """pulse.json + brief.html(온도계 화면) 생성."""
+    if days is None: days = 1          # 첫 화면 = 전일+당일 ('오늘의 ...')
     config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -319,6 +321,7 @@ def _compute_keyman(conn, days: int | None = None, limit: int = 24) -> list[dict
 
 def export_keyman(conn, days: int | None = None) -> dict:
     """keyman.json + keyman.html(Key-man 동향 화면) 생성."""
+    if days is None: days = 30         # 인사·리더십은 월간 흐름
     config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -367,6 +370,7 @@ def _compute_regulations(conn, days: int | None = None, limit: int = 24) -> list
 
 def export_regulations(conn, days: int | None = None) -> dict:
     """regulations.json + regulations.html(규제·정책 화면) 생성."""
+    if days is None: days = 30         # 규제·정책은 월간 흐름
     config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -399,6 +403,7 @@ _ISSUES = [
     ("홍콩 금융",         "Hong Kong Finance",     ["hkma", "hang seng"]),
     ("인도 시장",         "India Markets",         ["rbi", "rupee", "sensex", "nifty"]),
     ("무역·관세·제재",    "Trade / Sanctions",     ["tariff", "sanction", "trade war", "export control"]),
+    ("규제·감독",         "Regulation·Supervision",["regulation", "regulator", "supervis", "compliance", "basel", "capital requirement", "audit"]),
     ("ESG·기후",         "ESG / Climate",         ["esg", "carbon", "climate", "green bond", "net zero"]),
     ("디지털·AI·반도체",  "Digital / AI / Chips",  ["artificial intelligence", "semiconductor", "fintech"]),
     ("부동산·모기지",     "Property / Mortgage",   ["property", "real estate", "mortgage", "home price"]),
@@ -444,6 +449,7 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 6) -> list[dic
 
 def export_topics(conn, days: int | None = None) -> dict:
     """topics.json + topics.html(TopicWatch 화면) 생성."""
+    if days is None: days = 7          # 주간 흐름
     config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),

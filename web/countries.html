@@ -102,7 +102,7 @@
     </div>
     <h1>현지언론 Intelligence</h1>
     <div class="sub">현지 주요언론 기사를 AI가 선별·요약하고 KB 거점 관점의 시사점을 제시합니다</div>
-    <div class="nav"><a href="brief.html">Global Pulse</a><a class="on" href="countries.html">현지언론</a><a href="keyman.html">Key-man</a><a href="regulations.html">규제·정책</a><a href="topics.html">TopicWatch</a></div>
+    <div class="nav"><a href="brief.html">Global Pulse</a><a class="on" href="countries.html">현지언론</a><a href="keyman.html">Key-man</a><a href="topics.html">TopicWatch</a></div>
   </div>
 
   <section class="sec" id="secCov">
@@ -145,7 +145,7 @@
   document.getElementById('covRt').textContent=`ACTIVE ${nActive} / ${(DATA.countries||[]).length}개 거점`;
 
   let fCat='', fCC='';
-  const catCount=k=>k?arts.filter(a=>(a.c||'').includes(k)).length:arts.length;
+  const catCount=k=>{const pool=fCC?arts.filter(a=>a.cc===fCC):arts;return k?pool.filter(a=>(a.c||'').includes(k)).length:pool.length;};
 
   document.getElementById('cats').innerHTML=CATS.map(([k,l])=>
     `<span class="chip${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
@@ -167,9 +167,10 @@
   if(enEl){ enEl.style.cursor='pointer';
     enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
     enEl.onclick=()=>{ P.set('lang',LANG==='en'?'ko':'en'); location.search=P.toString(); }; }
+  document.querySelectorAll('.nav a').forEach(a=>{ a.href=a.getAttribute('href').split('?')[0]+location.search; });
 
   function render(){
-    document.querySelectorAll('#cats .chip').forEach(c=>c.classList.toggle('on',c.dataset.k===fCat));
+    document.getElementById('cats').innerHTML=CATS.map(([k,l])=>`<span class="chip${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
     document.querySelectorAll('#cov .cc').forEach(c=>c.classList.toggle('sel',c.dataset.cc===fCC));
     let rows=arts.filter(a=>(!fCat||(a.c||'').includes(fCat))&&(!fCC||a.cc===fCC));
     document.getElementById('count').textContent=rows.length+' 건'+(fCC?(' · '+(NAMES[fCC]||fCC)):'');

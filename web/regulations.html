@@ -85,6 +85,7 @@
   if(enEl){ enEl.style.cursor='pointer';
     enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
     enEl.onclick=()=>{ P.set('lang',LANG==='en'?'ko':'en'); location.search=P.toString(); }; }
+  document.querySelectorAll('.nav a').forEach(a=>{ a.href=a.getAttribute('href').split('?')[0]+location.search; });
   const gen=(D.generated_at||'').slice(0,16).replace('T',' ');
   document.getElementById('gen').textContent='업데이트 '+gen;
   const arts=D.articles||[];

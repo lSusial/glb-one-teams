@@ -55,7 +55,7 @@
     </div>
     <h1>Key-man 인사동향</h1>
     <div class="sub">각국 중앙은행·감독당국·금융기관의 정책 결정자 인사·리더십 변화</div>
-    <div class="nav"><a href="brief.html">Global Pulse</a><a href="countries.html">현지언론</a><a class="on" href="keyman.html">Key-man</a><a href="regulations.html">규제·정책</a><a href="topics.html">TopicWatch</a></div>
+    <div class="nav"><a href="brief.html">Global Pulse</a><a href="countries.html">현지언론</a><a class="on" href="keyman.html">Key-man</a><a href="topics.html">TopicWatch</a></div>
   </div>
 
   <section class="sec">
@@ -85,6 +85,7 @@
   if(enEl){ enEl.style.cursor='pointer';
     enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
     enEl.onclick=()=>{ P.set('lang',LANG==='en'?'ko':'en'); location.search=P.toString(); }; }
+  document.querySelectorAll('.nav a').forEach(a=>{ a.href=a.getAttribute('href').split('?')[0]+location.search; });
   const gen=(D.generated_at||'').slice(0,16).replace('T',' ');
   document.getElementById('gen').textContent='업데이트 '+gen;
   const arts=D.articles||[];

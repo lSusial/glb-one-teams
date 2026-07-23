@@ -55,7 +55,7 @@
     </div>
     <h1>TopicWatch</h1>
     <div class="sub">같은 이슈가 여러 거점에서 어떻게 나타나는지 — 주제별 횡단 딥다이브</div>
-    <div class="nav"><a href="brief.html">Global Pulse</a><a href="countries.html">현지언론</a><a href="keyman.html">Key-man</a><a href="regulations.html">규제·정책</a><a class="on" href="topics.html">TopicWatch</a></div>
+    <div class="nav"><a href="brief.html">Global Pulse</a><a href="countries.html">현지언론</a><a href="keyman.html">Key-man</a><a class="on" href="topics.html">TopicWatch</a></div>
   </div>
   <div id="feed"></div>
   <footer><div class="tag">CONNECTING PEOPLE, CREATING GLOBAL VALUE</div><div id="gen"></div></footer>
@@ -79,6 +79,7 @@
   if(enEl){ enEl.style.cursor='pointer';
     enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
     enEl.onclick=()=>{ P.set('lang',LANG==='en'?'ko':'en'); location.search=P.toString(); }; }
+  document.querySelectorAll('.nav a').forEach(a=>{ a.href=a.getAttribute('href').split('?')[0]+location.search; });
 
   document.getElementById('gen').textContent='업데이트 '+(D.generated_at||'').slice(0,16).replace('T',' ');
   const cl=D.clusters||[];

@@ -25,7 +25,7 @@ DEFAULT_PROVIDER = os.environ.get("LLM_PROVIDER", "anthropic")
 
 # 작업별 모델 분리 — 싼 모델로 거르고, 좋은 모델로 분석/합성 (비용 최적화)
 ANTHROPIC_MODEL_FAST  = "claude-haiku-4-5-20251001"   # llm_prefilter (저비용·고속)
-ANTHROPIC_MODEL_SMART = "claude-sonnet-4-6"           # llm_ranker / briefing
+ANTHROPIC_MODEL_SMART = "claude-haiku-4-5-20251001"   # llm_ranker / briefing (비용 절감 위해 Haiku로 전환)
 ANTHROPIC_MAX_TOKENS  = 1024
 
 # OpenAI 등 추가 시 사용할 자리(어댑터는 llm_provider.py)
