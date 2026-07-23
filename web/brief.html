@@ -22,9 +22,10 @@
   .mast .rt{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:12px;color:#cfc9c0}
   .mast .en{border:1px solid rgba(255,188,0,.6);color:var(--kb-yellow);border-radius:20px;padding:2px 10px;font-weight:700}
   .mast .en .off{color:#a49c8f}
+  .dsel{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.28);border-radius:8px;padding:2px 7px;font-size:12px;max-width:130px}
   .mast h1{position:relative;z-index:1;font-size:26px;font-weight:800;margin:14px 0 8px;line-height:1.2}
   .mast .sub{position:relative;z-index:1;font-size:12.5px;color:#cfc9c0}
-  .nav{display:flex;gap:8px;margin:14px 0 0}
+  .nav{display:flex;gap:8px;margin:14px 0 0;flex-wrap:wrap}
   .nav a{font-size:13px;font-weight:700;color:var(--sub);text-decoration:none;padding:8px 14px;border-radius:20px;border:1px solid var(--line);background:#fff}
   .nav a.on{background:var(--kb-dark);color:#fff;border-color:var(--kb-dark)}
 
@@ -39,7 +40,7 @@
   .temp{display:flex;align-items:center;gap:10px;margin:9px 0}
   .temp .lb{width:64px;font-weight:700;font-size:13px;flex:none}
   .temp .track{flex:1;height:13px;background:#eee9e2;border-radius:8px;overflow:hidden}
-  .temp .fill{height:100%;border-radius:8px;transition:width .5s}
+  .temp .fill{display:block;height:100%;min-width:2px;border-radius:8px;transition:width .5s}
   .temp .val{width:48px;text-align:right;font-weight:800;flex:none;font-variant-numeric:tabular-nums}
   .cap{font-size:11.5px;color:var(--sub);margin-top:14px}
   .cap .n{color:var(--kb-silver)}
@@ -72,11 +73,11 @@
     <div class="kbwm">KB</div>
     <div class="row">
       <span class="kb"><b>KB</b><span>국민은행</span></span>
-      <span class="rt"><span class="en">KR<span class="off"> / EN</span></span><span id="date"></span></span>
+      <span class="rt"><span class="en">KR<span class="off"> / EN</span></span><select id="dsel" class="dsel"></select></span>
     </div>
     <h1>글로벌 데일리 브리핑</h1>
     <div class="sub">전 세계 KB 글로벌 네트워크 · 뉴스 분석 기반 시장 온도</div>
-    <div class="nav"><a class="on" href="brief.html">Global Pulse</a><a href="countries.html">현지언론</a><a href="keyman.html">Key-man</a></div>
+    <div class="nav"><a class="on" href="brief.html">Global Pulse</a><a href="countries.html">현지언론</a><a href="keyman.html">Key-man</a><a href="regulations.html">규제·정책</a></div>
   </div>
 
   <section class="sec">
@@ -105,12 +106,13 @@
 
 <script>
 (async function(){
+  const P=new URLSearchParams(location.search), QD=P.get('date');
   let D=null;
-  try{ D=JSON.parse(document.getElementById('pulse-data').textContent);}catch(e){}
+  if(QD){ try{ D=await (await fetch('archive/'+QD+'/pulse.json')).json(); }catch(e){} }
+  try{ if(!D) D=JSON.parse(document.getElementById('pulse-data').textContent);}catch(e){}
   if(!D){ try{ D=await (await fetch('pulse.json')).json(); }catch(e){} }
   if(!D){ document.querySelector('.wrap').innerHTML='<p style="color:#7a746c;text-align:center;padding:40px">pulse.json 이 없습니다. <code>python main.py export</code> 로 생성하세요.</p>'; return; }
   const gen=(D.generated_at||'').slice(0,16).replace('T',' ');
-  document.getElementById('date').textContent=gen.slice(0,10);
   document.getElementById('asof').textContent=gen.slice(0,10)+' 기준';
   document.getElementById('gen').textContent='업데이트 '+gen;
   document.getElementById('method').textContent=(D.days?`최근 ${D.days}일 · `:'')+'온도=중요도·빈도 종합';
@@ -124,20 +126,36 @@
   const NAMES={GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아'};
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l={finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'}[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
+  const LANG=P.get('lang')==='en'?'en':'ko';
+  const tq=a=>LANG==='en'?(a.q_en||a.q):a.q, tk=a=>LANG==='en'?(a.k_en||a.k):a.k;
+  const tf=f=>LANG==='en'?(f.summary_en||f.summary):f.summary;
+  const enEl=document.querySelector('.en');
+  if(enEl){ enEl.style.cursor='pointer';
+    enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
+    enEl.onclick=()=>{ P.set('lang',LANG==='en'?'ko':'en'); location.search=P.toString(); }; }
 
   document.getElementById('flows').innerHTML=(D.key_flows||[]).map(f=>`
     <div class="flow"><span class="badge fb" style="background:${f.color}">${f.label}</span>
       <div><div class="ft"><span class="fg">${f.flag||''}</span> ${esc(f.title)}</div>
-      <div class="fs">${esc(f.summary)}</div></div></div>`).join('')
+      <div class="fs">${esc(tf(f))}</div></div></div>`).join('')
     || '<div style="color:var(--sub);font-size:13px;padding:6px 0">데이터 없음 (AI 분석 필요)</div>';
 
   document.getElementById('news').innerHTML=(D.top_news||[]).map(a=>`
     <div class="nc"><div class="nt"><span class="fg">${a.flag||''}</span> <b>${NAMES[a.cc]||a.cc||''}</b> · ${esc(a.src)} · ${esc(a.d)} ${badges(a.c)}
       ${a.score!=null?`<span class="score">${a.score}</span>`:''}</div>
       <h4>${a.u?`<a href="${esc(a.u)}" target="_blank" rel="noopener">${esc(a.t)}</a>`:esc(a.t)}</h4>
-      ${a.q?`<div class="nq">${esc(a.q)}</div>`:''}
-      ${a.k?`<div class="nk"><b>KB 시사점</b> ${esc(a.k)}</div>`:''}</div>`).join('')
+      ${tq(a)?`<div class="nq">${esc(tq(a))}</div>`:''}
+      ${tk(a)?`<div class="nk"><b>KB 시사점</b> ${esc(tk(a))}</div>`:''}</div>`).join('')
     || '<div style="color:var(--sub);font-size:13px">데이터 없음</div>';
+
+  try{
+    const dates=await (await fetch('archive/dates.json')).json();
+    const sel=document.getElementById('dsel');
+    if(sel&&dates.length){
+      sel.innerHTML='<option value="">최신</option>'+dates.map(d=>`<option value="${d}"${d===QD?' selected':''}>${d}</option>`).join('');
+      sel.onchange=()=>{ location.search = sel.value?('?date='+sel.value):''; };
+    } else if(sel){ sel.style.display='none'; }
+  }catch(e){ const s=document.getElementById('dsel'); if(s) s.style.display='none'; }
 })();
 </script>
 </body>

@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>KB 글로벌 데일리 브리핑 — Key-man 인사동향</title>
-<script id="keyman-data" type="application/json">null</script>
+<title>KB 글로벌 데일리 브리핑 — 규제·정책</title>
+<script id="reg-data" type="application/json">null</script>
 <style>
   :root{--kb-yellow:#FFBC00;--kb-dark:#545045;--kb-gold:#85754E;--kb-silver:#8A8D8F;
         --ink:#2b2926;--line:#e8e4dd;--card:#fff;--sub:#7a746c;--page:#dcd8d2;}
@@ -26,7 +26,7 @@
   .nav a.on{background:var(--kb-dark);color:#fff;border-color:var(--kb-dark)}
   .sec{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-top:14px}
   .sec-h{display:flex;align-items:flex-start;gap:10px;margin-bottom:12px}
-  .num{flex:none;width:26px;height:26px;border-radius:7px;color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;background:var(--kb-gold)}
+  .num{flex:none;width:26px;height:26px;border-radius:7px;color:#fff;font-weight:800;font-size:15px;display:flex;align-items:center;justify-content:center;background:#b23b3b}
   .sec-h .tt{font-size:15px;font-weight:800}.sec-h .ds{font-size:12px;color:var(--sub);margin-top:2px}
   .sec-h .rt{margin-left:auto;font-size:12px;color:var(--sub)}
   .badge{font-size:10.5px;font-weight:800;padding:1px 8px;border-radius:20px;color:#fff}
@@ -53,14 +53,14 @@
       <span class="kb"><b>KB</b><span>국민은행</span></span>
       <span class="rt"><span class="en">KR<span class="off"> / EN</span></span><select id="dsel" class="dsel"></select></span>
     </div>
-    <h1>Key-man 인사동향</h1>
-    <div class="sub">각국 중앙은행·감독당국·금융기관의 정책 결정자 인사·리더십 변화</div>
-    <div class="nav"><a href="brief.html">Global Pulse</a><a href="countries.html">현지언론</a><a class="on" href="keyman.html">Key-man</a><a href="regulations.html">규제·정책</a></div>
+    <h1>규제·정책 동향</h1>
+    <div class="sub">각 거점의 규제·감독·리스크 이슈를 횡단으로 모아 봅니다</div>
+    <div class="nav"><a href="brief.html">Global Pulse</a><a href="countries.html">현지언론</a><a href="keyman.html">Key-man</a><a class="on" href="regulations.html">규제·정책</a></div>
   </div>
 
   <section class="sec">
-    <div class="sec-h"><div class="num">★</div>
-      <div><div class="tt">인사·리더십 동향</div><div class="ds">임명·취임·사임 등 Key-man 이동 (뉴스 기반 추출)</div></div>
+    <div class="sec-h"><div class="num">§</div>
+      <div><div class="tt">규제·리스크 동향</div><div class="ds">RISK 주제 기사 · 거점 횡단 중요도 순</div></div>
       <div class="rt" id="cnt"></div></div>
     <div class="feed" id="feed"></div>
   </section>
@@ -72,10 +72,10 @@
 (async function(){
   const P=new URLSearchParams(location.search), QD=P.get('date');
   let D=null;
-  if(QD){ try{ D=await (await fetch('archive/'+QD+'/keyman.json')).json(); }catch(e){} }
-  try{ if(!D) D=JSON.parse(document.getElementById('keyman-data').textContent);}catch(e){}
-  if(!D){ try{ D=await (await fetch('keyman.json')).json(); }catch(e){} }
-  if(!D){ document.querySelector('.wrap').innerHTML='<p class="empty">keyman.json 이 없습니다. <code>python main.py export</code> 로 생성하세요.</p>'; return; }
+  if(QD){ try{ D=await (await fetch('archive/'+QD+'/regulations.json')).json(); }catch(e){} }
+  try{ if(!D) D=JSON.parse(document.getElementById('reg-data').textContent);}catch(e){}
+  if(!D){ try{ D=await (await fetch('regulations.json')).json(); }catch(e){} }
+  if(!D){ document.querySelector('.wrap').innerHTML='<p class="empty">regulations.json 이 없습니다. <code>python main.py export</code> 로 생성하세요.</p>'; return; }
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const NAMES={GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아'};
   const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l={finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'}[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
@@ -90,7 +90,7 @@
   const arts=D.articles||[];
   document.getElementById('cnt').textContent=arts.length+' 건';
   const feed=document.getElementById('feed');
-  if(!arts.length){feed.innerHTML='<div class="empty">아직 감지된 인사동향이 없습니다.<br>AI 랭킹이 더 진행되면 채워집니다. (뉴스 기반 키워드 추출)</div>';return;}
+  if(!arts.length){feed.innerHTML='<div class="empty">규제·리스크 주제 기사가 아직 없습니다.<br>AI 랭킹이 더 진행되면 채워집니다.</div>';return;}
   feed.innerHTML=arts.map(a=>`<div class="art">
     <div class="top"><span class="flag">${a.flag||''}</span> <b>${NAMES[a.cc]||a.cc||''}</b> · ${esc(a.src)} · ${esc(a.d)} ${badges(a.c)}
       ${a.score!=null?`<span class="score">${a.score}</span>`:''}</div>

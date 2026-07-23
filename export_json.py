@@ -16,6 +16,7 @@ import re
 from datetime import datetime, timezone
 
 import config
+import db
 import taxonomy
 
 log = logging.getLogger("export_json")
@@ -29,7 +30,39 @@ _FLAGS = {
 }
 
 
+def _snapshot_date(date: str | None = None) -> str:
+    """스냅샷 라벨 날짜 (기본: 오늘, 로컬)."""
+    return date or datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d")
+
+
+def _write_json(name: str, payload: dict) -> None:
+    """최신본 + 날짜 아카이브(archive/YYYY-MM-DD/) 저장 + 날짜 인덱스(dates.json) 갱신."""
+    (config.EXPORT_DIR / f"{name}.json").write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    date = payload.get("snapshot_date") or _snapshot_date()
+    adir = config.EXPORT_DIR / "archive" / date
+    adir.mkdir(parents=True, exist_ok=True)
+    (adir / f"{name}.json").write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+    idx = config.EXPORT_DIR / "archive" / "dates.json"
+    dates = json.loads(idx.read_text(encoding="utf-8")) if idx.exists() else []
+    if date not in dates:
+        dates.append(date)
+        dates.sort(reverse=True)
+        idx.write_text(json.dumps(dates, ensure_ascii=False), encoding="utf-8")
+
+
+def _ensure_ai_columns(conn) -> None:
+    """export 가 참조하는 AI 컬럼을 멱등 보장(AI 미실행 환경에서도 export 동작)."""
+    db.ensure_columns(conn, "articles_raw", [
+        ("summary_ko",        "ALTER TABLE articles_raw ADD COLUMN summary_ko        TEXT"),
+        ("kb_implication",    "ALTER TABLE articles_raw ADD COLUMN kb_implication    TEXT"),
+        ("summary_en",        "ALTER TABLE articles_raw ADD COLUMN summary_en        TEXT"),
+        ("kb_implication_en", "ALTER TABLE articles_raw ADD COLUMN kb_implication_en TEXT"),
+    ])
+
+
 def export_countries(conn, active_only: bool = True) -> dict:
+    _ensure_ai_columns(conn)
     """국가별 기사를 UI 데이터 계약(countries.json)으로 내보낸다.
 
     active_only=True  (기본, AI 실행 후): ai_score >= AI_SCORE_ACTIVE_THRESHOLD 인 ACTIVE 기사만.
@@ -49,8 +82,8 @@ def export_countries(conn, active_only: bool = True) -> dict:
     for cc, flag in _FLAGS.items():
         rows = conn.execute(
             f"""
-            SELECT a.title, a.summary_ko, a.kb_implication, a.topics, a.link,
-                   a.published_at, a.ai_score, m.media_name
+            SELECT a.title, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
+                   a.topics, a.link, a.published_at, a.ai_score, m.media_name
             FROM articles_raw a
             JOIN media_sources m ON m.source_id = a.source_id
             WHERE m.primary_country_code = ?
@@ -71,6 +104,8 @@ def export_countries(conn, active_only: bool = True) -> dict:
                 "t": a["title"],
                 "q": a["summary_ko"] or "",
                 "k": a["kb_implication"] or "",
+                "q_en": a["summary_en"] or "",
+                "k_en": a["kb_implication_en"] or "",
                 "u": a["link"],
                 "score": a["ai_score"],
             })
@@ -85,12 +120,13 @@ def export_countries(conn, active_only: bool = True) -> dict:
 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "snapshot_date": _snapshot_date(),
         "mode": "active" if active_only else "passed",
         "active_threshold": config.AI_SCORE_ACTIVE_THRESHOLD if active_only else None,
         "countries": countries,
     }
+    _write_json("countries", payload)
     path = config.EXPORT_DIR / "countries.json"
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
     # 자기완결 HTML (템플릿에 데이터 주입 — 오프라인 열람 / Pages 배포 겸용)
     if _TEMPLATE.exists():
@@ -168,7 +204,7 @@ def _compute_key_flows(conn, days: int | None = None) -> list[dict]:
     flows, used = [], set()
     for code, label, color in _PULSE_CATS:
         rows = conn.execute(
-            f"""SELECT a.article_id, a.ai_score, a.title, a.summary_ko, m.primary_country_code cc
+            f"""SELECT a.article_id, a.ai_score, a.title, a.summary_ko, a.summary_en, m.primary_country_code cc
                 FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
                 WHERE a.ai_score IS NOT NULL AND a.topics LIKE ?{dc}
                 ORDER BY a.ai_score DESC LIMIT 6""",
@@ -179,7 +215,8 @@ def _compute_key_flows(conn, days: int | None = None) -> list[dict]:
             used.add(pick["article_id"])
             flows.append(dict(code=code, label=label, color=color, cc=pick["cc"],
                               flag=_FLAGS_ALL.get(pick["cc"], ""), title=pick["title"],
-                              summary=(pick["summary_ko"] or "")[:170]))
+                              summary=(pick["summary_ko"] or "")[:170],
+                              summary_en=(pick["summary_en"] or "")[:170]))
     return flows
 
 
@@ -187,8 +224,8 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 5) -> list[dic
     """전 거점 중요도 TOP = '오늘의 주요 시장 뉴스'."""
     dc, params = _date_clause(days)
     rows = conn.execute(
-        f"""SELECT a.ai_score, a.title, a.summary_ko, a.kb_implication, a.topics, a.link,
-                   a.published_at, m.primary_country_code cc, m.media_name
+        f"""SELECT a.ai_score, a.title, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
+                   a.topics, a.link, a.published_at, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}
             ORDER BY a.ai_score DESC, a.published_at DESC LIMIT ?""",
@@ -199,8 +236,8 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 5) -> list[dic
         codes = [c for c in (r["topics"] or "").split(",") if c]
         out.append(dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""), src=r["media_name"],
                         d=(r["published_at"] or "")[:10], t=r["title"], q=r["summary_ko"] or "",
-                        k=r["kb_implication"] or "", c=taxonomy.ui_string(codes),
-                        score=r["ai_score"], u=r["link"]))
+                        k=r["kb_implication"] or "", q_en=r["summary_en"] or "", k_en=r["kb_implication_en"] or "",
+                        c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"]))
     return out
 
 
@@ -209,13 +246,13 @@ def export_pulse(conn, days: int | None = None) -> dict:
     config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "snapshot_date": _snapshot_date(),
         "days": days,
         "categories": _compute_pulse(conn, days=days),
         "key_flows": _compute_key_flows(conn, days=days),
         "top_news": _compute_top_news(conn, days=days),
     }
-    (config.EXPORT_DIR / "pulse.json").write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_json("pulse", payload)
 
     if _PULSE_TEMPLATE.exists():
         data_js = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
@@ -258,7 +295,8 @@ def _compute_keyman(conn, days: int | None = None, limit: int = 24) -> list[dict
     dc, params = _date_clause(days)
     rows = conn.execute(
         f"""SELECT a.ai_score, a.title, a.summary, a.summary_ko, a.kb_implication,
-                   a.topics, a.link, a.published_at, m.primary_country_code cc, m.media_name
+                   a.summary_en, a.kb_implication_en, a.topics, a.link, a.published_at,
+                   m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score IS NOT NULL AND a.duplicate_of IS NULL
               AND a.ai_model LIKE '%:%'{dc}
@@ -272,8 +310,8 @@ def _compute_keyman(conn, days: int | None = None, limit: int = 24) -> list[dict
             codes = [c for c in (r["topics"] or "").split(",") if c]
             out.append(dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""), src=r["media_name"],
                             d=(r["published_at"] or "")[:10], t=r["title"], q=r["summary_ko"] or "",
-                            k=r["kb_implication"] or "", c=taxonomy.ui_string(codes),
-                            score=r["ai_score"], u=r["link"]))
+                            k=r["kb_implication"] or "", q_en=r["summary_en"] or "", k_en=r["kb_implication_en"] or "",
+                            c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"]))
             if len(out) >= limit:
                 break
     return out
@@ -284,11 +322,11 @@ def export_keyman(conn, days: int | None = None) -> dict:
     config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
+        "snapshot_date": _snapshot_date(),
         "days": days,
         "articles": _compute_keyman(conn, days=days),
     }
-    (config.EXPORT_DIR / "keyman.json").write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_json("keyman", payload)
     if _KEYMAN_TEMPLATE.exists():
         data_js = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
         html = _KEYMAN_TEMPLATE.read_text(encoding="utf-8").replace(
@@ -297,3 +335,51 @@ def export_keyman(conn, days: int | None = None) -> dict:
         (config.EXPORT_DIR / "keyman.html").write_text(html, encoding="utf-8")
     log.info("keyman.json 작성 — 기사=%d", len(payload["articles"]))
     return {"articles": len(payload["articles"]), "path": str(config.EXPORT_DIR / "keyman.json")}
+
+
+# ---------------------------------------------------------------------------
+# 규제·정책 동향 (taxonomy RISK 주제 = 규제·리스크, 거점 횡단)
+# ---------------------------------------------------------------------------
+_REG_TEMPLATE = config.ROOT / "web" / "regulations.html"
+
+
+def _compute_regulations(conn, days: int | None = None, limit: int = 24) -> list[dict]:
+    """RISK(규제·리스크) 주제로 태깅된 기사를 거점 횡단 중요도 순으로."""
+    dc, params = _date_clause(days)
+    rows = conn.execute(
+        f"""SELECT a.ai_score, a.title, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
+                   a.topics, a.link, a.published_at, m.primary_country_code cc, m.media_name
+            FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
+            WHERE a.ai_score IS NOT NULL AND a.duplicate_of IS NULL
+              AND a.ai_model LIKE '%:%' AND a.topics LIKE '%RISK%'{dc}
+            ORDER BY a.ai_score DESC LIMIT ?""",
+        (*params, limit),
+    ).fetchall()
+    out = []
+    for r in rows:
+        codes = [c for c in (r["topics"] or "").split(",") if c]
+        out.append(dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""), src=r["media_name"],
+                        d=(r["published_at"] or "")[:10], t=r["title"], q=r["summary_ko"] or "",
+                        k=r["kb_implication"] or "", q_en=r["summary_en"] or "", k_en=r["kb_implication_en"] or "",
+                        c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"]))
+    return out
+
+
+def export_regulations(conn, days: int | None = None) -> dict:
+    """regulations.json + regulations.html(규제·정책 화면) 생성."""
+    config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "snapshot_date": _snapshot_date(),
+        "days": days,
+        "articles": _compute_regulations(conn, days=days),
+    }
+    _write_json("regulations", payload)
+    if _REG_TEMPLATE.exists():
+        data_js = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
+        html = _REG_TEMPLATE.read_text(encoding="utf-8").replace(
+            '<script id="reg-data" type="application/json">null</script>',
+            f'<script id="reg-data" type="application/json">{data_js}</script>')
+        (config.EXPORT_DIR / "regulations.html").write_text(html, encoding="utf-8")
+    log.info("regulations.json 작성 — 기사=%d", len(payload["articles"]))
+    return {"articles": len(payload["articles"]), "path": str(config.EXPORT_DIR / "regulations.json")}

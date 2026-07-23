@@ -13,9 +13,10 @@ glb-one-teams 파이프라인 CLI
 
 AI 레이어(별도 — ANTHROPIC_API_KEY 필요, 미설정 시 즉시 안내 후 중단):
   python main.py prefilter [--days N]  # LLM 1차 관문 (keep/drop)
-  python main.py rank [--days N]       # AI 분석 (score/summary/topics/kb_implication)
+  python main.py rank [--days N]       # AI 분석[영어] (score/summary_en/topics/kb_implication_en)
+  python main.py translate [--days N]  # 영어 기준본 → 한국어 번역 (표시분만, 저비용)
   python main.py brief                 # 국가별 브리핑 생성
-  python main.py ai [--days N]         # prefilter → rank → brief 한 번에 (--days: 최근 N일만)
+  python main.py ai [--days N]         # prefilter → rank → translate → brief 한 번에
   python main.py export            # DB → data/export/countries.json (ACTIVE)
   python main.py export --passed   # AI 없이 필터 통과 기사로 export (Phase 1)
   python main.py admin             # 관리자 페이지 생성 (data/export/admin.html)
@@ -160,6 +161,13 @@ def cmd_rank(args):
     print(f"[rank] 처리={s['ranked']}  ACTIVE={s['active']}")
 
 
+def cmd_translate(args):
+    import llm_translate
+    conn = db.open_conn()
+    s = _ai_guard(lambda: llm_translate.run_translate(conn, days=getattr(args, "days", None)), "translate")
+    print(f"[translate] 대상={s['total']}  KO채움={s['ko']}  EN채움={s['en']}")
+
+
 def cmd_brief(args):
     import briefing
     conn = db.open_conn()
@@ -171,19 +179,23 @@ def cmd_brief(args):
 
 
 def cmd_ai(args):
-    """prefilter → rank → brief 순서 실행."""
+    """prefilter → rank → translate → brief 순서 실행."""
     import briefing
     import llm_prefilter
     import llm_ranker
+    import llm_translate
     conn = db.open_conn()
     days = getattr(args, "days", None)
-    print("▶ [1/3] LLM 프리필터...")
+    print("▶ [1/4] LLM 프리필터...")
     s1 = _ai_guard(lambda: llm_prefilter.run_prefilter(conn, days=days), "ai")
     print(f"   keep={s1['keep']} drop={s1['drop']}")
-    print("▶ [2/3] AI 분석...")
+    print("▶ [2/4] AI 분석[영어]...")
     s2 = _ai_guard(lambda: llm_ranker.run_rank(conn, days=days), "ai")
     print(f"   ranked={s2['ranked']} ACTIVE={s2['active']}")
-    print("▶ [3/3] 국가 브리핑...")
+    print("▶ [3/4] 한국어 번역(표시분)...")
+    st = _ai_guard(lambda: llm_translate.run_translate(conn, days=days), "ai")
+    print(f"   KO채움={st['ko']} EN채움={st['en']}")
+    print("▶ [4/4] 국가 브리핑...")
     s3 = _ai_guard(lambda: briefing.run_briefing(conn), "ai")
     print(f"   written={s3['written']}")
 
@@ -199,6 +211,8 @@ def cmd_export(args):
     print(f"[export] pulse categories={p['categories']}  → {p['path']}")
     k = export_json.export_keyman(conn)
     print(f"[export] keyman articles={k['articles']}  → {k['path']}")
+    g = export_json.export_regulations(conn)
+    print(f"[export] regulations articles={g['articles']}  → {g['path']}")
 
 
 def cmd_admin(_args):
@@ -235,8 +249,10 @@ def main():
     # AI 단계
     pre = sub.add_parser("prefilter", help="LLM 1차 관문 (keep/drop)")
     pre.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
-    rnk = sub.add_parser("rank",      help="AI 분석 (score/summary/topics/kb_implication)")
+    rnk = sub.add_parser("rank",      help="AI 분석[영어] (score/summary_en/topics/kb_implication_en)")
     rnk.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
+    trn = sub.add_parser("translate", help="영어 기준본 → 한국어 번역 (표시분, 저비용)")
+    trn.add_argument("--days", type=int, help="최근 N일만")
     brf = sub.add_parser("brief", help="국가별 브리핑 생성")
     brf.add_argument("--type", default="weekly", help="브리핑 유형 (weekly|daily)")
     aip = sub.add_parser("ai",        help="prefilter → rank → brief 일괄")
@@ -250,7 +266,7 @@ def main():
     {
         "init": cmd_init, "fetch": cmd_fetch, "filter": cmd_filter,
         "dedup": cmd_dedup, "run": cmd_run, "report": cmd_report, "list": cmd_list,
-        "prefilter": cmd_prefilter, "rank": cmd_rank, "brief": cmd_brief,
+        "prefilter": cmd_prefilter, "rank": cmd_rank, "translate": cmd_translate, "brief": cmd_brief,
         "ai": cmd_ai, "export": cmd_export, "admin": cmd_admin,
     }[args.cmd](args)
 

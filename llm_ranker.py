@@ -33,24 +33,28 @@ def ensure_columns(conn) -> None:
         ("summary_ko",     "ALTER TABLE articles_raw ADD COLUMN summary_ko     TEXT"),
         ("ai_model",       "ALTER TABLE articles_raw ADD COLUMN ai_model       TEXT"),
         ("topics",         "ALTER TABLE articles_raw ADD COLUMN topics         TEXT"),
-        # kb_implication: UI 'KB 시사점' 담을 신규 컬럼
+        # kb_implication: UI 'KB 시사점' (한국어, llm_translate 에서 채움)
         ("kb_implication", "ALTER TABLE articles_raw ADD COLUMN kb_implication TEXT"),
+        # 영어 기준본(canonical) — rank 가 채우고, 한국어는 llm_translate 가 번역
+        ("summary_en",        "ALTER TABLE articles_raw ADD COLUMN summary_en        TEXT"),
+        ("kb_implication_en", "ALTER TABLE articles_raw ADD COLUMN kb_implication_en TEXT"),
     ])
 
 
 def _system_prompt() -> str:
+    # 원문이 영어이므로 영어를 기준본(canonical)으로 생성 → 한국어는 llm_translate 가 번역.
     return (
-        "당신은 KB금융그룹 글로벌 인텔리전스 애널리스트다. 해외 뉴스 1건을 분석해 "
-        "아래 JSON만 출력한다.\n"
-        '{"ai_score": (KB 경영 중요도 0~100 정수), '
-        '"summary_ko": "한국어 2~3문장 요약", '
-        '"topics": ["주제코드", ...], '
-        '"kb_implication": "KB 거점 관점의 시사점·액션 1~2문장"}\n\n'
-        "topics 는 아래 코드에서만 고른다(복수 가능, 최대 3개):\n"
+        "You are a global intelligence analyst at KB Financial Group. "
+        "Analyze one overseas news article and output ONLY this JSON:\n"
+        '{"ai_score": (KB business importance, integer 0-100), '
+        '"summary_en": "2-3 sentence English summary", '
+        '"topics": ["TOPIC_CODE", ...], '
+        '"kb_implication_en": "1-2 sentence KB-perspective implication/action, in English"}\n\n'
+        "Choose topics ONLY from these codes (multiple allowed, max 3):\n"
         + taxonomy.prompt_reference()
-        + "\n\nai_score 기준: 거점 여신·리스크·조달에 직접 영향=80+, "
-        "간접·배경=40~60, 약함=40미만.\n"
-        "kb_implication 은 기사 내용 범위에서만 작성하고 근거 없는 추측은 피한다."
+        + "\n\nai_score guide: direct impact on KB branch lending/risk/funding = 80+, "
+        "indirect/background = 40-60, weak = under 40.\n"
+        "Write kb_implication_en strictly within the article content; avoid unfounded speculation."
     )
 
 
@@ -100,17 +104,17 @@ def run_rank(conn, provider: LLMProvider | None = None,
             score = max(0, min(100, int(data.get("ai_score"))))
         except (TypeError, ValueError):
             score = 50
-        summary_ko = str(data.get("summary_ko") or "")[:1500]
+        summary_en = str(data.get("summary_en") or "")[:1500]
         topics = taxonomy.validate(data.get("topics", []))
         if not topics:
             topics = taxonomy.seed_candidates(f"{r['title']} {r['summary'] or ''}")
-        kb_impl = str(data.get("kb_implication") or "")[:1000]
+        kb_impl_en = str(data.get("kb_implication_en") or "")[:1000]
 
         cur.execute(
             """UPDATE articles_raw
-               SET ai_score = ?, summary_ko = ?, topics = ?, kb_implication = ?, ai_model = ?
+               SET ai_score = ?, summary_en = ?, topics = ?, kb_implication_en = ?, ai_model = ?
                WHERE article_id = ?""",
-            (score, summary_ko, ",".join(topics), kb_impl, provider.model_id, r["article_id"]),
+            (score, summary_en, ",".join(topics), kb_impl_en, provider.model_id, r["article_id"]),
         )
         conn.commit()
         stats["ranked"] += 1
