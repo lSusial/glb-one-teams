@@ -47,6 +47,14 @@ LLM_BATCH_MAX_WAIT_SEC = 24 * 3600   # 배치 최대 대기(초, API SLA=24h)
 PREFILTER_LIMIT = 300        # 한 번 실행에 처리할 최대 기사 수(prefilter)
 RANK_LIMIT      = 150        # 한 번 실행에 처리할 최대 기사 수(ranker)
 
+# ── 본문 추출(fulltext.py) ───────────────────────────────────────
+# prefilter 통과분만 원문 본문 추출(무료). 스니펫(~141B) 대신 본문으로 rank 품질↑.
+FULLTEXT_LIMIT   = 400       # 한 번 실행에 본문 추출할 최대 기사 수
+FULLTEXT_WORKERS = 12        # 병렬 fetch 수
+FULLTEXT_TIMEOUT = 15        # 원문 fetch 타임아웃(초)
+FULLTEXT_MAXLEN  = 12000     # 저장 본문 최대 길이(자)
+RANK_BODY_MAXLEN = 4000      # rank 프롬프트에 넣는 본문 최대 길이(자)
+
 # ai_score(0~100) 가 이 값 이상이면 UI에서 ACTIVE(노출), 미만은 SOURCE WATCH
 # 60→55: 임계 바로 아래(50~59)에 준수한 거시·금융 뉴스가 몰려 있어 노출 폭을 넓힘
 AI_SCORE_ACTIVE_THRESHOLD = 55

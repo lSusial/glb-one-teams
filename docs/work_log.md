@@ -145,8 +145,15 @@
   - `export_json.py`: `_daily_briefs()` → 국가별 최신 daily 브리핑을 `countries.json`의 국가별 `brief`{ko,en,date} 필드로 주입.
   - `main.py ai` 4단계가 이제 **일일 브리핑** 생성.
 
+#### 수집 심화 — 본문 추출 (무료, rank 품질↑)
+- **진단**: 76/118 피드가 Google News RSS → summary 평균 141B(제목 수준 스니펫)로만 분석. keep 802건 중 **490건이 아직 `news.google.com` 리다이렉트 링크**(구식 redirect-follow 해소 실패).
+- **`fulltext.py` 신규**: prefilter 통과분만 원문 URL을 열어 본문 전체 추출(`trafilatura`) → `articles_raw.full_text`. Google News 링크는 `googlenewsdecoder`(현행 batchexecute 방식)로 실제 URL 해소 후 추출. 실패 시 스니펫 폴백. 병렬 fetch.
+- **파이프라인 편입**: prefilter → **fulltext** → rank. `llm_ranker` 는 `full_text` 있으면 본문으로, 없으면 스니펫으로 자동 분석. `main.py fulltext` + `ai` 5단계로 확장. `config`에 FULLTEXT_*·RANK_BODY_MAXLEN. `requirements.txt`에 trafilatura·googlenewsdecoder.
+- **실행 환경**: 수집처럼 **맥북(개방망)**. 방향 결정 = 무료 우선(유료 API는 보류).
+- **다음 후보(무료)**: GDELT breadth, OFFICIAL 12피드 활성화, 구글뉴스 쿼리 확대.
+
 #### 운영 메모
-- 실제 AI 실행은 맥북(ANTHROPIC_API_KEY): `python main.py ai --days 2`(4단계=일일 브리핑 포함) → `python main.py export`.
+- 실제 AI 실행은 맥북(ANTHROPIC_API_KEY): `pip install -r requirements.txt` 후 `python main.py ai --days 2`(2단계=본문추출, 5단계=일일 브리핑 포함) → `python main.py export`.
 - 임계 55 하향 후 55~59 신규 노출분 KO 미번역 소수 → `translate --days 2`로 채움(당장은 EN 폴백으로 노출).
 
 ---

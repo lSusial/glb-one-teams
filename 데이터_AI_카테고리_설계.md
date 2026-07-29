@@ -7,6 +7,20 @@
 
 ---
 
+## ★ 구현 현황 (2026-07-23 갱신)
+
+> 아래 0~5장은 **초기 설계**(2026-06-27, 대부분 "⬜ 신규"). 이후 실제 구현·실행이 완료됐으므로 현재 상태를 먼저 요약한다. 상세 이력은 `docs/work_log.md` 세션 5~8.
+
+- **AI 레이어 이식·실행 완료**(맥북). 모듈: `llm_prefilter`·`fulltext`·`llm_ranker`·`llm_translate`·`briefing` + 프로바이더 추상화 `llm_provider`.
+- **파이프라인(실제)**: fetch → 관련성게이트(축B) + dedup → **llm_prefilter**(노이즈 keep/drop) → **fulltext**(keep 원문 본문 추출, `trafilatura`+`googlenewsdecoder`, 무료) → **llm_ranker**(ai_score·summary_en·topics·kb_implication_en) → **llm_translate**(표시분 한국어) → **briefing**(daily=현지언론 상단, weekly) → export.
+- **비용 최적화**: 모델 Haiku, **Message Batches API(토큰 50%↓)** 기본(`--sync`로 동기). `--days`로 물량 축소. 번역은 표시분만.
+- **이중언어 canonical = 영어**: 원문 대부분 영어라 rank가 영어로 분석·요약(`summary_en`·`kb_implication_en`) → `llm_translate`가 한국어(`summary_ko`·`kb_implication`) 채움.
+- **taxonomy.yaml 구현**(주제코드 5종 MARKET/BANKING/DIGITAL/ESG/RISK ↔ UI 필터). `kb_implication` 컬럼 추가 완료.
+- **ACTIVE 임계 = 55**(ai_score). 규제 라우팅 = TopicWatch 규제·감독 클러스터로 흡수.
+- **본문 추출로 수집 심화**: 76/118 피드가 Google News 스니펫(평균 141B)뿐 → prefilter 통과분만 원문 본문 추출해 rank가 본문으로 분석. **수집 강화 방향 = 무료 우선(유료 API 보류).** 다음 무료 후보: GDELT·OFFICIAL 피드·구글뉴스 쿼리 확대.
+
+---
+
 ## 0. 출발점 — 코드베이스가 이미 알려주는 것
 
 가장 중요한 사실: **AI 파이프라인은 이미 설계돼 있다.** `schema.sql`의 `articles_raw` 테이블이 AI 산출 컬럼을 미리 예약해 뒀고, 별도 `country_briefings` 테이블까지 있다. 다만 이 "수집 전용" 레포에는 그 AI 모듈이 없다(`requirements.txt`에 anthropic/openai 같은 AI 라이브러리 없음 — feedparser·PyYAML·requests뿐). 실제 AI 모듈(`llm_prefilter.py`, `llm_ranker.py`, `briefing.py`)은 prototype 레포에 있다.
@@ -18,10 +32,14 @@
 | 단계 | 모듈 | 상태 |
 |---|---|---|
 | 수집 (fetch) | `collector.py` | ✅ 구현됨 (RSS + Google News 우회) |
-| 키워드 필터 + 중복 | `keyword_filter.py` | ✅ 구현됨 (점수제 게이트) |
-| LLM 1차 관문 | `llm_prefilter.py` | ⬜ 스키마만 예약 (컬럼 `llm_prefilter`, `llm_reject_reason`) |
-| AI 분석 | `llm_ranker.py` | ⬜ 스키마만 예약 (`ai_score`, `summary_ko`, `topics`, `ai_model`) |
-| 국가 브리핑 | `briefing.py` | ⬜ 스키마만 예약 (`country_briefings` 테이블) |
+| 키워드 필터 + 중복 | `keyword_filter.py` | ✅ 구현됨 (점수제 게이트, F1 77) |
+| LLM 1차 관문 | `llm_prefilter.py` | ✅ 구현·실행 (`llm_prefilter`, `llm_reject_reason`) |
+| 본문 추출 | `fulltext.py` | ✅ 구현 (keep 원문 → `full_text`, 무료) |
+| AI 분석 | `llm_ranker.py` | ✅ 구현·실행 (`ai_score`·`summary_en`·`topics`·`kb_implication_en`·`ai_model`) |
+| 번역 | `llm_translate.py` | ✅ 구현·실행 (`summary_ko`·`kb_implication`, 표시분) |
+| 국가 브리핑 | `briefing.py` | ✅ 구현·실행 (`country_briefings`, daily/weekly + `summary_en`) |
+
+> 초기엔 AI 모듈이 prototype 레포에만 있었으나, 세션 5~8에서 이 레포로 이식·실행 완료. 아래 상세 설계는 근거·의도 기록으로 유지한다.
 
 ---
 

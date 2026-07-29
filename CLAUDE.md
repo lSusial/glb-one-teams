@@ -55,6 +55,10 @@ python main.py list    # 최근 기사 확인
 ## 현재 알려진 이슈
 - RTHK 피드: XML SAXParseException 오류로 수집 실패 (피드 자체 문제)
 - Google News 피드: 서버에서 직접 수집 시 503 → 맥북 수집 후 rsync로 해결
+- Google News 링크 해소: 구식 redirect-follow는 최신 consent/JS 리다이렉트에 실패 → `fulltext.py`가 `googlenewsdecoder`로 해소 후 본문 추출 (맥북 실행)
+
+## 수집 심화 — 본문 추출 (fulltext.py, 무료)
+- prefilter 통과분만 원문 본문 추출(`trafilatura`) → `articles_raw.full_text`, rank가 스니펫 대신 본문으로 분석. 파이프라인: prefilter → **fulltext** → rank. `main.py fulltext` / `ai` 5단계. 패키지: trafilatura·googlenewsdecoder. **뉴스 수집 강화 방향 = 무료 우선(유료 API 보류).**
 
 ## 기획·현황 문서 (2026-07-13 확정안 반영)
 - `PLAN.md` — 기획 확정안·제품 구조(새 6탭 UI)·11개 거점·로드맵 (기획 레이어)

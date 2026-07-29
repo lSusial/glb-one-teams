@@ -160,6 +160,13 @@ def cmd_prefilter(args):
     print(f"[prefilter] 처리={s['total']}  keep={s['keep']}  drop={s['drop']}")
 
 
+def cmd_fulltext(args):
+    import fulltext
+    conn = db.open_conn()
+    s = _ai_guard(lambda: fulltext.run_fulltext(conn, days=getattr(args, "days", None)), "fulltext")
+    print(f"[fulltext] 대상={s['total']}  본문={s['extracted']}  URL해소={s['resolved']}  실패={s['failed']}")
+
+
 def cmd_rank(args):
     import llm_ranker
     conn = db.open_conn()
@@ -194,19 +201,23 @@ def cmd_ai(args):
     import llm_prefilter
     import llm_ranker
     import llm_translate
+    import fulltext
     conn = db.open_conn()
     days = getattr(args, "days", None)
     ub = _batch_flag(args)
-    print("▶ [1/4] LLM 프리필터...")
+    print("▶ [1/5] LLM 프리필터...")
     s1 = _ai_guard(lambda: llm_prefilter.run_prefilter(conn, days=days, use_batch=ub), "ai")
     print(f"   keep={s1['keep']} drop={s1['drop']}")
-    print("▶ [2/4] AI 분석[영어]...")
+    print("▶ [2/5] 본문 추출(keep 원문)...")
+    sf = _ai_guard(lambda: fulltext.run_fulltext(conn, days=days), "ai")
+    print(f"   본문={sf['extracted']} URL해소={sf['resolved']} 실패={sf['failed']}")
+    print("▶ [3/5] AI 분석[영어]...")
     s2 = _ai_guard(lambda: llm_ranker.run_rank(conn, days=days, use_batch=ub), "ai")
     print(f"   ranked={s2['ranked']} ACTIVE={s2['active']}")
-    print("▶ [3/4] 한국어 번역(표시분)...")
+    print("▶ [4/5] 한국어 번역(표시분)...")
     st = _ai_guard(lambda: llm_translate.run_translate(conn, days=days, use_batch=ub), "ai")
     print(f"   KO채움={st['ko']} EN채움={st['en']}")
-    print("▶ [4/4] 국가 일일 브리핑(현지언론 상단, 전일+당일)...")
+    print("▶ [5/5] 국가 일일 브리핑(현지언론 상단, 전일+당일)...")
     s3 = _ai_guard(lambda: briefing.run_briefing(conn, briefing_type="daily", days=days, use_batch=ub), "ai")
     print(f"   written={s3['written']}")
 
@@ -262,6 +273,8 @@ def main():
     pre = sub.add_parser("prefilter", help="LLM 1차 관문 (keep/drop)")
     pre.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
     pre.add_argument("--sync", action="store_true", help=_SYNC_HELP)
+    ftx = sub.add_parser("fulltext", help="keep 기사 원문 본문 추출 (rank 품질↑, 무료)")
+    ftx.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
     rnk = sub.add_parser("rank",      help="AI 분석[영어] (score/summary_en/topics/kb_implication_en)")
     rnk.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
     rnk.add_argument("--sync", action="store_true", help=_SYNC_HELP)
@@ -284,7 +297,8 @@ def main():
     {
         "init": cmd_init, "fetch": cmd_fetch, "filter": cmd_filter,
         "dedup": cmd_dedup, "run": cmd_run, "report": cmd_report, "list": cmd_list,
-        "prefilter": cmd_prefilter, "rank": cmd_rank, "translate": cmd_translate, "brief": cmd_brief,
+        "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "rank": cmd_rank,
+        "translate": cmd_translate, "brief": cmd_brief,
         "ai": cmd_ai, "export": cmd_export, "admin": cmd_admin,
     }[args.cmd](args)
 

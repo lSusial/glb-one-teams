@@ -38,6 +38,8 @@ def ensure_columns(conn) -> None:
         # 영어 기준본(canonical) — rank 가 채우고, 한국어는 llm_translate 가 번역
         ("summary_en",        "ALTER TABLE articles_raw ADD COLUMN summary_en        TEXT"),
         ("kb_implication_en", "ALTER TABLE articles_raw ADD COLUMN kb_implication_en TEXT"),
+        # 본문 추출본(fulltext.py) — 있으면 rank 가 스니펫 대신 본문으로 분석
+        ("full_text",         "ALTER TABLE articles_raw ADD COLUMN full_text         TEXT"),
     ])
 
 
@@ -78,7 +80,8 @@ def run_rank(conn, provider: LLMProvider | None = None,
 
     rows = conn.execute(
         f"""
-        SELECT a.article_id, a.title, a.summary, m.primary_country_code AS cc, m.media_name
+        SELECT a.article_id, a.title, a.summary, a.full_text,
+               m.primary_country_code AS cc, m.media_name
         FROM articles_raw a
         JOIN media_sources m ON m.source_id = a.source_id
         WHERE a.llm_prefilter = 'keep'
@@ -96,11 +99,17 @@ def run_rank(conn, provider: LLMProvider | None = None,
     for i, r in enumerate(rows):
         cid = str(i)
         ctx = kb_network.context_for(r["cc"])
+        # 본문 추출본이 있으면 본문으로, 없으면 RSS 스니펫으로 (자동 폴백)
+        body = (r["full_text"] or "").strip()
+        if body:
+            body_line = f"본문: {body[:config.RANK_BODY_MAXLEN]}"
+        else:
+            body_line = f"요약: {(r['summary'] or '')[:1200]}"
         user = (
             f"[거점 맥락: {ctx}]\n"
             f"매체: {r['media_name']}  국가: {r['cc']}\n"
             f"제목: {r['title']}\n"
-            f"요약: {(r['summary'] or '')[:1200]}"
+            f"{body_line}"
         )
         requests.append((cid, system, user, 600))
         row_by_id[cid] = r
