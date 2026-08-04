@@ -231,8 +231,8 @@ def cmd_export(args):
     print(f"[export] mode={mode}  countries={s['countries']}  articles={s['articles']}  → {s['path']}")
     p = export_json.export_pulse(conn)
     print(f"[export] pulse categories={p['categories']}  → {p['path']}")
-    k = export_json.export_keyman(conn)
-    print(f"[export] keyman articles={k['articles']}  → {k['path']}")
+    w = export_json.export_weekly(conn)
+    print(f"[export] weekly 국가={w['countries']}  → {w['path']}")
     t = export_json.export_topics(conn)
     print(f"[export] topics clusters={t['clusters']}  → {t['path']}")
 

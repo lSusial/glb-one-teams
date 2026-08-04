@@ -10,13 +10,13 @@
 
 # ── 주제 코드(축 C) ──────────────────────────────────────────────
 # code : AI topics 출력에 쓰는 표준 코드 (대문자)
-# ui   : UI 현지언론 필터 버튼 키 (finance/digital/esg/risk)
+# ui   : UI 현지언론 필터 버튼 키 (economy/finance/digital/esg/risk)
 # label: 화면 표시용 라벨 (ko/en)
 # seeds: 1차 후보 매칭용 키워드 (keyword_filter.FINANCE_KEYWORDS 그룹 재사용)
 topics:
   - code: MARKET
-    ui: finance
-    label: { ko: "시장·경제", en: "Market·Economy" }
+    ui: economy
+    label: { ko: "경제", en: "Economy" }
     seeds: [interest rate, exchange rate, bond, yield, gdp, inflation,
             monetary policy, central bank, fx, treasury, rate hike, rate cut]
   - code: BANKING

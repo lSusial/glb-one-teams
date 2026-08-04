@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>KB 글로벌 데일리 브리핑 — 주간 브리핑</title>
+<script id="weekly-data" type="application/json">null</script>
+<style>
+  :root{--kb-yellow:#FFBC00;--kb-dark:#545045;--kb-gold:#85754E;--kb-silver:#8A8D8F;
+        --ink:#2b2926;--line:#e8e4dd;--card:#fff;--sub:#7a746c;--page:#dcd8d2;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--page);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:14px}
+  .wrap{max-width:760px;margin:0 auto;padding:22px 16px 0}
+  .mast{position:relative;overflow:hidden;border-radius:14px;padding:20px 24px 22px;color:#fff;background:linear-gradient(135deg,#5c574f 0%,#4a453e 100%)}
+  .mast .kbwm{position:absolute;right:-6px;top:-26px;font-size:132px;font-weight:900;color:rgba(255,255,255,.05);letter-spacing:-6px}
+  .mast .row{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
+  .mast .kb{font-weight:800}.mast .kb b{color:var(--kb-yellow)}.mast .kb span{color:#d9d4cc;font-weight:600;margin-left:4px}
+  .mast .rt{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:12px;color:#cfc9c0}
+  .mast .en{border:1px solid rgba(255,188,0,.6);color:var(--kb-yellow);border-radius:20px;padding:2px 10px;font-weight:700}
+  .mast .en .off{color:#a49c8f}
+  .dsel{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.28);border-radius:8px;padding:2px 7px;font-size:12px;max-width:130px}
+  .mast h1{position:relative;z-index:1;font-size:26px;font-weight:800;margin:14px 0 8px;line-height:1.2}
+  .mast .sub{position:relative;z-index:1;font-size:12.5px;color:#cfc9c0}
+  .nav{display:flex;gap:8px;margin:14px 0 0;flex-wrap:wrap}
+  .nav a{font-size:13px;font-weight:700;color:var(--sub);text-decoration:none;padding:8px 14px;border-radius:20px;border:1px solid var(--line);background:#fff}
+  .nav a.on{background:var(--kb-dark);color:#fff;border-color:var(--kb-dark)}
+  /* 국가 선택 칩 */
+  .cov{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
+  .cc{display:flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;background:#fdfcfa;cursor:pointer}
+  .cc:hover{border-color:var(--kb-silver)}
+  .cc.sel{border-color:var(--kb-dark);box-shadow:inset 0 0 0 1px var(--kb-dark)}
+  /* 브리핑 카드 */
+  .wk{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-top:12px;border-top:3px solid var(--kb-yellow)}
+  .wh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line)}
+  .wh .flag{font-size:19px}.wh b{font-size:16px}
+  .wh .meta{font-size:11.5px;color:var(--sub);font-weight:600}
+  .wh .stat{margin-left:auto;font-size:12px;font-weight:800;color:#fff;background:var(--kb-gold);border-radius:20px;padding:3px 11px}
+  .wsum{font-size:13.5px;line-height:1.75;color:#3a352e}
+  .blk{margin-top:12px}
+  .blk .lbl{font-size:11.5px;font-weight:800;color:var(--kb-gold);letter-spacing:.3px;margin-bottom:5px}
+  .wiss{margin:0;padding-left:18px}
+  .wiss li{font-size:13px;line-height:1.6;margin-bottom:3px}
+  .wout{font-size:13px;line-height:1.65;background:#fffdf4;border-left:3px solid var(--kb-yellow);border-radius:5px;padding:7px 11px}
+  .wkw{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .kw{font-size:11.5px;color:var(--sub);background:#f4f1ea;border-radius:20px;padding:3px 10px}
+  .empty{color:var(--sub);text-align:center;padding:34px;font-size:13px;line-height:1.7}
+  footer{text-align:center;color:var(--kb-silver);font-size:11.5px;letter-spacing:.5px;padding:22px 0 34px}
+  footer .tag{color:var(--kb-gold);font-weight:800;letter-spacing:1px}
+  a{color:#2b5f9e;text-decoration:none}a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="mast">
+    <div class="kbwm">KB</div>
+    <div class="row">
+      <span class="kb"><b>KB</b><span>국민은행</span></span>
+      <span class="rt"><span class="en">KR<span class="off"> / EN</span></span><select id="dsel" class="dsel"></select></span>
+    </div>
+    <h1>주간 리포트</h1>
+    <div class="sub">거점별 최근 1주간 뉴스를 AI가 종합 — 핵심 이슈·전망·대표 수치</div>
+    <div class="nav"><a href="brief.html">오늘의 글로벌</a><a href="countries.html">국가별 뉴스</a><a class="on" href="weekly.html">주간 리포트</a><a href="topics.html">이슈 트래커</a></div>
+  </div>
+
+  <div class="cov" id="cov"></div>
+  <div id="feed"></div>
+  <footer><div class="tag">CONNECTING PEOPLE, CREATING GLOBAL VALUE</div><div id="gen"></div></footer>
+</div>
+
+<script>
+(async function(){
+  const P=new URLSearchParams(location.search), QD=P.get('date');
+  let D=null;
+  if(QD){ try{ D=await (await fetch('archive/'+QD+'/weekly.json')).json(); }catch(e){} }
+  try{ if(!D) D=JSON.parse(document.getElementById('weekly-data').textContent);}catch(e){}
+  if(!D){ try{ D=await (await fetch('weekly.json')).json(); }catch(e){} }
+  if(!D){ document.getElementById('feed').innerHTML='<div class="empty">weekly.json 이 없습니다. <code>python main.py brief</code> → <code>export</code> 로 생성하세요.</div>'; return; }
+
+  const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const NAMES={GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',GLOBAL:'글로벌'};
+  const LANG=P.get('lang')==='en'?'en':'ko';
+  const ts=b=>LANG==='en'?(b.summary_en||b.summary):(b.summary||b.summary_en);
+  const ti=b=>{const a=LANG==='en'?(b.issues_en&&b.issues_en.length?b.issues_en:b.issues):(b.issues&&b.issues.length?b.issues:b.issues_en);return a||[];};
+  const to=b=>LANG==='en'?(b.outlook_en||b.outlook):(b.outlook||b.outlook_en);
+  const enEl=document.querySelector('.en');
+  if(enEl){ enEl.style.cursor='pointer';
+    enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
+    enEl.onclick=()=>{ P.set('lang',LANG==='en'?'ko':'en'); location.search=P.toString(); }; }
+  document.querySelectorAll('.nav a').forEach(a=>{ a.href=a.getAttribute('href').split('?')[0]+location.search; });
+  document.getElementById('gen').textContent='업데이트 '+(D.generated_at||'').slice(0,16).replace('T',' ');
+
+  const cos=(D.countries||[]).filter(c=>(c.summary||c.summary_en));
+  if(!cos.length){document.getElementById('feed').innerHTML='<div class="empty">주간 브리핑이 아직 없습니다.<br>맥북에서 <code>python main.py brief</code>(주간) 실행 후 <code>export</code>.</div>';return;}
+
+  let fCC='';
+  const cov=document.getElementById('cov'), feed=document.getElementById('feed');
+  cov.innerHTML=cos.map(c=>`<span class="cc" data-cc="${c.cc}"><span>${c.flag||''}</span>${NAMES[c.cc]||c.cc}</span>`).join('');
+  cov.onclick=e=>{const el=e.target.closest('.cc');if(!el)return;fCC=(fCC===el.dataset.cc?'':el.dataset.cc);render();};
+
+  function card(c){
+    const iss=ti(c), kw=(c.keywords||[]);
+    return `<div class="wk">
+      <div class="wh"><span class="flag">${c.flag||''}</span> <b>${NAMES[c.cc]||c.cc}</b>
+        <span class="meta">${c.n!=null?c.n+'건 · ':''}${esc(c.date||'')}</span>
+        ${c.key_stat?`<span class="stat">${esc(c.key_stat)}</span>`:''}</div>
+      <div class="wsum">${esc(ts(c))}</div>
+      ${iss.length?`<div class="blk"><div class="lbl">${LANG==='en'?'KEY ISSUES':'핵심 이슈'}</div>
+        <ul class="wiss">${iss.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
+      ${to(c)?`<div class="blk"><div class="lbl">${LANG==='en'?'OUTLOOK':'전망'}</div>
+        <div class="wout">${esc(to(c))}</div></div>`:''}
+      ${kw.length?`<div class="wkw">${kw.map(k=>`<span class="kw">#${esc(k)}</span>`).join('')}</div>`:''}
+    </div>`;
+  }
+  function render(){
+    cov.querySelectorAll('.cc').forEach(el=>el.classList.toggle('sel',el.dataset.cc===fCC));
+    const list=fCC?cos.filter(c=>c.cc===fCC):cos;
+    feed.innerHTML=list.map(card).join('');
+  }
+  render();
+
+  try{
+    const dates=await (await fetch('archive/dates.json')).json();
+    const sel=document.getElementById('dsel');
+    if(sel&&dates.length){
+      sel.innerHTML='<option value="">최신</option>'+dates.map(d=>`<option value="${d}"${d===QD?' selected':''}>${d}</option>`).join('');
+      sel.onchange=()=>{ location.search = sel.value?('?date='+sel.value):''; };
+    } else if(sel){ sel.style.display='none'; }
+  }catch(e){ const s=document.getElementById('dsel'); if(s) s.style.display='none'; }
+})();
+</script>
+</body>
+</html>

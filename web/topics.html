@@ -38,7 +38,7 @@
   .ca .ck{margin-top:5px;background:#fffdf4;border-left:3px solid var(--kb-yellow);border-radius:5px;padding:5px 9px;font-size:12.5px;line-height:1.5}
   .ca .ck b{color:var(--kb-gold)}
   .badge{font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;color:#fff}
-  .b-finance{background:#2b5f9e}.b-digital{background:#6a3fb5}.b-esg{background:#3a8a6a}.b-risk{background:#b23b3b}
+  .b-economy{background:#2b5f9e}.b-finance{background:#2f7d4f}.b-digital{background:#6a3fb5}.b-esg{background:#3a8a6a}.b-risk{background:#b23b3b}
   .empty{color:var(--sub);text-align:center;padding:30px;font-size:13px;line-height:1.6}
   footer{text-align:center;color:var(--kb-silver);font-size:11.5px;letter-spacing:.5px;padding:22px 0 34px}
   footer .tag{color:var(--kb-gold);font-weight:800;letter-spacing:1px}
@@ -53,9 +53,9 @@
       <span class="kb"><b>KB</b><span>국민은행</span></span>
       <span class="rt"><span class="en">KR<span class="off"> / EN</span></span><select id="dsel" class="dsel"></select></span>
     </div>
-    <h1>TopicWatch</h1>
+    <h1>이슈 트래커</h1>
     <div class="sub">같은 이슈가 여러 거점에서 어떻게 나타나는지 — 주제별 횡단 딥다이브</div>
-    <div class="nav"><a href="brief.html">Global Pulse</a><a href="countries.html">현지언론</a><a href="keyman.html">Key-man</a><a class="on" href="topics.html">TopicWatch</a></div>
+    <div class="nav"><a href="brief.html">오늘의 글로벌</a><a href="countries.html">국가별 뉴스</a><a href="weekly.html">주간 리포트</a><a class="on" href="topics.html">이슈 트래커</a></div>
   </div>
   <div id="feed"></div>
   <footer><div class="tag">CONNECTING PEOPLE, CREATING GLOBAL VALUE</div><div id="gen"></div></footer>
@@ -72,7 +72,7 @@
 
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const NAMES={GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',GLOBAL:'글로벌'};
-  const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l={finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'}[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
+  const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l={economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'}[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
   const LANG=P.get('lang')==='en'?'en':'ko';
   const tq=a=>LANG==='en'?(a.q_en||a.q):(a.q||a.q_en), tk=a=>LANG==='en'?(a.k_en||a.k):(a.k||a.k_en);
   const enEl=document.querySelector('.en');

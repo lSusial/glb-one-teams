@@ -45,7 +45,7 @@
   .cap{font-size:11.5px;color:var(--sub);margin-top:14px}
   .cap .n{color:var(--kb-silver)}
   .badge{font-size:10.5px;font-weight:800;padding:1px 8px;border-radius:20px;color:#fff}
-  .b-finance{background:#2b5f9e}.b-digital{background:#6a3fb5}.b-esg{background:#3a8a6a}.b-risk{background:#b23b3b}
+  .b-economy{background:#2b5f9e}.b-finance{background:#2f7d4f}.b-digital{background:#6a3fb5}.b-esg{background:#3a8a6a}.b-risk{background:#b23b3b}
   .flow{padding:11px 0;border-top:1px solid var(--line)}
   .flow:first-child{border-top:0;padding-top:2px}
   .flow .ft{font-weight:700;font-size:13.5px;line-height:1.6}
@@ -75,9 +75,9 @@
       <span class="kb"><b>KB</b><span>국민은행</span></span>
       <span class="rt"><span class="en">KR<span class="off"> / EN</span></span><select id="dsel" class="dsel"></select></span>
     </div>
-    <h1>글로벌 데일리 브리핑</h1>
+    <h1>오늘의 글로벌</h1>
     <div class="sub">전 세계 KB 글로벌 네트워크 · 뉴스 분석 기반 시장 온도</div>
-    <div class="nav"><a class="on" href="brief.html">Global Pulse</a><a href="countries.html">현지언론</a><a href="keyman.html">Key-man</a><a href="topics.html">TopicWatch</a></div>
+    <div class="nav"><a class="on" href="brief.html">오늘의 글로벌</a><a href="countries.html">국가별 뉴스</a><a href="weekly.html">주간 리포트</a><a href="topics.html">이슈 트래커</a></div>
   </div>
 
   <section class="sec">
@@ -91,13 +91,7 @@
 
   <section class="sec accent">
     <div class="sec-h"><div class="num" style="background:var(--kb-yellow);color:var(--kb-dark)">02</div>
-      <div><div class="tt">오늘의 핵심 흐름</div><div class="ds">오늘 가장 주목받는 이슈 (중요도순 · 카테고리 배지)</div></div></div>
-    <div id="flows"></div>
-  </section>
-
-  <section class="sec">
-    <div class="sec-h"><div class="num">03</div>
-      <div><div class="tt">오늘의 주요 시장 뉴스</div><div class="ds">전 거점 AI 중요도 상위 · 클릭 시 원문</div></div></div>
+      <div><div class="tt">오늘의 핵심 뉴스</div><div class="ds">전 거점 AI 중요도 상위 · 국가무관 · 카테고리 배지 · 클릭 시 원문</div></div></div>
     <div class="news" id="news"></div>
   </section>
 
@@ -125,7 +119,7 @@
 
   const NAMES={GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아'};
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l={finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'}[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
+  const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l={economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'}[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
   const LANG=P.get('lang')==='en'?'en':'ko';
   const tq=a=>LANG==='en'?(a.q_en||a.q):(a.q||a.q_en), tk=a=>LANG==='en'?(a.k_en||a.k):(a.k||a.k_en);
   const tf=f=>LANG==='en'?(f.summary_en||f.summary):(f.summary||f.summary_en);
@@ -134,12 +128,6 @@
     enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
     enEl.onclick=()=>{ P.set('lang',LANG==='en'?'ko':'en'); location.search=P.toString(); }; }
   document.querySelectorAll('.nav a').forEach(a=>{ a.href=a.getAttribute('href').split('?')[0]+location.search; });
-
-  document.getElementById('flows').innerHTML=(D.key_flows||[]).map(f=>`
-    <div class="flow">
-      <div class="ft"><span class="fg">${f.flag||''}</span> ${badges(f.c)} ${esc(f.title)}</div>
-      <div class="fs">${esc(tf(f))}</div></div>`).join('')
-    || '<div style="color:var(--sub);font-size:13px;padding:6px 0">데이터 없음 (AI 분석 필요)</div>';
 
   document.getElementById('news').innerHTML=(D.top_news||[]).map(a=>`
     <div class="nc"><div class="nt"><span class="fg">${a.flag||''}</span> <b>${NAMES[a.cc]||a.cc||''}</b> · ${esc(a.src)} · ${esc(a.d)} ${badges(a.c)}

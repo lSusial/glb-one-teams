@@ -175,13 +175,13 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
 # ---------------------------------------------------------------------------
 _PULSE_TEMPLATE = config.ROOT / "web" / "brief.html"
 
-# taxonomy 코드 → 온도계 5대 카테고리(레퍼런스 색상)
+# taxonomy 코드 → 온도계 5대 카테고리(배지·필터와 라벨·색상 일치: 경제/금융/디지털/ESG/리스크)
 _PULSE_CATS = [
-    ("MARKET",  "경제",    "#2b5f9e"),
-    ("BANKING", "금융",    "#2f7d4f"),
-    ("DIGITAL", "디지털",  "#6a3fb5"),
-    ("RISK",    "금융사고", "#b23b3b"),
-    ("ESG",     "ESG",     "#3a8a6a"),
+    ("MARKET",  "경제",   "#2b5f9e"),
+    ("BANKING", "금융",   "#2f7d4f"),
+    ("DIGITAL", "디지털", "#6a3fb5"),
+    ("ESG",     "ESG",    "#3a8a6a"),
+    ("RISK",    "리스크", "#b23b3b"),
 ]
 
 
@@ -250,24 +250,53 @@ def _compute_key_flows(conn, days: int | None = None, limit: int = 6) -> list[di
     return flows
 
 
-def _compute_top_news(conn, days: int | None = None, limit: int = 5) -> list[dict]:
-    """전 거점 중요도 TOP = '오늘의 주요 시장 뉴스'."""
+_TN_STOP = set("a an the of to in on for and or with at by from as is are be after just against "
+               "over into up out will its news com vs amid".split())
+
+
+def _sig_tokens(text: str) -> set:
+    """제목 유사도용 유의미 토큰(소문자·불용어 제거·3자+)."""
+    return {w for w in re.findall(r"[a-z0-9]+", (text or "").lower())
+            if w not in _TN_STOP and len(w) > 2}
+
+
+def _jaccard(a: set, b: set) -> float:
+    return len(a & b) / len(a | b) if a and b else 0.0
+
+
+def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dict]:
+    """전 거점 중요도 TOP = '오늘의 핵심 뉴스'.
+
+    다양성: ① 제목 근접중복(같은 기사 재탕) 제외  ② 국가별 상한(도배 방지).
+    후보 풀을 넉넉히 뽑아 위 규칙 적용 후 limit 만큼.
+    """
     dc, params = _date_clause(days)
     rows = conn.execute(
         f"""SELECT a.ai_score, a.title, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
                    a.topics, a.link, a.published_at, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}
-            ORDER BY a.ai_score DESC, a.published_at DESC LIMIT ?""",
-        (config.AI_SCORE_ACTIVE_THRESHOLD, *params, limit),
+            ORDER BY a.ai_score DESC, a.published_at DESC LIMIT 60""",
+        (config.AI_SCORE_ACTIVE_THRESHOLD, *params),
     ).fetchall()
-    out = []
+
+    out, seen_tokens, per_cc = [], [], {}
     for r in rows:
+        tk = _sig_tokens(r["title"])
+        if any(_jaccard(tk, s) >= config.TOP_NEWS_SIM for s in seen_tokens):
+            continue                                   # 근접 중복(같은 기사 재탕)
+        cc = r["cc"]
+        if per_cc.get(cc, 0) >= config.TOP_NEWS_PER_COUNTRY:
+            continue                                   # 국가별 상한
         codes = [c for c in (r["topics"] or "").split(",") if c]
-        out.append(dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""), src=r["media_name"],
+        out.append(dict(cc=cc, flag=_FLAGS_ALL.get(cc, ""), src=r["media_name"],
                         d=(r["published_at"] or "")[:10], t=r["title"], q=r["summary_ko"] or "",
                         k=r["kb_implication"] or "", q_en=r["summary_en"] or "", k_en=r["kb_implication_en"] or "",
                         c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"]))
+        seen_tokens.append(tk)
+        per_cc[cc] = per_cc.get(cc, 0) + 1
+        if len(out) >= limit:
+            break
     return out
 
 
@@ -280,8 +309,7 @@ def export_pulse(conn, days: int | None = None) -> dict:
         "snapshot_date": _snapshot_date(),
         "days": days,
         "categories": _compute_pulse(conn, days=days),
-        "key_flows": _compute_key_flows(conn, days=days),
-        "top_news": _compute_top_news(conn, days=days),
+        "top_news": _compute_top_news(conn, days=days, limit=8),
     }
     _write_json("pulse", payload)
 
@@ -299,7 +327,75 @@ def export_pulse(conn, days: int | None = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Key-man 인사·리더십 동향 (뉴스 기반 키워드 추출)
+# 주간 브리핑 (국가별) — country_briefings(weekly) 기반
+# ---------------------------------------------------------------------------
+_WEEKLY_TEMPLATE = config.ROOT / "web" / "weekly.html"
+
+
+def _weekly_briefs(conn) -> list[dict]:
+    """country_briefings(weekly) 최신본을 국가별 1건으로 반환(한/영)."""
+    try:
+        cols = [c[1] for c in conn.execute("PRAGMA table_info(country_briefings)")]
+    except Exception:
+        return []
+    if "cc" not in cols:
+        return []
+    wanted = ["cc", "summary", "summary_en", "issues", "issues_en", "outlook",
+              "outlook_en", "keywords", "key_stat", "briefing_date", "article_count"]
+    sel = ", ".join(c for c in wanted if c in cols)
+    rows = conn.execute(
+        f"SELECT {sel} FROM country_briefings WHERE briefing_type='weekly' "
+        "ORDER BY briefing_date DESC, generated_at DESC"
+    ).fetchall()
+
+    def jl(v):
+        try:
+            return json.loads(v) if v else []
+        except Exception:
+            return []
+
+    seen, out = set(), []
+    for r in rows:
+        cc = r["cc"]
+        if cc in seen:
+            continue
+        seen.add(cc)
+        k = r.keys()
+        g = lambda c: (r[c] if c in k else "") or ""
+        out.append(dict(
+            cc=cc, flag=_FLAGS_ALL.get(cc, ""),
+            summary=g("summary"), summary_en=g("summary_en"),
+            issues=jl(r["issues"] if "issues" in k else None),
+            issues_en=jl(r["issues_en"] if "issues_en" in k else None),
+            outlook=g("outlook"), outlook_en=g("outlook_en"),
+            keywords=jl(r["keywords"] if "keywords" in k else None),
+            key_stat=g("key_stat"), date=g("briefing_date"),
+            n=(r["article_count"] if "article_count" in k else None),
+        ))
+    return out
+
+
+def export_weekly(conn) -> dict:
+    """weekly.json + weekly.html(국가별 주간 브리핑) 생성."""
+    config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "snapshot_date": _snapshot_date(),
+        "countries": _weekly_briefs(conn),
+    }
+    _write_json("weekly", payload)
+    if _WEEKLY_TEMPLATE.exists():
+        data_js = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
+        html = _WEEKLY_TEMPLATE.read_text(encoding="utf-8").replace(
+            '<script id="weekly-data" type="application/json">null</script>',
+            f'<script id="weekly-data" type="application/json">{data_js}</script>')
+        (config.EXPORT_DIR / "weekly.html").write_text(html, encoding="utf-8")
+    log.info("weekly.json 작성 — 국가=%d", len(payload["countries"]))
+    return {"countries": len(payload["countries"]), "path": str(config.EXPORT_DIR / "weekly.json")}
+
+
+# ---------------------------------------------------------------------------
+# Key-man 인사·리더십 동향 (뉴스 기반 키워드 추출) — [폐지] 주간 브리핑으로 대체
 # ---------------------------------------------------------------------------
 _KEYMAN_TEMPLATE = config.ROOT / "web" / "keyman.html"
 
@@ -350,7 +446,7 @@ def _compute_keyman(conn, days: int | None = None, limit: int = 24) -> list[dict
 
 def export_keyman(conn, days: int | None = None) -> dict:
     """keyman.json + keyman.html(Key-man 동향 화면) 생성."""
-    if days is None: days = 30         # 인사·리더십은 월간 흐름
+    if days is None: days = 7          # 인사·리더십은 주간 흐름
     config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),

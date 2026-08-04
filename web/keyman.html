@@ -30,7 +30,7 @@
   .sec-h .tt{font-size:15px;font-weight:800}.sec-h .ds{font-size:12px;color:var(--sub);margin-top:2px}
   .sec-h .rt{margin-left:auto;font-size:12px;color:var(--sub)}
   .badge{font-size:10.5px;font-weight:800;padding:1px 8px;border-radius:20px;color:#fff}
-  .b-finance{background:#2b5f9e}.b-digital{background:#6a3fb5}.b-esg{background:#3a8a6a}.b-risk{background:#b23b3b}
+  .b-economy{background:#2b5f9e}.b-finance{background:#2f7d4f}.b-digital{background:#6a3fb5}.b-esg{background:#3a8a6a}.b-risk{background:#b23b3b}
   .feed{display:flex;flex-direction:column;gap:9px}
   .art{border:1px solid var(--line);border-radius:10px;padding:13px 15px;background:#fff}
   .art .top{font-size:12px;color:var(--sub);display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:5px}
@@ -78,7 +78,7 @@
   if(!D){ document.querySelector('.wrap').innerHTML='<p class="empty">keyman.json 이 없습니다. <code>python main.py export</code> 로 생성하세요.</p>'; return; }
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const NAMES={GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아'};
-  const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l={finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'}[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
+  const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l={economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'}[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
   const LANG=P.get('lang')==='en'?'en':'ko';
   const tq=a=>LANG==='en'?(a.q_en||a.q):(a.q||a.q_en), tk=a=>LANG==='en'?(a.k_en||a.k):(a.k||a.k_en);
   const enEl=document.querySelector('.en');
