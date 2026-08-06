@@ -358,7 +358,7 @@ def _weekly_briefs(conn) -> list[dict]:
     seen, out = set(), []
     for r in rows:
         cc = r["cc"]
-        if cc in seen:
+        if cc in seen or cc in ("KR", "GLOBAL"):
             continue
         seen.add(cc)
         k = r.keys()
