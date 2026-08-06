@@ -21,10 +21,13 @@ rsync -avz --delete \
     "$REMOTE:~/glb-one-teams/data/export/"
 
 echo "▶ [3/3] 웹서버(포트 $PORT) 재기동..."
-ssh -i "$SSH_KEY" "$REMOTE" \
-    "pkill -f 'http.server $PORT' 2>/dev/null; sleep 1; \
-     cd ~/glb-one-teams/data/export && \
-     nohup python3 -m http.server $PORT >/tmp/glbweb.log 2>&1 & echo '  서버 기동됨'"
+ssh -i "$SSH_KEY" "$REMOTE" bash -s <<REMOTE_EOF
+pkill -f 'http.server $PORT' 2>/dev/null || true
+sleep 1
+cd ~/glb-one-teams/data/export
+nohup python3 -m http.server $PORT >/tmp/glbweb.log 2>&1 &
+echo '  서버 기동됨'
+REMOTE_EOF
 
 echo ""
 echo "✓ 완료 →  http://168.107.56.139:$PORT/brief.html"
