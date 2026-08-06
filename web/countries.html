@@ -184,6 +184,7 @@
 
   const LANG=EN?'en':'ko';
   const tq=a=>EN?(a.q_en||a.q):(a.q||a.q_en), tk=a=>EN?(a.k_en||a.k):(a.k||a.k_en);
+  const tt=a=>{ if(EN||!a.q) return a.t; const s=a.q.split(/(?<=[.!?])\s/)[0]; return s.length>72?s.slice(0,70)+'…':s; };
   const enEl=document.querySelector('.en');
   if(enEl){ enEl.style.cursor='pointer';
     enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
@@ -222,7 +223,7 @@
     feed.innerHTML=rows.map((a,i)=>`<div class="art" data-i="${i}">
       <div class="top"><span class="flag">${a.flag||''}</span> ${esc(a.src)} · ${esc(md(a.d))} ${badges(a.c)}
 </div>
-      <div class="t">${esc(a.t)}</div>
+      <div class="t">${esc(tt(a))}</div>
       ${tq(a)?`<div class="q">${esc(tq(a))}</div>`:''}
       ${tk(a)?`<div class="k"><b>${EN?'KB implication':'KB 시사점'}</b> ${esc(tk(a))}</div>`:''}</div>`).join('');
     feed._rows=rows;
@@ -232,7 +233,7 @@
     const a=document.getElementById('feed')._rows[+el.dataset.i];
     document.getElementById('modal').innerHTML=`<span class="x" id="mx">×</span>
       <div class="mt">${a.flag||''} ${esc(a.src)} · ${esc(md(a.d))} ${badges(a.c)}</div>
-      <h2>${esc(a.t)}</h2>
+      <h2>${esc(tt(a))}</h2>
       ${tq(a)?`<div class="s"><h3>${EN?'Summary':'요약'}</h3><div>${esc(tq(a))}</div></div>`:''}
       ${tk(a)?`<div class="s"><h3>${EN?'KB implication':'KB 시사점'}</h3><div>${esc(tk(a))}</div></div>`:''}
       ${a.u?`<a class="lk" href="${esc(a.u)}" target="_blank" rel="noopener">${EN?'View source ↗':'원문 보기 ↗'}</a>`:''}`;

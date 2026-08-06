@@ -138,6 +138,7 @@
   const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l=BL[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
   const LANG=EN?'en':'ko';
   const tq=a=>EN?(a.q_en||a.q):(a.q||a.q_en), tk=a=>EN?(a.k_en||a.k):(a.k||a.k_en);
+  const tt=a=>{ if(EN||!a.q) return a.t; const s=a.q.split(/(?<=[.!?])\s/)[0]; return s.length>72?s.slice(0,70)+'…':s; };
   const tf=f=>EN?(f.summary_en||f.summary):(f.summary||f.summary_en);
   const enEl=document.querySelector('.en');
   if(enEl){ enEl.style.cursor='pointer';
@@ -149,7 +150,7 @@
   document.getElementById('news').innerHTML=(D.top_news||[]).map(a=>`
     <div class="nc"><div class="nt"><span class="fg">${a.flag||''}</span> <b>${NAMES[a.cc]||a.cc||''}</b> · ${esc(a.src)} · ${esc(md(a.d))} ${badges(a.c)}
 </div>
-      <h4>${a.u?`<a href="${esc(a.u)}" target="_blank" rel="noopener">${esc(a.t)}</a>`:esc(a.t)}</h4>
+      <h4>${a.u?`<a href="${esc(a.u)}" target="_blank" rel="noopener">${esc(tt(a))}</a>`:esc(tt(a))}</h4>
       ${tq(a)?`<div class="nq">${esc(tq(a))}</div>`:''}
       ${tk(a)?`<div class="nk"><b>${EN?'KB implication':'KB 시사점'}</b> ${esc(tk(a))}</div>`:''}</div>`).join('')
     || `<div style="color:var(--sub);font-size:13px">${EN?'No data':'데이터 없음'}</div>`;
