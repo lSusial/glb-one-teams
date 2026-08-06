@@ -152,7 +152,7 @@
 </div>
       <h4>${a.u?`<a href="${esc(a.u)}" target="_blank" rel="noopener">${esc(tt(a))}</a>`:esc(tt(a))}</h4>
       ${tq(a)?`<div class="nq">${esc(tq(a))}</div>`:''}
-      ${tk(a)?`<div class="nk"><b>${EN?'KB implication':'KB 시사점'}</b> ${esc(tk(a))}</div>`:''}</div>`).join('')
+      </div>`).join('')
     || `<div style="color:var(--sub);font-size:13px">${EN?'No data':'데이터 없음'}</div>`;
 
   try{

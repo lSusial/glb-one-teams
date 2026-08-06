@@ -71,8 +71,7 @@
   .art .score{margin-left:auto;font-weight:800;color:var(--kb-gold)}
   .art .t{font-size:15px;font-weight:700;line-height:1.35;margin:2px 0 6px}
   .art .q{color:#463f37;line-height:1.55}
-  .art .k{margin-top:8px;background:#fffdf4;border:1px solid #f1e7c8;border-left:3px solid var(--kb-yellow);border-radius:6px;padding:7px 11px;font-size:13px;line-height:1.55}
-  .art .k b{color:var(--kb-gold)}
+  .art-lk{display:inline-block;margin-top:8px;font-size:12px;font-weight:600;color:var(--c-fin)}
   .empty{color:var(--sub);text-align:center;padding:34px;font-size:13px;line-height:1.7}
   /* ── 일일 브리핑 박스 ── */
   .brief{background:#fbf8ef;border:1px solid #efe6cf;border-left:3px solid var(--kb-yellow);border-radius:8px;padding:12px 14px;margin-bottom:12px}
@@ -225,7 +224,7 @@
 </div>
       <div class="t">${esc(tt(a))}</div>
       ${tq(a)?`<div class="q">${esc(tq(a))}</div>`:''}
-      ${tk(a)?`<div class="k"><b>${EN?'KB implication':'KB 시사점'}</b> ${esc(tk(a))}</div>`:''}</div>`).join('');
+      ${a.u?`<a class="art-lk" href="${esc(a.u)}" target="_blank" rel="noopener">${EN?'View source ↗':'원문 보기 ↗'}</a>`:''}</div>`).join('');
     feed._rows=rows;
   }
   document.getElementById('feed').onclick=e=>{
@@ -235,7 +234,6 @@
       <div class="mt">${a.flag||''} ${esc(a.src)} · ${esc(md(a.d))} ${badges(a.c)}</div>
       <h2>${esc(tt(a))}</h2>
       ${tq(a)?`<div class="s"><h3>${EN?'Summary':'요약'}</h3><div>${esc(tq(a))}</div></div>`:''}
-      ${tk(a)?`<div class="s"><h3>${EN?'KB implication':'KB 시사점'}</h3><div>${esc(tk(a))}</div></div>`:''}
       ${a.u?`<a class="lk" href="${esc(a.u)}" target="_blank" rel="noopener">${EN?'View source ↗':'원문 보기 ↗'}</a>`:''}`;
     document.getElementById('ov').classList.add('on');
   };
