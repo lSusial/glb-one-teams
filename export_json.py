@@ -111,7 +111,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     for cc, flag in _FLAGS.items():
         rows = conn.execute(
             f"""
-            SELECT a.title, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
+            SELECT a.title, a.title_ko, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
                    a.topics, a.link, a.published_at, a.ai_score, m.media_name
             FROM articles_raw a
             JOIN media_sources m ON m.source_id = a.source_id
@@ -130,7 +130,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                 "c": taxonomy.ui_string(codes),
                 "src": a["media_name"],
                 "d": (a["published_at"] or "")[:10],
-                "t": a["title"],
+                "t": a["title_ko"] or a["title"],
                 "q": a["summary_ko"] or "",
                 "k": a["kb_implication"] or "",
                 "q_en": a["summary_en"] or "",

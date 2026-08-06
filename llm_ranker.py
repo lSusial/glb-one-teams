@@ -40,6 +40,7 @@ def ensure_columns(conn) -> None:
         ("kb_implication_en", "ALTER TABLE articles_raw ADD COLUMN kb_implication_en TEXT"),
         # 본문 추출본(fulltext.py) — 있으면 rank 가 스니펫 대신 본문으로 분석
         ("full_text",         "ALTER TABLE articles_raw ADD COLUMN full_text         TEXT"),
+        ("title_ko",          "ALTER TABLE articles_raw ADD COLUMN title_ko          TEXT"),
     ])
 
 
@@ -49,6 +50,7 @@ def _system_prompt() -> str:
         "You are a global intelligence analyst at KB Financial Group. "
         "Analyze one overseas news article and output ONLY this JSON:\n"
         '{"ai_score": (KB business importance, integer 0-100), '
+        '"title_ko": "10자 이내 한국어 제목", '
         '"summary_en": "2-3 sentence English summary", '
         '"topics": ["TOPIC_CODE", ...], '
         '"kb_implication_en": "1-2 sentence KB-perspective implication/action, in English"}\n\n'
@@ -124,6 +126,7 @@ def run_rank(conn, provider: LLMProvider | None = None,
             score = max(0, min(100, int(data.get("ai_score"))))
         except (TypeError, ValueError):
             score = 50
+        title_ko = str(data.get("title_ko") or "")[:60]
         summary_en = str(data.get("summary_en") or "")[:1500]
         topics = taxonomy.validate(data.get("topics", []))
         if not topics:
@@ -132,9 +135,9 @@ def run_rank(conn, provider: LLMProvider | None = None,
 
         cur.execute(
             """UPDATE articles_raw
-               SET ai_score = ?, summary_en = ?, topics = ?, kb_implication_en = ?, ai_model = ?
+               SET ai_score = ?, title_ko = ?, summary_en = ?, topics = ?, kb_implication_en = ?, ai_model = ?
                WHERE article_id = ?""",
-            (score, summary_en, ",".join(topics), kb_impl_en, provider.model_id, r["article_id"]),
+            (score, title_ko, summary_en, ",".join(topics), kb_impl_en, provider.model_id, r["article_id"]),
         )
         stats["ranked"] += 1
         if score >= config.AI_SCORE_ACTIVE_THRESHOLD:

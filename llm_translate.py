@@ -25,7 +25,8 @@ log = logging.getLogger("llm_translate")
 _SYS = {
     "ko": ("Translate the 'summary' and 'kb_implication' below into natural Korean "
            "(financial/business register). Keep KB branch/entity names (예: 뉴욕지점, 프라삭은행). "
-           'Output ONLY JSON: {"summary": "...", "kb_implication": "..."}'),
+           "Also generate 'title_ko': a concise Korean headline (15자 이내) summarizing the article. "
+           'Output ONLY JSON: {"title_ko": "...", "summary": "...", "kb_implication": "..."}'),
     "en": ("Translate the 'summary' and 'kb_implication' below into natural English "
            "(financial/business register). Keep KB branch/entity names. "
            'Output ONLY JSON: {"summary": "...", "kb_implication": "..."}'),
@@ -36,11 +37,17 @@ def ensure_columns(conn) -> None:
     db.ensure_columns(conn, "articles_raw", [
         ("summary_en",        "ALTER TABLE articles_raw ADD COLUMN summary_en        TEXT"),
         ("kb_implication_en", "ALTER TABLE articles_raw ADD COLUMN kb_implication_en TEXT"),
+        ("title_ko",          "ALTER TABLE articles_raw ADD COLUMN title_ko          TEXT"),
     ])
 
 
-def _user(summary, kb):
-    return f"summary: {(summary or '')[:1500]}\nkb_implication: {(kb or '')[:1000]}"
+def _user(summary, kb, title=""):
+    lines = []
+    if title:
+        lines.append(f"title: {title[:200]}")
+    lines.append(f"summary: {(summary or '')[:1500]}")
+    lines.append(f"kb_implication: {(kb or '')[:1000]}")
+    return "\n".join(lines)
 
 
 def run_translate(conn, provider: LLMProvider | None = None,
@@ -61,11 +68,12 @@ def run_translate(conn, provider: LLMProvider | None = None,
 
     rows = conn.execute(
         f"""
-        SELECT article_id, summary_en, kb_implication_en, summary_ko, kb_implication
+        SELECT article_id, title, summary_en, kb_implication_en, summary_ko, kb_implication, title_ko
         FROM articles_raw
         WHERE ai_score >= ? AND duplicate_of IS NULL
           AND ( (COALESCE(summary_en,'')  <> '' AND COALESCE(summary_ko,'') = '')
-             OR (COALESCE(summary_ko,'')  <> '' AND COALESCE(summary_en,'') = '') )
+             OR (COALESCE(summary_ko,'')  <> '' AND COALESCE(summary_en,'') = '')
+             OR (COALESCE(summary_ko,'')  <> '' AND COALESCE(title_ko,'')   = '') )
           {date_clause}
         ORDER BY ai_score DESC
         LIMIT ?
@@ -80,13 +88,16 @@ def run_translate(conn, provider: LLMProvider | None = None,
     for i, r in enumerate(rows):
         has_en = bool((r["summary_en"] or "").strip())
         has_ko = bool((r["summary_ko"] or "").strip())
-        if has_en and not has_ko:                       # EN(기준본) → KO
-            cid, target, src_s, src_k = str(i), "ko", r["summary_en"], r["kb_implication_en"]
-        elif has_ko and not has_en:                     # KO(레거시) → EN
-            cid, target, src_s, src_k = str(i), "en", r["summary_ko"], r["kb_implication"]
+        has_title_ko = bool((r["title_ko"] or "").strip())
+        if has_en and (not has_ko or not has_title_ko):   # EN(기준본) → KO + title_ko
+            cid, target = str(i), "ko"
+            src_s, src_k = r["summary_en"], r["kb_implication_en"]
+        elif has_ko and not has_en:                        # KO(레거시) → EN
+            cid, target = str(i), "en"
+            src_s, src_k = r["summary_ko"], r["kb_implication"]
         else:
             continue
-        requests.append((cid, _SYS[target], _user(src_s, src_k), 600))
+        requests.append((cid, _SYS[target], _user(src_s, src_k, r["title"]), 600))
         meta[cid] = (r["article_id"], target)
 
     results = provider.complete_json_batch(requests) if requests else {}
@@ -99,8 +110,9 @@ def run_translate(conn, provider: LLMProvider | None = None,
         if not (s or k):
             continue
         if target == "ko":
-            cur.execute("UPDATE articles_raw SET summary_ko=?, kb_implication=? WHERE article_id=?",
-                        (s, k, article_id))
+            t_ko = str(data.get("title_ko") or "")[:60]
+            cur.execute("UPDATE articles_raw SET summary_ko=?, kb_implication=?, title_ko=? WHERE article_id=?",
+                        (s, k, t_ko or None, article_id))
             stats["ko"] += 1
         else:
             cur.execute("UPDATE articles_raw SET summary_en=?, kb_implication_en=? WHERE article_id=?",
