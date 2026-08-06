@@ -29,8 +29,13 @@ nohup python3 -m http.server $PORT >/tmp/glbweb.log 2>&1 &
 echo '  서버 기동됨'
 REMOTE_EOF
 
+echo "▶ [4/4] Cloudflare Pages 배포..."
+wrangler pages deploy data/export --project-name kb-global-daily --commit-dirty=true 2>&1 | tail -3
+
 echo ""
-echo "✓ 완료 →  http://168.107.56.139:$PORT/brief.html"
+echo "✓ 완료"
+echo "   Oracle Cloud  →  http://168.107.56.139:$PORT/brief.html"
+echo "   Cloudflare    →  https://kb-global-daily.pages.dev"
 echo "   접속 안 되면 포트 $PORT 가 오라클 보안목록 + 인스턴스 방화벽에 열려 있는지 확인:"
 echo "     서버에서: sudo iptables -I INPUT -p tcp --dport $PORT -j ACCEPT"
 echo "     오라클 콘솔: VCN > 보안목록 > 수신규칙에 $PORT/TCP 추가"
