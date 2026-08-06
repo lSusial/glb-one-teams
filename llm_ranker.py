@@ -50,7 +50,7 @@ def _system_prompt() -> str:
         "You are a global intelligence analyst at KB Financial Group. "
         "Analyze one overseas news article and output ONLY this JSON:\n"
         '{"ai_score": (KB business importance, integer 0-100), '
-        '"title_ko": "10자 이내 한국어 제목", '
+        '"title_ko": "15자 이내 신문 헤드라인 스타일 한국어 제목", '
         '"summary_en": "2-3 sentence English summary", '
         '"topics": ["TOPIC_CODE", ...], '
         '"kb_implication_en": "1-2 sentence KB-perspective implication/action, in English"}\n\n'

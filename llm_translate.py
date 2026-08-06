@@ -23,9 +23,11 @@ from llm_provider import LLMProvider, get_provider
 log = logging.getLogger("llm_translate")
 
 _SYS = {
-    "ko": ("Translate the 'summary' and 'kb_implication' below into natural Korean "
-           "(financial/business register). Keep KB branch/entity names (예: 뉴욕지점, 프라삭은행). "
-           "Also generate 'title_ko': a concise Korean headline (15자 이내) summarizing the article. "
+    "ko": ("You are rewriting financial news into concise Korean for busy bankers. "
+           "Rules: ① title_ko — 15자 이내, 핵심 사실만, 신문 헤드라인 스타일 "
+           "② summary — 2문장 이내, 단문(주어+서술어), 핵심 사실·수치만, '~다' 체, 수식어 최소화 "
+           "③ kb_implication — 1문장, KB 거점 직접 영향만 "
+           "Keep KB branch names (예: 뉴욕지점, 프라삭은행). "
            'Output ONLY JSON: {"title_ko": "...", "summary": "...", "kb_implication": "..."}'),
     "en": ("Translate the 'summary' and 'kb_implication' below into natural English "
            "(financial/business register). Keep KB branch/entity names. "
