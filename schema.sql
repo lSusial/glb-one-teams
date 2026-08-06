@@ -110,3 +110,24 @@ CREATE TABLE IF NOT EXISTS country_briefings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_briefings_cc_date ON country_briefings(cc, briefing_date DESC);
+
+-- 브로드캐스트 발송 (broadcaster.py)
+CREATE TABLE IF NOT EXISTS broadcast_targets (
+    cc        TEXT NOT NULL,
+    channel   TEXT NOT NULL DEFAULT 'telegram',
+    target_id TEXT NOT NULL,
+    language  TEXT NOT NULL DEFAULT 'ko',
+    enabled   INTEGER NOT NULL DEFAULT 1,
+    PRIMARY KEY (cc, channel)
+);
+
+CREATE TABLE IF NOT EXISTS broadcast_log (
+    cc            TEXT NOT NULL,
+    briefing_date TEXT NOT NULL,
+    briefing_type TEXT NOT NULL DEFAULT 'daily',
+    channel       TEXT NOT NULL DEFAULT 'telegram',
+    status        TEXT NOT NULL,
+    sent_at       TEXT,
+    error         TEXT,
+    UNIQUE (cc, briefing_date, briefing_type, channel)
+);

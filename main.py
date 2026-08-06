@@ -20,12 +20,35 @@ AI 레이어(별도 — ANTHROPIC_API_KEY 필요, 미설정 시 즉시 안내 �
   python main.py export            # DB → data/export/countries.json (ACTIVE)
   python main.py export --passed   # AI 없이 필터 통과 기사로 export (Phase 1)
   python main.py admin             # 관리자 페이지 생성 (data/export/admin.html)
+
+발송:
+  python main.py broadcast                   # 최신 daily 브리핑 전 거점 Telegram 발송
+  python main.py broadcast --dry-run         # 실제 발송 없이 메시지 미리보기
+  python main.py broadcast --date 2026-08-06 # 특정 날짜
+  python main.py broadcast --cc JP           # 특정 거점만
+  python main.py broadcast --type weekly     # 주간 브리핑
 """
 from __future__ import annotations
 
 import argparse
 import logging
+import os
 import sys
+from pathlib import Path
+
+
+def _load_dotenv(path: Path = Path(__file__).parent / ".env") -> None:
+    if not path.exists():
+        return
+    for line in path.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip())
+
+
+_load_dotenv()
 
 import collector
 import config
@@ -244,6 +267,19 @@ def cmd_admin(_args):
     print(f"[admin] articles={r['articles']}  sources={r['sources']}  → {r['html'] or r['json']}")
 
 
+def cmd_broadcast(args):
+    import broadcaster
+    conn = db.open_conn()
+    r = broadcaster.run_broadcast(
+        conn,
+        briefing_date=getattr(args, "date", None),
+        briefing_type=getattr(args, "type", "daily"),
+        cc_filter=getattr(args, "cc", None),
+        dry_run=getattr(args, "dry_run", False),
+    )
+    print(f"[broadcast] date={r['date']}  sent={r['sent']}  skipped={r['skipped']}  failed={r['failed']}")
+
+
 # ---------------------------------------------------------------------------
 def main():
     logging.basicConfig(
@@ -293,6 +329,12 @@ def main():
                      help="AI 점수 없이 필터 통과 기사로 export (Phase 1)")
     sub.add_parser("admin",     help="관리자 페이지 데이터 생성 (data/export/admin.html)")
 
+    bcast = sub.add_parser("broadcast", help="브리핑 → Telegram 채널 발송")
+    bcast.add_argument("--date", help="발송 날짜 (YYYY-MM-DD). 미지정 시 최신 브리핑 날짜 사용")
+    bcast.add_argument("--type", default="daily", help="브리핑 유형 (daily|weekly), 기본 daily")
+    bcast.add_argument("--cc",   help="특정 거점만 발송 (예: JP)")
+    bcast.add_argument("--dry-run", action="store_true", dest="dry_run", help="실제 발송 없이 메시지 미리보기")
+
     args = p.parse_args()
     {
         "init": cmd_init, "fetch": cmd_fetch, "filter": cmd_filter,
@@ -300,6 +342,7 @@ def main():
         "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "rank": cmd_rank,
         "translate": cmd_translate, "brief": cmd_brief,
         "ai": cmd_ai, "export": cmd_export, "admin": cmd_admin,
+        "broadcast": cmd_broadcast,
     }[args.cmd](args)
 
 
