@@ -124,18 +124,32 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
         ).fetchall()
 
         articles = []
-        for a in rows:
+        for i, a in enumerate(rows):
             codes = [c for c in (a["topics"] or "").split(",") if c]
+            my_topics = set(codes)
+            # related links: 같은 cc 내 topics 겹치는 다른 기사 (없으면 순번 다음 기사)
+            rl = [{"t": a["title"][:100], "u": a["link"]}]
+            for j, b in enumerate(rows):
+                if j == i:
+                    continue
+                b_topics = set((b["topics"] or "").split(","))
+                if (not my_topics) or (my_topics & b_topics):
+                    rl.append({"t": b["title"][:100], "u": b["link"]})
+                    break
+            if len(rl) < 2:
+                for j, b in enumerate(rows):
+                    if j != i:
+                        rl.append({"t": b["title"][:100], "u": b["link"]})
+                        break
             articles.append({
                 "c": taxonomy.ui_string(codes),
                 "src": a["media_name"],
                 "d": (a["published_at"] or "")[:10],
                 "t": a["title_ko"] or a["title"],
                 "q": a["summary_ko"] or "",
-                "k": a["kb_implication"] or "",
                 "q_en": a["summary_en"] or "",
-                "k_en": a["kb_implication_en"] or "",
                 "u": a["link"],
+                "rl": rl[:2],
                 "score": a["ai_score"],
             })
         total += len(articles)
@@ -273,7 +287,7 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
     """
     dc, params = _date_clause(days)
     rows = conn.execute(
-        f"""SELECT a.ai_score, a.title, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
+        f"""SELECT a.ai_score, a.title, a.title_ko, a.summary_ko, a.summary_en,
                    a.topics, a.link, a.published_at, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}
@@ -290,10 +304,22 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
         if per_cc.get(cc, 0) >= config.TOP_NEWS_PER_COUNTRY:
             continue                                   # 국가별 상한
         codes = [c for c in (r["topics"] or "").split(",") if c]
+        my_topics = set(codes)
+        # related: 전체 후보에서 같은 cc + topics 겹치는 기사 1개
+        rl = [{"t": r["title"][:100], "u": r["link"]}]
+        for b in rows:
+            if b["link"] == r["link"]:
+                continue
+            b_topics = set((b["topics"] or "").split(","))
+            if b["cc"] == cc and (not my_topics or my_topics & b_topics):
+                rl.append({"t": b["title"][:100], "u": b["link"]})
+                break
+        t_ko = r["title_ko"] if "title_ko" in r.keys() else None
         out.append(dict(cc=cc, flag=_FLAGS_ALL.get(cc, ""), src=r["media_name"],
-                        d=(r["published_at"] or "")[:10], t=r["title"], q=r["summary_ko"] or "",
-                        k=r["kb_implication"] or "", q_en=r["summary_en"] or "", k_en=r["kb_implication_en"] or "",
-                        c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"]))
+                        d=(r["published_at"] or "")[:10],
+                        t=t_ko or r["title"], q=r["summary_ko"] or "",
+                        q_en=r["summary_en"] or "",
+                        c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"], rl=rl[:2]))
         seen_tokens.append(tk)
         per_cc[cc] = per_cc.get(cc, 0) + 1
         if len(out) >= limit:
