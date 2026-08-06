@@ -53,9 +53,9 @@
       <span class="kb"><b>KB</b><span>국민은행</span></span>
       <span class="rt"><span class="en">KR<span class="off"> / EN</span></span><select id="dsel" class="dsel"></select></span>
     </div>
-    <h1>이슈 트래커</h1>
-    <div class="sub">같은 이슈가 여러 거점에서 어떻게 나타나는지 — 주제별 횡단 딥다이브</div>
-    <div class="nav"><a href="brief.html">오늘의 글로벌</a><a href="countries.html">국가별 뉴스</a><a href="weekly.html">주간 리포트</a><a class="on" href="topics.html">이슈 트래커</a></div>
+    <h1 data-en="Issue Tracker">이슈 트래커</h1>
+    <div class="sub" data-en="How one issue plays out across hubs — cross-cutting deep dive">같은 이슈가 여러 거점에서 어떻게 나타나는지 — 주제별 횡단 딥다이브</div>
+    <div class="nav"><a href="brief.html" data-en="Today's Global">오늘의 글로벌</a><a href="countries.html" data-en="Country News">국가별 뉴스</a><a href="weekly.html" data-en="Weekly Report">주간 리포트</a><a class="on" href="topics.html" data-en="Issue Tracker">이슈 트래커</a></div>
   </div>
   <div id="feed"></div>
   <footer><div class="tag">CONNECTING PEOPLE, CREATING GLOBAL VALUE</div><div id="gen"></div></footer>
@@ -63,45 +63,49 @@
 
 <script>
 (async function(){
-  const P=new URLSearchParams(location.search), QD=P.get('date');
+  const P=new URLSearchParams(location.search), QD=P.get('date'), EN=P.get('lang')==='en';
   let D=null;
   if(QD){ try{ D=await (await fetch('archive/'+QD+'/topics.json')).json(); }catch(e){} }
   try{ if(!D) D=JSON.parse(document.getElementById('topics-data').textContent);}catch(e){}
   if(!D){ try{ D=await (await fetch('topics.json')).json(); }catch(e){} }
-  if(!D){ document.getElementById('feed').innerHTML='<div class="empty">topics.json 이 없습니다. <code>python main.py export</code> 로 생성하세요.</div>'; return; }
+  if(!D){ document.getElementById('feed').innerHTML=`<div class="empty">${EN?'topics.json not found. Run <code>python main.py export</code>.':'topics.json 이 없습니다. <code>python main.py export</code> 로 생성하세요.'}</div>`; return; }
 
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const NAMES={GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',GLOBAL:'글로벌'};
-  const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l={economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'}[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
-  const LANG=P.get('lang')==='en'?'en':'ko';
-  const tq=a=>LANG==='en'?(a.q_en||a.q):(a.q||a.q_en), tk=a=>LANG==='en'?(a.k_en||a.k):(a.k||a.k_en);
+  const md=s=>String(s||'').slice(5);   // 연도 제거(MM-DD)
+  const NAMES=EN?{GB:'UK',US:'US',HK:'Hong Kong',CN:'China',JP:'Japan',SG:'Singapore',IN:'India',VN:'Vietnam',MM:'Myanmar',ID:'Indonesia',KH:'Cambodia',GLOBAL:'Global'}
+               :{GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',GLOBAL:'글로벌'};
+  const BL=EN?{economy:'Economy',finance:'Banking',digital:'Digital',esg:'ESG',risk:'Risk'}:{economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'};
+  const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l=BL[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
+  const LANG=EN?'en':'ko';
+  const tq=a=>EN?(a.q_en||a.q):(a.q||a.q_en), tk=a=>EN?(a.k_en||a.k):(a.k||a.k_en);
   const enEl=document.querySelector('.en');
   if(enEl){ enEl.style.cursor='pointer';
     enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
     enEl.onclick=()=>{ P.set('lang',LANG==='en'?'ko':'en'); location.search=P.toString(); }; }
   document.querySelectorAll('.nav a').forEach(a=>{ a.href=a.getAttribute('href').split('?')[0]+location.search; });
+  if(EN) document.querySelectorAll('[data-en]').forEach(el=>{ el.textContent=el.getAttribute('data-en'); });
 
-  document.getElementById('gen').textContent='업데이트 '+(D.generated_at||'').slice(0,16).replace('T',' ');
+  document.getElementById('gen').textContent=(EN?'Updated ':'업데이트 ')+(D.generated_at||'').slice(0,16).replace('T',' ');
   const cl=D.clusters||[];
   const feed=document.getElementById('feed');
-  if(!cl.length){feed.innerHTML='<div class="empty">횡단 이슈가 아직 없습니다.<br>AI 랭킹이 더 진행되면 채워집니다.</div>';return;}
+  if(!cl.length){feed.innerHTML=`<div class="empty">${EN?'No cross-cutting issues yet.<br>Fills in as AI ranking progresses.':'횡단 이슈가 아직 없습니다.<br>AI 랭킹이 더 진행되면 채워집니다.'}</div>`;return;}
   feed.innerHTML=cl.map(c=>`<div class="cluster">
     <div class="ch"><span class="clabel">${esc(LANG==='en'?(c.label_en||c.label):c.label)}</span>
       <span class="cflags">${(c.flags||[]).join('')}</span>
-      <span class="cmeta">${(c.ccs||[]).length}개 거점 · ${c.count}건</span></div>
+      <span class="cmeta">${(c.ccs||[]).length}${EN?' hubs · ':'개 거점 · '}${c.count}${EN?'':'건'}</span></div>
     ${(c.articles||[]).map(a=>`<div class="ca">
-      <div class="cat"><span class="flag">${a.flag||''}</span> <b>${NAMES[a.cc]||a.cc||''}</b> · ${esc(a.src)} · ${esc(a.d)} ${badges(a.c)}
-        ${a.score!=null?`<span class="score">${a.score}</span>`:''}</div>
+      <div class="cat"><span class="flag">${a.flag||''}</span> <b>${NAMES[a.cc]||a.cc||''}</b> · ${esc(a.src)} · ${esc(md(a.d))} ${badges(a.c)}
+</div>
       <div class="ctt">${a.u?`<a href="${esc(a.u)}" target="_blank" rel="noopener">${esc(a.t)}</a>`:esc(a.t)}</div>
       ${tq(a)?`<div class="cq">${esc(tq(a))}</div>`:''}
-      ${tk(a)?`<div class="ck"><b>KB 시사점</b> ${esc(tk(a))}</div>`:''}</div>`).join('')}
+      ${tk(a)?`<div class="ck"><b>${EN?'KB implication':'KB 시사점'}</b> ${esc(tk(a))}</div>`:''}</div>`).join('')}
   </div>`).join('');
 
   try{
     const dates=await (await fetch('archive/dates.json')).json();
     const sel=document.getElementById('dsel');
     if(sel&&dates.length){
-      sel.innerHTML='<option value="">최신</option>'+dates.map(d=>`<option value="${d}"${d===QD?' selected':''}>${d}</option>`).join('');
+      sel.innerHTML=`<option value="">${EN?'Latest':'최신'}</option>`+dates.map(d=>`<option value="${d}"${d===QD?' selected':''}>${d}</option>`).join('');
       sel.onchange=()=>{ location.search = sel.value?('?date='+sel.value):''; };
     } else if(sel){ sel.style.display='none'; }
   }catch(e){ const s=document.getElementById('dsel'); if(s) s.style.display='none'; }

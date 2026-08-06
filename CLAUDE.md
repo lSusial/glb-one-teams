@@ -1,13 +1,15 @@
 # glb-one-teams 프로젝트 컨텍스트
 
 ## 프로젝트 목적
-KB 글로벌 거점 뉴스 수집 파이프라인. AI 없이 수집·필터·중복제거만 담당.
-새 UI 및 AI 프로바이더 실험을 위한 베이스 레포.
+KB 글로벌 거점(11개국) 뉴스 데일리. 파이프라인: 수집 → 필터 → AI 분석 → export → **정적 4탭 UI**.
+**★ 이 레포(glb-one-teams)가 메인이자 go-forward 레포다.** 신규 작업은 전부 여기서 한다.
 
 ## 관련 레포
-- **glb-one-teams** (이 레포): 수집 전용, GitHub: https://github.com/lSusial/glb-one-teams.git
-- **glb-news-rss/prototype**: 풀 파이프라인 + KB 대시보드 (Streamlit, 로컬 전용)
+- **glb-one-teams** (이 레포, ★메인): 수집 코어 + AI 레이어 + 정적 4탭 UI. GitHub: https://github.com/lSusial/glb-one-teams.git
+- **glb-news-rss/prototype**: 구 Streamlit 대시보드 (로컬 전용, **참조·아카이브 레거시** — 여기서 신규 작업 안 함)
   - 경로: `/Users/sangminl/Documents/Claude/Projects/glb-news-rss/prototype/`
+
+> **현재 상태·다음 작업은 [`STATUS.md`](STATUS.md) 참조.** 세션 상세는 [`docs/work_log.md`](docs/work_log.md).
 
 ## 서버 정보
 - **Oracle Cloud:** `ubuntu@168.107.56.139` (포트 22)

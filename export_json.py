@@ -177,11 +177,11 @@ _PULSE_TEMPLATE = config.ROOT / "web" / "brief.html"
 
 # taxonomy 코드 → 온도계 5대 카테고리(배지·필터와 라벨·색상 일치: 경제/금융/디지털/ESG/리스크)
 _PULSE_CATS = [
-    ("MARKET",  "경제",   "#2b5f9e"),
-    ("BANKING", "금융",   "#2f7d4f"),
-    ("DIGITAL", "디지털", "#6a3fb5"),
-    ("ESG",     "ESG",    "#3a8a6a"),
-    ("RISK",    "리스크", "#b23b3b"),
+    ("MARKET",  "경제",   "Economy", "#2b5f9e"),
+    ("BANKING", "금융",   "Banking", "#2f7d4f"),
+    ("DIGITAL", "디지털", "Digital", "#6a3fb5"),
+    ("ESG",     "ESG",    "ESG",     "#3a8a6a"),
+    ("RISK",    "리스크", "Risk",    "#b23b3b"),
 ]
 
 
@@ -197,7 +197,7 @@ def _compute_pulse(conn, days: int | None = None) -> list[dict]:
         params,
     ).fetchall()
 
-    buckets: dict[str, list[int]] = {code: [] for code, _, _ in _PULSE_CATS}
+    buckets: dict[str, list[int]] = {code: [] for code, _, _, _ in _PULSE_CATS}
     for r in rows:
         codes = set((r["topics"] or "").split(","))
         for code in buckets:
@@ -206,12 +206,13 @@ def _compute_pulse(conn, days: int | None = None) -> list[dict]:
 
     max_n = max((len(v) for v in buckets.values()), default=0) or 1
     cats = []
-    for code, label, color in _PULSE_CATS:
+    for code, label, label_en, color in _PULSE_CATS:
         s = buckets[code]
         n = len(s)
         avg = sum(s) / n if n else 0
         temp = round(min(100, 0.6 * avg + 0.4 * (n / max_n * 100)))
-        cats.append(dict(code=code, label=label, color=color, temp=temp, count=n, avg=round(avg)))
+        cats.append(dict(code=code, label=label, label_en=label_en, color=color,
+                         temp=temp, count=n, avg=round(avg)))
     return cats
 
 

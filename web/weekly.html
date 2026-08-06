@@ -57,9 +57,9 @@
       <span class="kb"><b>KB</b><span>국민은행</span></span>
       <span class="rt"><span class="en">KR<span class="off"> / EN</span></span><select id="dsel" class="dsel"></select></span>
     </div>
-    <h1>주간 리포트</h1>
-    <div class="sub">거점별 최근 1주간 뉴스를 AI가 종합 — 핵심 이슈·전망·대표 수치</div>
-    <div class="nav"><a href="brief.html">오늘의 글로벌</a><a href="countries.html">국가별 뉴스</a><a class="on" href="weekly.html">주간 리포트</a><a href="topics.html">이슈 트래커</a></div>
+    <h1 data-en="Weekly Report">주간 리포트</h1>
+    <div class="sub" data-en="AI synthesizes each hub's past week — key issues, outlook, headline figure">거점별 최근 1주간 뉴스를 AI가 종합 — 핵심 이슈·전망·대표 수치</div>
+    <div class="nav"><a href="brief.html" data-en="Today's Global">오늘의 글로벌</a><a href="countries.html" data-en="Country News">국가별 뉴스</a><a class="on" href="weekly.html" data-en="Weekly Report">주간 리포트</a><a href="topics.html" data-en="Issue Tracker">이슈 트래커</a></div>
   </div>
 
   <div class="cov" id="cov"></div>
@@ -69,28 +69,30 @@
 
 <script>
 (async function(){
-  const P=new URLSearchParams(location.search), QD=P.get('date');
+  const P=new URLSearchParams(location.search), QD=P.get('date'), EN=P.get('lang')==='en';
   let D=null;
   if(QD){ try{ D=await (await fetch('archive/'+QD+'/weekly.json')).json(); }catch(e){} }
   try{ if(!D) D=JSON.parse(document.getElementById('weekly-data').textContent);}catch(e){}
   if(!D){ try{ D=await (await fetch('weekly.json')).json(); }catch(e){} }
-  if(!D){ document.getElementById('feed').innerHTML='<div class="empty">weekly.json 이 없습니다. <code>python main.py brief</code> → <code>export</code> 로 생성하세요.</div>'; return; }
+  if(!D){ document.getElementById('feed').innerHTML=`<div class="empty">${EN?'weekly.json not found. Run <code>python main.py brief</code> → <code>export</code>.':'weekly.json 이 없습니다. <code>python main.py brief</code> → <code>export</code> 로 생성하세요.'}</div>`; return; }
 
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const NAMES={GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',GLOBAL:'글로벌'};
-  const LANG=P.get('lang')==='en'?'en':'ko';
-  const ts=b=>LANG==='en'?(b.summary_en||b.summary):(b.summary||b.summary_en);
-  const ti=b=>{const a=LANG==='en'?(b.issues_en&&b.issues_en.length?b.issues_en:b.issues):(b.issues&&b.issues.length?b.issues:b.issues_en);return a||[];};
-  const to=b=>LANG==='en'?(b.outlook_en||b.outlook):(b.outlook||b.outlook_en);
+  const NAMES=EN?{GB:'UK',US:'US',HK:'Hong Kong',CN:'China',JP:'Japan',SG:'Singapore',IN:'India',VN:'Vietnam',MM:'Myanmar',ID:'Indonesia',KH:'Cambodia',GLOBAL:'Global'}
+               :{GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',GLOBAL:'글로벌'};
+  const LANG=EN?'en':'ko';
+  const ts=b=>EN?(b.summary_en||b.summary):(b.summary||b.summary_en);
+  const ti=b=>{const a=EN?(b.issues_en&&b.issues_en.length?b.issues_en:b.issues):(b.issues&&b.issues.length?b.issues:b.issues_en);return a||[];};
+  const to=b=>EN?(b.outlook_en||b.outlook):(b.outlook||b.outlook_en);
   const enEl=document.querySelector('.en');
   if(enEl){ enEl.style.cursor='pointer';
     enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
     enEl.onclick=()=>{ P.set('lang',LANG==='en'?'ko':'en'); location.search=P.toString(); }; }
   document.querySelectorAll('.nav a').forEach(a=>{ a.href=a.getAttribute('href').split('?')[0]+location.search; });
-  document.getElementById('gen').textContent='업데이트 '+(D.generated_at||'').slice(0,16).replace('T',' ');
+  if(EN) document.querySelectorAll('[data-en]').forEach(el=>{ el.textContent=el.getAttribute('data-en'); });
+  document.getElementById('gen').textContent=(EN?'Updated ':'업데이트 ')+(D.generated_at||'').slice(0,16).replace('T',' ');
 
   const cos=(D.countries||[]).filter(c=>(c.summary||c.summary_en));
-  if(!cos.length){document.getElementById('feed').innerHTML='<div class="empty">주간 브리핑이 아직 없습니다.<br>맥북에서 <code>python main.py brief</code>(주간) 실행 후 <code>export</code>.</div>';return;}
+  if(!cos.length){document.getElementById('feed').innerHTML=`<div class="empty">${EN?'No weekly reports yet.<br>Run <code>python main.py brief</code> then <code>export</code>.':'주간 브리핑이 아직 없습니다.<br>맥북에서 <code>python main.py brief</code>(주간) 실행 후 <code>export</code>.'}</div>`;return;}
 
   let fCC='';
   const cov=document.getElementById('cov'), feed=document.getElementById('feed');
@@ -101,7 +103,7 @@
     const iss=ti(c), kw=(c.keywords||[]);
     return `<div class="wk">
       <div class="wh"><span class="flag">${c.flag||''}</span> <b>${NAMES[c.cc]||c.cc}</b>
-        <span class="meta">${c.n!=null?c.n+'건 · ':''}${esc(c.date||'')}</span>
+        <span class="meta">${c.n!=null?c.n+(EN?' articles · ':'건 · '):''}${esc(c.date||'')}</span>
         ${c.key_stat?`<span class="stat">${esc(c.key_stat)}</span>`:''}</div>
       <div class="wsum">${esc(ts(c))}</div>
       ${iss.length?`<div class="blk"><div class="lbl">${LANG==='en'?'KEY ISSUES':'핵심 이슈'}</div>
@@ -122,7 +124,7 @@
     const dates=await (await fetch('archive/dates.json')).json();
     const sel=document.getElementById('dsel');
     if(sel&&dates.length){
-      sel.innerHTML='<option value="">최신</option>'+dates.map(d=>`<option value="${d}"${d===QD?' selected':''}>${d}</option>`).join('');
+      sel.innerHTML=`<option value="">${EN?'Latest':'최신'}</option>`+dates.map(d=>`<option value="${d}"${d===QD?' selected':''}>${d}</option>`).join('');
       sel.onchange=()=>{ location.search = sel.value?('?date='+sel.value):''; };
     } else if(sel){ sel.style.display='none'; }
   }catch(e){ const s=document.getElementById('dsel'); if(s) s.style.display='none'; }

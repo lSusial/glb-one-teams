@@ -75,23 +75,23 @@
       <span class="kb"><b>KB</b><span>국민은행</span></span>
       <span class="rt"><span class="en">KR<span class="off"> / EN</span></span><select id="dsel" class="dsel"></select></span>
     </div>
-    <h1>오늘의 글로벌</h1>
-    <div class="sub">전 세계 KB 글로벌 네트워크 · 뉴스 분석 기반 시장 온도</div>
-    <div class="nav"><a class="on" href="brief.html">오늘의 글로벌</a><a href="countries.html">국가별 뉴스</a><a href="weekly.html">주간 리포트</a><a href="topics.html">이슈 트래커</a></div>
+    <h1 data-en="Today's Global">오늘의 글로벌</h1>
+    <div class="sub" data-en="KB global network · market temperature from news analysis">전 세계 KB 글로벌 네트워크 · 뉴스 분석 기반 시장 온도</div>
+    <div class="nav"><a class="on" href="brief.html" data-en="Today's Global">오늘의 글로벌</a><a href="countries.html" data-en="Country News">국가별 뉴스</a><a href="weekly.html" data-en="Weekly Report">주간 리포트</a><a href="topics.html" data-en="Issue Tracker">이슈 트래커</a></div>
   </div>
 
   <section class="sec">
     <div class="sec-h"><div class="num">01</div>
-      <div><div class="tt">오늘의 글로벌 온도</div><div class="ds">주요 이슈의 상대적 주목도를 한눈에 봅니다</div></div>
+      <div><div class="tt" data-en="Today's Global Temperature">오늘의 글로벌 온도</div><div class="ds" data-en="Relative attention on key issues at a glance">주요 이슈의 상대적 주목도를 한눈에 봅니다</div></div>
       <div class="rt" id="asof"></div></div>
-    <div class="scale"><span>0°C</span><span class="mid">이슈 주목도</span><span>100°C</span></div>
+    <div class="scale"><span>0°C</span><span class="mid" data-en="Issue attention">이슈 주목도</span><span>100°C</span></div>
     <div id="bars"></div>
-    <div class="cap">막대 길이는 이슈 주목도를, 색상은 뉴스 영역을 나타냅니다. <span class="n" id="method"></span></div>
+    <div class="cap"><span data-en="Bar length = attention, color = news area.">막대 길이는 이슈 주목도를, 색상은 뉴스 영역을 나타냅니다.</span> <span class="n" id="method"></span></div>
   </section>
 
   <section class="sec accent">
     <div class="sec-h"><div class="num" style="background:var(--kb-yellow);color:var(--kb-dark)">02</div>
-      <div><div class="tt">오늘의 핵심 뉴스</div><div class="ds">전 거점 AI 중요도 상위 · 국가무관 · 카테고리 배지 · 클릭 시 원문</div></div></div>
+      <div><div class="tt" data-en="Today's Key News">오늘의 핵심 뉴스</div><div class="ds" data-en="Top AI-scored across all hubs · category badges · click for source">전 거점 AI 중요도 상위 · 국가무관 · 카테고리 배지 · 클릭 시 원문</div></div></div>
     <div class="news" id="news"></div>
   </section>
 
@@ -100,42 +100,46 @@
 
 <script>
 (async function(){
-  const P=new URLSearchParams(location.search), QD=P.get('date');
+  const P=new URLSearchParams(location.search), QD=P.get('date'), EN=P.get('lang')==='en';
   let D=null;
   if(QD){ try{ D=await (await fetch('archive/'+QD+'/pulse.json')).json(); }catch(e){} }
   try{ if(!D) D=JSON.parse(document.getElementById('pulse-data').textContent);}catch(e){}
   if(!D){ try{ D=await (await fetch('pulse.json')).json(); }catch(e){} }
   if(!D){ document.querySelector('.wrap').innerHTML='<p style="color:#7a746c;text-align:center;padding:40px">pulse.json 이 없습니다. <code>python main.py export</code> 로 생성하세요.</p>'; return; }
   const gen=(D.generated_at||'').slice(0,16).replace('T',' ');
-  document.getElementById('asof').textContent=gen.slice(0,10)+' 기준';
-  document.getElementById('gen').textContent='업데이트 '+gen;
-  document.getElementById('method').textContent=(D.days?`최근 ${D.days}일 · `:'')+'온도=중요도·빈도 종합';
+  document.getElementById('asof').textContent=EN?('as of '+gen.slice(0,10)):(gen.slice(0,10)+' 기준');
+  document.getElementById('gen').textContent=(EN?'Updated ':'업데이트 ')+gen;
+  document.getElementById('method').textContent=(D.days?(EN?`Last ${D.days}d · `:`최근 ${D.days}일 · `):'')+(EN?'Temp = importance × frequency':'온도=중요도·빈도 종합');
   document.getElementById('bars').innerHTML=(D.categories||[]).map(c=>`
     <div class="temp">
-      <span class="lb">${c.label}</span>
+      <span class="lb">${EN?(c.label_en||c.label):c.label}</span>
       <span class="track"><span class="fill" style="width:${c.temp}%;background:${c.color}"></span></span>
       <span class="val" style="color:${c.color}">${c.temp}°C</span>
     </div>`).join('');
 
-  const NAMES={GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아'};
+  const NAMES=EN?{GB:'UK',US:'US',HK:'Hong Kong',CN:'China',JP:'Japan',SG:'Singapore',IN:'India',VN:'Vietnam',MM:'Myanmar',ID:'Indonesia',KH:'Cambodia',GLOBAL:'Global'}
+               :{GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',GLOBAL:'글로벌'};
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l={economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'}[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
-  const LANG=P.get('lang')==='en'?'en':'ko';
-  const tq=a=>LANG==='en'?(a.q_en||a.q):(a.q||a.q_en), tk=a=>LANG==='en'?(a.k_en||a.k):(a.k||a.k_en);
-  const tf=f=>LANG==='en'?(f.summary_en||f.summary):(f.summary||f.summary_en);
+  const md=s=>String(s||'').slice(5);   // 연도 제거(MM-DD)
+  const BL=EN?{economy:'Economy',finance:'Banking',digital:'Digital',esg:'ESG',risk:'Risk'}:{economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'};
+  const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l=BL[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
+  const LANG=EN?'en':'ko';
+  const tq=a=>EN?(a.q_en||a.q):(a.q||a.q_en), tk=a=>EN?(a.k_en||a.k):(a.k||a.k_en);
+  const tf=f=>EN?(f.summary_en||f.summary):(f.summary||f.summary_en);
   const enEl=document.querySelector('.en');
   if(enEl){ enEl.style.cursor='pointer';
     enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
     enEl.onclick=()=>{ P.set('lang',LANG==='en'?'ko':'en'); location.search=P.toString(); }; }
   document.querySelectorAll('.nav a').forEach(a=>{ a.href=a.getAttribute('href').split('?')[0]+location.search; });
+  if(EN) document.querySelectorAll('[data-en]').forEach(el=>{ el.textContent=el.getAttribute('data-en'); });
 
   document.getElementById('news').innerHTML=(D.top_news||[]).map(a=>`
-    <div class="nc"><div class="nt"><span class="fg">${a.flag||''}</span> <b>${NAMES[a.cc]||a.cc||''}</b> · ${esc(a.src)} · ${esc(a.d)} ${badges(a.c)}
-      ${a.score!=null?`<span class="score">${a.score}</span>`:''}</div>
+    <div class="nc"><div class="nt"><span class="fg">${a.flag||''}</span> <b>${NAMES[a.cc]||a.cc||''}</b> · ${esc(a.src)} · ${esc(md(a.d))} ${badges(a.c)}
+</div>
       <h4>${a.u?`<a href="${esc(a.u)}" target="_blank" rel="noopener">${esc(a.t)}</a>`:esc(a.t)}</h4>
       ${tq(a)?`<div class="nq">${esc(tq(a))}</div>`:''}
-      ${tk(a)?`<div class="nk"><b>KB 시사점</b> ${esc(tk(a))}</div>`:''}</div>`).join('')
-    || '<div style="color:var(--sub);font-size:13px">데이터 없음</div>';
+      ${tk(a)?`<div class="nk"><b>${EN?'KB implication':'KB 시사점'}</b> ${esc(tk(a))}</div>`:''}</div>`).join('')
+    || `<div style="color:var(--sub);font-size:13px">${EN?'No data':'데이터 없음'}</div>`;
 
   try{
     const dates=await (await fetch('archive/dates.json')).json();

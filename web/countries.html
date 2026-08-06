@@ -51,8 +51,7 @@
   .cc{display:flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;background:#fdfcfa;cursor:pointer}
   .cc:hover{border-color:var(--kb-silver)}
   .cc.sel{border-color:var(--kb-dark);box-shadow:inset 0 0 0 1px var(--kb-dark)}
-  .cc .st{font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px}
-  .cc .act{background:#e7f2e8;color:#2f7d4f} .cc .watch{background:#efece7;color:#8a8d8f}
+  .cc.dim{opacity:.4}
 
   /* ── 필터 ── */
   .fil{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
@@ -107,21 +106,21 @@
       <span class="kb"><b>KB</b><span>국민은행</span></span>
       <span class="rt"><span class="en">KR<span class="off"> / EN</span></span><select id="dsel" class="dsel"></select></span>
     </div>
-    <h1>국가별 뉴스</h1>
-    <div class="sub">현지 주요언론 기사를 AI가 선별·요약하고 KB 거점 관점의 시사점을 제시합니다</div>
-    <div class="nav"><a href="brief.html">오늘의 글로벌</a><a class="on" href="countries.html">국가별 뉴스</a><a href="weekly.html">주간 리포트</a><a href="topics.html">이슈 트래커</a></div>
+    <h1 data-en="Country News">국가별 뉴스</h1>
+    <div class="sub" data-en="AI curates and summarizes local press, with KB-hub implications">현지 주요언론 기사를 AI가 선별·요약하고 KB 거점 관점의 시사점을 제시합니다</div>
+    <div class="nav"><a href="brief.html" data-en="Today's Global">오늘의 글로벌</a><a class="on" href="countries.html" data-en="Country News">국가별 뉴스</a><a href="weekly.html" data-en="Weekly Report">주간 리포트</a><a href="topics.html" data-en="Issue Tracker">이슈 트래커</a></div>
   </div>
 
   <section class="sec" id="secCov">
     <div class="sec-h"><div class="num g">01</div>
-      <div><div class="tt">거점 커버리지</div><div class="ds">거점별 현지언론 분석 현황 · 클릭 시 해당 거점만 보기</div></div>
+      <div><div class="tt" data-en="Hub Coverage">거점 커버리지</div><div class="ds" data-en="Click a hub to see that country's news">거점을 클릭해 해당 국가의 뉴스를 보세요</div></div>
       <div class="rt" id="covRt"></div></div>
     <div class="cov" id="cov"></div>
   </section>
 
   <section class="sec accent" id="secFeed">
     <div class="sec-h"><div class="num y">02</div>
-      <div><div class="tt">현지언론 피드</div><div class="ds">거점 선택 시 · 전일+당일 AI 브리핑 + 기사(중요도순)</div></div></div>
+      <div><div class="tt" data-en="Local Press Feed">현지언론 피드</div><div class="ds" data-en="On hub select · daily AI briefing + articles by importance">거점 선택 시 · 전일+당일 AI 브리핑 + 기사(중요도순)</div></div></div>
     <div id="brief" class="brief" style="display:none"></div>
     <div class="fil" id="cats"></div>
     <div class="fil" style="margin-top:8px"><span class="sp"></span><span class="cnt" id="count"></span></div>
@@ -135,7 +134,7 @@
 
 <script>
 (async function(){
-  const P=new URLSearchParams(location.search), QD=P.get('date');
+  const P=new URLSearchParams(location.search), QD=P.get('date'), EN=P.get('lang')==='en';
   let DATA=null;
   if(QD){ try{ DATA=await (await fetch('archive/'+QD+'/countries.json')).json(); }catch(e){} }
   try{ if(!DATA) DATA=JSON.parse(document.getElementById('countries-data').textContent);}catch(e){}
@@ -143,14 +142,16 @@
   if(!DATA){ document.querySelector('.wrap').innerHTML='<p class="empty">countries.json 이 없습니다. <code>python main.py export</code> 로 생성하세요.</p>'; return; }
 
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const NAMES={GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아'};
-  const CATS=[['','전체'],['economy','경제'],['finance','금융'],['digital','디지털'],['esg','ESG'],['risk','리스크']];
+  const md=s=>String(s||'').slice(5);   // 날짜 연도 제거(YYYY-MM-DD → MM-DD)
+  const NAMES=EN?{GB:'UK',US:'US',HK:'Hong Kong',CN:'China',JP:'Japan',SG:'Singapore',IN:'India',VN:'Vietnam',MM:'Myanmar',ID:'Indonesia',KH:'Cambodia',GLOBAL:'Global'}
+               :{GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',GLOBAL:'글로벌'};
+  const CATS=EN?[['','All'],['economy','Economy'],['finance','Banking'],['digital','Digital'],['esg','ESG'],['risk','Risk']]
+              :[['','전체'],['economy','경제'],['finance','금융'],['digital','디지털'],['esg','ESG'],['risk','리스크']];
   const gen=(DATA.generated_at||'').slice(0,16).replace('T',' ');
-  document.getElementById('gen').textContent='업데이트 '+gen+(DATA.mode?(' · '+DATA.mode):'');
+  document.getElementById('gen').textContent=(EN?'Updated ':'업데이트 ')+gen+(DATA.mode?(' · '+DATA.mode):'');
 
   const arts=[]; (DATA.countries||[]).forEach(c=>(c.articles||[]).forEach(a=>arts.push({...a,cc:c.cc,flag:c.flag})));
-  const nActive=(DATA.countries||[]).filter(c=>c.status==='ACTIVE').length;
-  document.getElementById('covRt').textContent=`ACTIVE ${nActive} / ${(DATA.countries||[]).length}개 거점`;
+  document.getElementById('covRt').textContent='';
 
   let fCat='', fCC='';
   const catCount=k=>{const pool=fCC?arts.filter(a=>a.cc===fCC):arts;return k?pool.filter(a=>(a.c||'').includes(k)).length:pool.length;};
@@ -159,23 +160,23 @@
     `<span class="chip${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
   document.getElementById('cats').onclick=e=>{const c=e.target.closest('.chip');if(!c)return;fCat=c.dataset.k;render();};
 
-  document.getElementById('cov').innerHTML=(DATA.countries||[]).map(c=>{
-    const act=c.status==='ACTIVE';
-    return `<span class="cc" data-cc="${c.cc}"><span>${c.flag||''}</span>${NAMES[c.cc]||c.cc}
-      <span class="st ${act?'act':'watch'}">${act?'ACTIVE '+c.count:'WATCH'}</span></span>`;}).join('');
+  document.getElementById('cov').innerHTML=(DATA.countries||[]).map(c=>
+    `<span class="cc${c.count?'':' dim'}" data-cc="${c.cc}"><span>${c.flag||''}</span>${NAMES[c.cc]||c.cc}</span>`).join('');
   document.getElementById('cov').onclick=e=>{const c=e.target.closest('.cc');if(!c)return;fCC=(fCC===c.dataset.cc?'':c.dataset.cc);render();};
 
+  const BL=EN?{economy:'Economy',finance:'Banking',digital:'Digital',esg:'ESG',risk:'Risk'}:{economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'};
   const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{
-    const lab={economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'}[k]; if(!lab)return'';
+    const lab=BL[k]; if(!lab)return'';
     return `<span class="badge b-${k}">${lab}</span>`;}).join(' ');
 
-  const LANG=P.get('lang')==='en'?'en':'ko';
-  const tq=a=>LANG==='en'?(a.q_en||a.q):(a.q||a.q_en), tk=a=>LANG==='en'?(a.k_en||a.k):(a.k||a.k_en);
+  const LANG=EN?'en':'ko';
+  const tq=a=>EN?(a.q_en||a.q):(a.q||a.q_en), tk=a=>EN?(a.k_en||a.k):(a.k||a.k_en);
   const enEl=document.querySelector('.en');
   if(enEl){ enEl.style.cursor='pointer';
     enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
     enEl.onclick=()=>{ P.set('lang',LANG==='en'?'ko':'en'); location.search=P.toString(); }; }
   document.querySelectorAll('.nav a').forEach(a=>{ a.href=a.getAttribute('href').split('?')[0]+location.search; });
+  if(EN) document.querySelectorAll('[data-en]').forEach(el=>{ el.textContent=el.getAttribute('data-en'); });
 
   function render(){
     document.querySelectorAll('#cov .cc').forEach(c=>c.classList.toggle('sel',c.dataset.cc===fCC));
@@ -185,7 +186,7 @@
     if(!fCC){
       bx.style.display='none'; catsEl.style.display='none';
       document.getElementById('count').textContent='';
-      feed.innerHTML='<div class="empty">위 <b>거점 커버리지</b>에서 국가를 선택하면<br>해당 거점의 <b>일일 브리핑</b>과 기사가 표시됩니다.</div>';
+      feed.innerHTML=EN?'<div class="empty">Select a hub in <b>Hub Coverage</b> above to see its<br><b>daily briefing</b> and articles.</div>':'<div class="empty">위 <b>거점 커버리지</b>에서 국가를 선택하면<br>해당 거점의 <b>일일 브리핑</b>과 기사가 표시됩니다.</div>';
       feed._rows=[]; return;
     }
 
@@ -203,25 +204,25 @@
            :`<div class="bt bempty">${LANG==='en'?'No briefing generated yet.':'아직 브리핑이 생성되지 않았습니다. 맥북에서 <code>python main.py brief --type daily</code> 실행 후 export.'}</div>`);
 
     let rows=arts.filter(a=>(!fCat||(a.c||'').includes(fCat))&&a.cc===fCC);
-    document.getElementById('count').textContent=rows.length+' 건 · '+(NAMES[fCC]||fCC);
-    if(!rows.length){feed.innerHTML='<div class="empty">해당 조건의 기사가 없습니다. (AI 분석 전이거나 SOURCE WATCH 상태)</div>';feed._rows=[];return;}
+    document.getElementById('count').textContent=rows.length+(EN?' articles · ':' 건 · ')+(NAMES[fCC]||fCC);
+    if(!rows.length){feed.innerHTML=`<div class="empty">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;feed._rows=[];return;}
     feed.innerHTML=rows.map((a,i)=>`<div class="art" data-i="${i}">
-      <div class="top"><span class="flag">${a.flag||''}</span> <b>${NAMES[a.cc]||a.cc}</b> · ${esc(a.src)} · ${esc(a.d)} ${badges(a.c)}
-        ${a.score!=null?`<span class="score">${a.score}</span>`:''}</div>
+      <div class="top"><span class="flag">${a.flag||''}</span> ${esc(a.src)} · ${esc(md(a.d))} ${badges(a.c)}
+</div>
       <div class="t">${esc(a.t)}</div>
       ${tq(a)?`<div class="q">${esc(tq(a))}</div>`:''}
-      ${tk(a)?`<div class="k"><b>KB 시사점</b> ${esc(tk(a))}</div>`:''}</div>`).join('');
+      ${tk(a)?`<div class="k"><b>${EN?'KB implication':'KB 시사점'}</b> ${esc(tk(a))}</div>`:''}</div>`).join('');
     feed._rows=rows;
   }
   document.getElementById('feed').onclick=e=>{
     const el=e.target.closest('.art'); if(!el||e.target.tagName==='A')return;
     const a=document.getElementById('feed')._rows[+el.dataset.i];
     document.getElementById('modal').innerHTML=`<span class="x" id="mx">×</span>
-      <div class="mt">${a.flag||''} ${NAMES[a.cc]||a.cc} · ${esc(a.src)} · ${esc(a.d)} ${badges(a.c)}</div>
+      <div class="mt">${a.flag||''} ${esc(a.src)} · ${esc(md(a.d))} ${badges(a.c)}</div>
       <h2>${esc(a.t)}</h2>
-      ${tq(a)?`<div class="s"><h3>요약</h3><div>${esc(tq(a))}</div></div>`:''}
-      ${tk(a)?`<div class="s"><h3>KB 시사점</h3><div>${esc(tk(a))}</div></div>`:''}
-      ${a.u?`<a class="lk" href="${esc(a.u)}" target="_blank" rel="noopener">원문 보기 ↗</a>`:''}`;
+      ${tq(a)?`<div class="s"><h3>${EN?'Summary':'요약'}</h3><div>${esc(tq(a))}</div></div>`:''}
+      ${tk(a)?`<div class="s"><h3>${EN?'KB implication':'KB 시사점'}</h3><div>${esc(tk(a))}</div></div>`:''}
+      ${a.u?`<a class="lk" href="${esc(a.u)}" target="_blank" rel="noopener">${EN?'View source ↗':'원문 보기 ↗'}</a>`:''}`;
     document.getElementById('ov').classList.add('on');
   };
   document.getElementById('ov').onclick=e=>{if(e.target.id==='ov'||e.target.id==='mx')document.getElementById('ov').classList.remove('on');};
@@ -231,7 +232,7 @@
     const dates=await (await fetch('archive/dates.json')).json();
     const sel=document.getElementById('dsel');
     if(sel&&dates.length){
-      sel.innerHTML='<option value="">최신</option>'+dates.map(d=>`<option value="${d}"${d===QD?' selected':''}>${d}</option>`).join('');
+      sel.innerHTML=`<option value="">${EN?'Latest':'최신'}</option>`+dates.map(d=>`<option value="${d}"${d===QD?' selected':''}>${d}</option>`).join('');
       sel.onchange=()=>{ location.search = sel.value?('?date='+sel.value):''; };
     } else if(sel){ sel.style.display='none'; }
   }catch(e){ const s=document.getElementById('dsel'); if(s) s.style.display='none'; }

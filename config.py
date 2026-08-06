@@ -44,8 +44,10 @@ LLM_BATCH_POLL_SEC   = 10      # 완료 폴링 간격(초)
 LLM_BATCH_MAX_WAIT_SEC = 24 * 3600   # 배치 최대 대기(초, API SLA=24h)
 
 # ── AI 파이프라인 파라미터 ───────────────────────────────────────
-PREFILTER_LIMIT = 300        # 한 번 실행에 처리할 최대 기사 수(prefilter)
-RANK_LIMIT      = 150        # 한 번 실행에 처리할 최대 기사 수(ranker)
+# 상한이 낮으면 filter_score 뒤쪽(소규모 거점: GB꼬리·MM·KH)이 미처리로 밀려 WATCH가 됨.
+# Haiku+배치(50%↓)라 처리비용이 싸므로 하루 물량(전일+당일 ~700건)을 다 소화하게 상향.
+PREFILTER_LIMIT = 800        # 한 번 실행에 처리할 최대 기사 수(prefilter)
+RANK_LIMIT      = 400        # 한 번 실행에 처리할 최대 기사 수(ranker)
 
 # ── 본문 추출(fulltext.py) ───────────────────────────────────────
 # prefilter 통과분만 원문 본문 추출(무료). 스니펫(~141B) 대신 본문으로 rank 품질↑.
