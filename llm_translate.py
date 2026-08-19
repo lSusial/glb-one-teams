@@ -25,7 +25,8 @@ log = logging.getLogger("llm_translate")
 _SYS = {
     "ko": ("You are rewriting financial news into concise Korean for busy bankers. "
            "Rules: ① title_ko — 15자 이내, 핵심 사실만, 신문 헤드라인 스타일 "
-           "② summary — 2문장 이내, 단문(주어+서술어), 핵심 사실·수치만, '~다' 체, 수식어 최소화 "
+           "② summary — 2문장 이내, 단문, '~다' 체. "
+           "   중요: title_ko 내용을 절대 반복하지 말 것. title_ko가 다루지 않은 배경·수치·영향만 서술. "
            "③ kb_implication — 1문장, KB 거점 직접 영향만 "
            "Keep KB branch names (예: 뉴욕지점, 프라삭은행). "
            'Output ONLY JSON: {"title_ko": "...", "summary": "...", "kb_implication": "..."}'),

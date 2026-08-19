@@ -64,12 +64,12 @@
   .feed{display:flex;flex-direction:column;gap:9px;margin-top:12px}
   .art{border:1px solid var(--line);border-radius:10px;padding:13px 15px;cursor:pointer;background:#fff;transition:box-shadow .1s}
   .art:hover{box-shadow:0 3px 12px rgba(0,0,0,.07)}
-  .art .top{font-size:12px;color:var(--sub);display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:5px}
+  .art .top{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:5px}
   .art .flag{font-size:15px}
   .badge{font-size:10.5px;font-weight:800;padding:1px 8px;border-radius:20px;color:#fff}
-  .b-economy{background:#2b5f9e}.b-finance{background:#2f7d4f}.b-digital{background:#6a3fb5}.b-esg{background:#3a8a6a}.b-risk{background:#b23b3b}
-  .art .score{margin-left:auto;font-weight:800;color:var(--kb-gold)}
-  .art .t{font-size:15px;font-weight:700;line-height:1.35;margin:2px 0 6px}
+  .b-economy{background:#2b5f9e}.b-finance{background:#2f7d4f}.b-digital{background:#6a3fb5}.b-esg{background:#3a8a6a}.b-risk{background:#b23b3b}.b-geo{background:#7a5230}
+  .art .top .ad{font-size:11px;color:var(--sub);margin-left:auto}
+  .art .t{font-size:14px;font-weight:700;line-height:1.35;margin:0 0 6px;color:var(--ink)}
   .art .q{color:#463f37;line-height:1.55}
   .rl{margin-top:8px;padding-top:7px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:3px}
   .rl .rh{font-size:11px;color:var(--sub);font-weight:700;margin-bottom:2px}
@@ -159,8 +159,8 @@
   const md=s=>String(s||'').slice(5);   // 날짜 연도 제거(YYYY-MM-DD → MM-DD)
   const NAMES=EN?{GB:'UK',US:'US',HK:'Hong Kong',CN:'China',JP:'Japan',SG:'Singapore',IN:'India',VN:'Vietnam',MM:'Myanmar',ID:'Indonesia',KH:'Cambodia',GLOBAL:'Global'}
                :{GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',GLOBAL:'글로벌'};
-  const CATS=EN?[['','All'],['economy','Economy'],['finance','Banking'],['digital','Digital'],['esg','ESG'],['risk','Risk']]
-              :[['','전체'],['economy','경제'],['finance','금융'],['digital','디지털'],['esg','ESG'],['risk','리스크']];
+  const CATS=EN?[['','All'],['economy','Economy'],['finance','Banking'],['digital','Digital'],['esg','ESG'],['risk','Risk'],['geo','Geopolitics']]
+              :[['','전체'],['economy','경제'],['finance','금융'],['digital','디지털'],['esg','ESG'],['risk','리스크'],['geo','지정학']];
   const gen=(DATA.generated_at||'').slice(0,16).replace('T',' ');
   document.getElementById('gen').textContent=(EN?'Updated ':'업데이트 ')+gen+(DATA.mode?(' · '+DATA.mode):'');
 
@@ -178,14 +178,14 @@
     `<span class="cc${c.count?'':' dim'}" data-cc="${c.cc}"><span>${c.flag||''}</span>${NAMES[c.cc]||c.cc}</span>`).join('');
   document.getElementById('cov').onclick=e=>{const c=e.target.closest('.cc');if(!c)return;fCC=(fCC===c.dataset.cc?'':c.dataset.cc);render();};
 
-  const BL=EN?{economy:'Economy',finance:'Banking',digital:'Digital',esg:'ESG',risk:'Risk'}:{economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'};
+  const BL=EN?{economy:'Economy',finance:'Banking',digital:'Digital',esg:'ESG',risk:'Risk',geo:'Geopolitics'}:{economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크',geo:'지정학'};
   const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{
     const lab=BL[k]; if(!lab)return'';
     return `<span class="badge b-${k}">${lab}</span>`;}).join(' ');
 
   const LANG=EN?'en':'ko';
   const tq=a=>EN?(a.q_en||a.q):(a.q||a.q_en), tk=a=>EN?(a.k_en||a.k):(a.k||a.k_en);
-  const tt=a=>{ if(EN||!a.q) return a.t; const s=a.q.split(/(?<=[.!?])\s/)[0]; return s.length>72?s.slice(0,70)+'…':s; };
+  const tt=a=>a.t;
   const enEl=document.querySelector('.en');
   if(enEl){ enEl.style.cursor='pointer';
     enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
@@ -222,8 +222,7 @@
     document.getElementById('count').textContent=rows.length+(EN?' articles · ':' 건 · ')+(NAMES[fCC]||fCC);
     if(!rows.length){feed.innerHTML=`<div class="empty">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;feed._rows=[];return;}
     feed.innerHTML=rows.map((a,i)=>`<div class="art" data-i="${i}">
-      <div class="top"><span class="flag">${a.flag||''}</span> ${esc(a.src)} · ${esc(md(a.d))} ${badges(a.c)}
-</div>
+      <div class="top"><span class="flag">${a.flag||''}</span>${badges(a.c)}<span class="ad">${esc(md(a.d))}</span></div>
       <div class="t">${esc(tt(a))}</div>
       ${tq(a)?`<div class="q">${esc(tq(a))}</div>`:''}
       ${(a.rl||[]).length?`<div class="rl"><span class="rh">${EN?'Sources':'관련 기사'}</span>${(a.rl||[]).map(r=>`<a href="${esc(r.u)}" target="_blank" rel="noopener">${esc(r.t)} ↗</a>`).join('')}</div>`:''}</div>`).join('');
@@ -233,7 +232,7 @@
     const el=e.target.closest('.art'); if(!el||e.target.tagName==='A')return;
     const a=document.getElementById('feed')._rows[+el.dataset.i];
     document.getElementById('modal').innerHTML=`<span class="x" id="mx">×</span>
-      <div class="mt">${a.flag||''} ${esc(a.src)} · ${esc(md(a.d))} ${badges(a.c)}</div>
+      <div class="mt">${a.flag||''} ${esc(md(a.d))} ${badges(a.c)}</div>
       <h2>${esc(tt(a))}</h2>
       ${tq(a)?`<div class="s"><h3>${EN?'Summary':'요약'}</h3><div>${esc(tq(a))}</div></div>`:''}
       ${a.u?`<a class="lk" href="${esc(a.u)}" target="_blank" rel="noopener">${EN?'View source ↗':'원문 보기 ↗'}</a>`:''}`;

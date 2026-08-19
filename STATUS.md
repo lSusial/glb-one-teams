@@ -1,6 +1,6 @@
 # 현황 / 확정안 대비 정합 — glb-one-teams
 
-> 최초 작성 2026-05-29(prototype) | glb-one-teams 재작성 2026-07-14 | **전면 갱신 2026-07-29** | For Internal Use Only
+> 최초 작성 2026-05-29(prototype) | glb-one-teams 재작성 2026-07-14 | **전면 갱신 2026-08-14** | For Internal Use Only
 >
 > 본 문서는 **확정안 ↔ go-forward 레포(`glb-one-teams`) 현황 브리지**입니다. 제품 비전·로드맵은 [`PLAN.md`](PLAN.md), 화면 설계는 [`화면분석_개발가이드.md`](화면분석_개발가이드.md), 수집·AI·카테고리 설계는 [`데이터_AI_카테고리_설계.md`](데이터_AI_카테고리_설계.md), 작업 이력은 [`docs/work_log.md`](docs/work_log.md)를 참조하세요.
 
@@ -10,117 +10,120 @@
 
 | 레포 | 역할 | 상태 |
 |---|---|---|
-| **glb-one-teams** (이 레포) | 수집 코어(AI 없음) + AI 레이어 + 정적 4탭 UI | **go-forward 베이스** |
+| **glb-one-teams** (이 레포) | 수집 코어 + AI 레이어 + 정적 4탭 UI | **go-forward 베이스, 매일 운영 중** |
 | glb-news-rss/prototype | 풀 파이프라인 + KB 대시보드(Streamlit, 로컬) | 참조·아카이브 |
 
-GitHub: `https://github.com/lSusial/glb-one-teams.git` · UI 레퍼런스(샘플): `https://uandix-kaneiko.github.io/global_One_Team/`
-
-핵심 원칙: **수집기는 AI 없이**(코어 `run`은 API 키 없이 동작), **AI는 별도 단계**(`ai`는 `ANTHROPIC_API_KEY` 있을 때만).
+GitHub: `https://github.com/lSusial/glb-one-teams.git`
+Cloudflare Pages (배포): `https://kb-global-daily.pages.dev`
 
 ---
 
-## 2. 파이프라인 현황 (AI 레이어 실행 완료 — 맥북)
+## 2. 파이프라인 현황 (완전 가동 중 — 맥북)
 
 ```
-fetch → keyword_filter → dedup → prefilter → fulltext → rank → translate → briefing → export → 정적 4탭 UI
+fetch → keyword_filter → dedup → prefilter(LLM) → fulltext → rank(LLM) → translate(LLM) → briefing(LLM) → export → Cloudflare Pages
 ```
 
-| 단계 | 모듈 | 상태 |
-|---|---|---|
-| 수집 (fetch) | `collector.py` | ✅ RSS 병렬 + Google News 우회·실URL 해소 |
-| 키워드 필터 + 중복 | `keyword_filter.py` | ✅ 제목/본문 점수제(≥3 통과), F1 77 |
-| 공통 인프라 | `config.py` / `db.py` | ✅ 경로·임계·모델 단일 출처, 멱등 마이그레이션 |
-| 주제 분류 | `taxonomy.yaml` / `taxonomy.py` | ✅ 5종(MARKET/BANKING/DIGITAL/ESG/RISK) + 라우팅 |
-| LLM 1차 관문 | `llm_prefilter.py` | ✅ 구현·실행 (keep/drop) |
-| **본문 추출** | `fulltext.py` | 🟡 **구현 완료·미실행·미커밋** (keep 원문→`full_text`) |
-| AI 분석 | `llm_ranker.py` | ✅ 구현·실행 (`ai_score`·`summary_en`·`topics`·`kb_implication_en`) |
-| 번역 | `llm_translate.py` | ✅ 구현·실행 (표시분 한국어) |
-| 국가 브리핑 | `briefing.py` | ✅ 구현·실행 (daily/weekly, 일일 9개국 생성됨) |
-| 프로바이더 추상화 | `llm_provider.py` | ✅ Anthropic·OpenAI(스캐폴드)·Stub + **Message Batches(50%↓)** |
-| UI 데이터 export | `export_json.py` | ✅ `countries/pulse/keyman/topics.json` + 아카이브 |
-| UI (정적 4탭) | `web/*.html` | ✅ 실데이터 연동 완료 |
+| 단계 | 모듈 | 상태 | 비고 |
+|---|---|---|---|
+| 수집 (fetch) | `collector.py` | ✅ 운영 중 | 106 피드, Google News 우회 |
+| 키워드 필터 + 중복 | `keyword_filter.py` | ✅ 운영 중 | 점수제(≥3), dedup |
+| LLM 1차 관문 | `llm_prefilter.py` | ✅ 운영 중 (개선 완료) | F1 0.542→0.708, 프롬프트 7카테고리 명시 |
+| 본문 추출 | `fulltext.py` | ✅ 운영 중 | trafilatura, Google뉴스 URL 해소 |
+| AI 분석 | `llm_ranker.py` | ✅ 운영 중 | ai_score·summary·topics·kb_implication |
+| 번역 | `llm_translate.py` | ✅ 운영 중 | ACTIVE분 한국어, EN canonical 폴백 |
+| 국가 브리핑 | `briefing.py` | ✅ 운영 중 | daily, 11~12개국 생성 |
+| 프로바이더 | `llm_provider.py` | ✅ | Batches API(50%↓), `--sync` 동기 옵션 |
+| export | `export_json.py` | ✅ 운영 중 | countries/pulse/weekly/topics + 아카이브 |
+| UI (4탭) | `web/*.html` | ✅ 실데이터 연동 | Cloudflare Pages 배포 완료 |
 
-> **비용 최적화**: 모델=Haiku, Message Batches API(토큰 50%↓, `--sync`로 동기), `--days` 물량 축소, 번역은 표시분만. 영어 canonical로 분석 후 한국어 번역. `ai_score` 0~100, **ACTIVE 임계 55**.
+> **비용**: 모델=Haiku, Message Batches(50%↓), `--days 2` 물량 제한. ACTIVE 임계=55.
 
 ---
 
 ## 3. 확정안 요구 → 구현 상태
 
-| 확정안 요구 | 상태 | 남은 일 |
+| 확정안 요구 | 상태 | 비고 |
 |---|---|---|
-| 자동 수집·필터·중복제거 | ✅ 동작 | 정기 자동화(스케줄) |
-| AI 중요도·요약·주제분류 | ✅ 실행 | 평가셋 정식 검증 |
-| KB 시사점 | ✅ `kb_implication` 생성 | — |
-| 대시보드/UI | ✅ 정적 4탭 실데이터 | 배포(Pages) |
-| 한·영 토글 번역 | ✅ 영어 canonical + 번역, 폴백 | — |
-| 국가 일일 브리핑 | ✅ 현지언론 상단(전일+당일) | — |
-| 수집 심화(본문) | 🟡 fulltext 코드완료·미실행 | 맥북 1회 실행·성공률 확인 |
-| 메신저 배포 | 🔴 미구현 | Pages vs 봇 방식 결정 |
-| 자회사 IR·OFFICIAL·거시지표 | ⛔ 이번 범위 보류 | 비-뉴스 소스 필요 |
-| 참여형 재미요소 | ⛔ 범위 제외 | 향후 재검토 |
-
-> **이번 진행 범위(2026-07-23 갱신):** 뉴스 분석으로 도출 가능한 항목 포함(현지언론+AI·일일브리핑·온도계·Key-man·**TopicWatch**(규제 흡수)). 보류: 자회사 IR·OFFICIAL 원천 피드·거시지표·재미요소.
+| 자동 수집·필터·중복제거 | ✅ 운영 | 수동 1일 1회(자동화 미구현) |
+| AI 중요도·요약·주제분류 | ✅ 실행 | ai_score, topics, summary_ko |
+| KB 시사점 | ✅ 생성 | kb_implication(_ko/_en) |
+| 대시보드/UI | ✅ Pages 배포 완료 | https://kb-global-daily.pages.dev |
+| 한·영 토글 | ✅ | KR/EN 전환, 폴백 지원 |
+| 국가 일일 브리핑 | ✅ | 11~12개국 daily |
+| 본문 추출(fulltext) | ✅ 운영 중 | 약 50% 성공률(Reuters/Bloomberg 페이월) |
+| TopicWatch(이슈 트래커) | ✅ 재설계 완료 | 카테고리 탭(경제/금융/디지털/리스크/지정학/ESG) |
+| 평가 프레임워크 | ✅ | eval_set_v2(149건), prefilter/ranker eval |
+| 메신저 배포 | 🔴 미구현 | Telegram/Zalo |
+| 정기 자동화 | 🔴 미구현 | cron/Oracle Cloud |
+| 자회사 IR·OFFICIAL·거시지표 | ⛔ 보류 | 비-뉴스 소스 필요 |
 
 ---
 
-## 4. 화면 구성 (정적 4탭 SPA)
+## 4. 화면 구성 (4탭 정적 SPA)
 
-규제·정책 화면은 **TopicWatch로 흡수**되어 6탭 → 4탭(+관리자).
-
-**화면 구성 확정 (2026-07-29):**
-
-| 탭 | 파일 | 데이터 창 | 구성 |
+| 탭 | 파일 | 데이터 창 | 내용 |
 |---|---|---|---|
-| ① Global Pulse | `brief.html` | **전일+당일** | 카테고리 온도계(5) + **오늘의 핵심 뉴스**(전 거점 국가무관·중요도순, 핵심흐름+주요뉴스 통합) |
-| ② 현지언론 | `countries.html` | **전일+당일** | 거점 커버리지 → **국가 선택**(국가별) → 일일 브리핑 박스 + 기사 피드(카테고리 필터) |
-| ③ Key-man | `keyman.html` | **주간** | 인사·리더십 동향(뉴스 키워드 추출) |
-| ④ TopicWatch | `topics.html` | **주간** | 주제별 횡단 이슈 클러스터(규제·감독 포함) |
-| (관리자) | `admin.html` | — | 수집 데이터 조회 |
+| ① Global Pulse | `brief.html` | 전일+당일 | 카테고리 온도계(5) + 오늘의 핵심뉴스(중요도순) |
+| ② 현지언론 | `countries.html` | 전일+당일 | 거점 선택 → 일일 브리핑 + 기사 피드(카테고리 필터) |
+| ③ 주간 리포트 | `weekly.html` | 주간 | 국가별 주간 상위 기사 |
+| ④ 이슈 트래커 | `topics.html` | 주간(7일) | **카테고리 탭**(경제/금융산업/디지털/규제·리스크/지정학/ESG) |
 
-- **데이터 창 정책**: Global Pulse·현지언론 = 전일+당일(오늘의 …) / Key-man·TopicWatch = 주간 흐름.
-- **역할 분리**: Global = 전 국가 통합 노출 / 현지언론 = 국가별 분리.
-- **카테고리 5분할**(2026-07-29): 경제(MARKET)·금융(BANKING)·디지털·ESG·리스크(RISK). 온도계·배지·필터 라벨·색상 일치. (이전엔 MARKET+BANKING이 '금융' 하나로 합쳐졌던 catch-all 해소.)
-- **공통**: KR/EN 토글(한쪽 비면 반대 언어 폴백), 날짜 선택 + `archive/{date}/` 아카이브, 데이터 앵커(최신 게시일) 기준 창.
+**카테고리 6종**: MARKET(경제) · BANKING(금융산업) · DIGITAL(디지털) · RISK(규제·리스크) · GEO(지정학) · ESG
 
 ---
 
 ## 5. 거점·소스 현황
 
-- **11개 거점**: GB·US·HK·CN·JP·SG·IN·VN·MM·ID·KH. 홍콩(`HK`)은 중국(`CN`)과 분리.
-- **소스**: 총 **88 소스 / 118 피드** (76개가 Google News RSS). 축 A 카테고리 = `GLOBAL_*` / 국가코드 / `OFFICIAL`(당국, tier0 비활성).
-- **수집 심화 방향 = 무료 우선**(유료 API 보류). 본문추출 후 다음 무료 레버: GDELT·OFFICIAL 활성화·구글뉴스 쿼리 확대.
+- **11개 거점**: GB·US·HK·CN·JP·SG·IN·VN·MM·ID·KH
+- **소스**: 88 소스 / 106 피드 (Google News RSS 중심)
+- **알려진 수집 실패**: RTHK(XML 오류), Reuters/Bloomberg/WSJ(페이월 401/403), Google News(Oracle Cloud에서 503 → 맥북 수집)
 
 ---
 
-## 6. 운영·데이터 현황
+## 6. 평가 프레임워크 (eval/)
 
-- **최신 데이터: 2026-07-23** (수 일 미갱신). 일일 브리핑 9개국 생성됨. **본문추출 0건**(미실행).
-- **수집 운영**: 맥북 `python main.py run` → `./sync_to_server.sh` rsync (Google News 503 회피).
-- **미커밋(2026-07-29)**: `fulltext.py`(신규) + `config.py`·`main.py`·`llm_ranker.py`·`requirements.txt`·설계문서 2종·`docs/work_log.md`·`CLAUDE.md`.
-- **배포**: 정적 화면은 Pages 준비 완료, 실제 배포 미수행.
-- **정기 자동화 미구현**(수동).
-
----
-
-## 7. 알려진 이슈
-
-- **RTHK 피드**: XML SAXParseException으로 수집 실패.
-- **Google News 링크 해소**: 구식 redirect-follow는 최신 consent/JS 리다이렉트 실패(keep 490건 잔존) → `fulltext.py`가 `googlenewsdecoder`로 해소 후 본문추출(맥북 실행 필요).
-- **금융 catch-all**: taxonomy MARKET+BANKING이 UI 'finance'로 합쳐져 금융 배지가 과다. 5분할 검토 대기.
+| 파일 | 내용 |
+|---|---|
+| `eval/eval_set_v2.jsonl` | 149건, grade 0~3, 11개 거점 균형 |
+| `eval/run_eval.py` | `--mode prefilter` / `--mode ranker` 평가 |
+| `eval/build_eval_v2.py` | eval_set v2 생성 스크립트 |
+| `eval/results_prefilter_20260807.json` | prefilter 최종: P=0.739, R=0.680, F1=0.708 |
 
 ---
 
-## 8. 다음 과제
+## 7. 운영 방법
 
-**즉시(맥북)**: 미커밋분 커밋 → 최신 수집 + `fulltext --days 2`(성공률 확인) + `ai --days 2` + `export`. → 묵은 데이터 갱신 & fulltext 첫 검증.
+```bash
+# 일일 수집 + AI + 배포 (맥북)
+python main.py run              # fetch → filter → dedup
+python main.py ai --days 2      # prefilter → fulltext → rank → translate → brief (배치, ~10분)
+python main.py export           # JSON 생성
+wrangler pages deploy data/export --project-name kb-global-daily --commit-dirty=true  # CF Pages
 
-- ✅ **화면 구성요소 확정**(2026-07-29): 데이터 창 정책·핵심뉴스 통합·카테고리 5분할 완료(§4).
+# Oracle Cloud 동기화 (SSH 가끔 타임아웃)
+rsync -avz -e "ssh -i ~/workspace/ssh-key-2026-06-25-4.key" data/export/ ubuntu@168.107.56.139:~/glb-one-teams/data/export/
 
-**그다음 트랙(택1)**:
-1. **배포** — GitHub Pages 실 URL, export→push 경로.
-2. **자동화** — 수집→AI→export 정기 스케줄.
-3. **수집 강화(무료)** — GDELT·OFFICIAL 피드·구글뉴스 쿼리 확대.
+# eval 실행
+python main.py eval --mode prefilter
+python main.py eval --mode ranker
+```
 
 ---
 
-*최종 업데이트: 2026-07-29*
+## 8. 알려진 이슈 / 다음 과제
+
+**이슈**:
+- Oracle Cloud SSH 가끔 타임아웃 (서버 상태 확인 필요)
+- ESG 카테고리 기사 수 적음(3건/주) — 소스 보강 필요
+- DB integrity check 실패 이력 있음(인덱스 손상) → `REINDEX idx_articles_dedup`으로 복구
+
+**다음 과제 (우선순위)**:
+1. **정기 자동화** — Oracle Cloud cron (수집→AI→export→CF Pages)
+2. **Telegram 채널** — 영어판(현지 간부용)
+3. **소스 보강** — ESG·OFFICIAL 피드 활성화
+4. **Oracle Cloud 서버 점검** — SSH 타임아웃 원인 파악
+
+---
+
+*최종 업데이트: 2026-08-14*

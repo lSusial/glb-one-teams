@@ -45,7 +45,7 @@
   .cap{font-size:11.5px;color:var(--sub);margin-top:14px}
   .cap .n{color:var(--kb-silver)}
   .badge{font-size:10.5px;font-weight:800;padding:1px 8px;border-radius:20px;color:#fff}
-  .b-economy{background:#2b5f9e}.b-finance{background:#2f7d4f}.b-digital{background:#6a3fb5}.b-esg{background:#3a8a6a}.b-risk{background:#b23b3b}
+  .b-economy{background:#2b5f9e}.b-finance{background:#2f7d4f}.b-digital{background:#6a3fb5}.b-esg{background:#3a8a6a}.b-risk{background:#b23b3b}.b-geo{background:#7a5230}
   .flow{padding:11px 0;border-top:1px solid var(--line)}
   .flow:first-child{border-top:0;padding-top:2px}
   .flow .ft{font-weight:700;font-size:13.5px;line-height:1.6}
@@ -54,10 +54,10 @@
   .flow .fs{color:#463f37;font-size:12.5px;line-height:1.5;margin-top:3px}
   .news{display:flex;flex-direction:column;gap:9px}
   .nc{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fff}
-  .nc .nt{font-size:12px;color:var(--sub);display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:4px}
+  .nc .nt{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:5px}
   .nc .nt .fg{font-size:14px}
-  .nc .score{margin-left:auto;font-weight:800;color:var(--kb-gold)}
-  .nc h4{font-size:14.5px;font-weight:700;margin:2px 0 5px;line-height:1.35}
+  .nc .nt .nd{font-size:11px;color:var(--sub);margin-left:auto}
+  .nc h4{font-size:14px;font-weight:700;margin:0 0 5px;line-height:1.35;color:var(--ink)}
   .nc .nq{color:#463f37;line-height:1.5;font-size:13px}
   .rl{margin-top:7px;padding-top:6px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:3px}
   .rl .rh{font-size:11px;color:var(--sub);font-weight:700;margin-bottom:1px}
@@ -135,11 +135,11 @@
                :{GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',GLOBAL:'글로벌'};
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const md=s=>String(s||'').slice(5);   // 연도 제거(MM-DD)
-  const BL=EN?{economy:'Economy',finance:'Banking',digital:'Digital',esg:'ESG',risk:'Risk'}:{economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크'};
+  const BL=EN?{economy:'Economy',finance:'Banking',digital:'Digital',esg:'ESG',risk:'Risk',geo:'Geopolitics'}:{economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크',geo:'지정학'};
   const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{const l=BL[k];return l?`<span class="badge b-${k}">${l}</span>`:'';}).join(' ');
   const LANG=EN?'en':'ko';
   const tq=a=>EN?(a.q_en||a.q):(a.q||a.q_en), tk=a=>EN?(a.k_en||a.k):(a.k||a.k_en);
-  const tt=a=>{ if(EN||!a.q) return a.t; const s=a.q.split(/(?<=[.!?])\s/)[0]; return s.length>72?s.slice(0,70)+'…':s; };
+  const tt=a=>a.t;
   const tf=f=>EN?(f.summary_en||f.summary):(f.summary||f.summary_en);
   const enEl=document.querySelector('.en');
   if(enEl){ enEl.style.cursor='pointer';
@@ -149,8 +149,7 @@
   if(EN) document.querySelectorAll('[data-en]').forEach(el=>{ el.textContent=el.getAttribute('data-en'); });
 
   document.getElementById('news').innerHTML=(D.top_news||[]).map(a=>`
-    <div class="nc"><div class="nt"><span class="fg">${a.flag||''}</span> <b>${NAMES[a.cc]||a.cc||''}</b> · ${esc(a.src)} · ${esc(md(a.d))} ${badges(a.c)}
-</div>
+    <div class="nc"><div class="nt"><span class="fg">${a.flag||''}</span>${badges(a.c)}<span class="nd">${esc(md(a.d))}</span></div>
       <h4>${a.u?`<a href="${esc(a.u)}" target="_blank" rel="noopener">${esc(tt(a))}</a>`:esc(tt(a))}</h4>
       ${tq(a)?`<div class="nq">${esc(tq(a))}</div>`:''}
       ${(a.rl||[]).length?`<div class="rl"><span class="rh">${EN?'Sources':'관련 기사'}</span>${(a.rl||[]).map(r=>`<a href="${esc(r.u)}" target="_blank" rel="noopener">${esc(r.t)} ↗</a>`).join('')}</div>`:''}

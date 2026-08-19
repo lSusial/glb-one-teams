@@ -257,7 +257,7 @@ def cmd_export(args):
     w = export_json.export_weekly(conn)
     print(f"[export] weekly 국가={w['countries']}  → {w['path']}")
     t = export_json.export_topics(conn)
-    print(f"[export] topics clusters={t['clusters']}  → {t['path']}")
+    print(f"[export] topics categories={t['categories']}  → {t['path']}")
 
 
 def cmd_admin(_args):
@@ -265,6 +265,20 @@ def cmd_admin(_args):
     conn = db.open_conn()
     r = admin_export.export_admin(conn)
     print(f"[admin] articles={r['articles']}  sources={r['sources']}  → {r['html'] or r['json']}")
+
+
+def cmd_eval(args):
+    import subprocess
+    cmd = [sys.executable, "eval/run_eval.py", "--mode", args.mode]
+    if args.sync:
+        cmd.append("--sync")
+    if args.threshold != 55:
+        cmd += ["--threshold", str(args.threshold)]
+    if args.eval_file:
+        cmd += ["--eval-file", args.eval_file]
+    if args.rubric != "both":
+        cmd += ["--rubric", args.rubric]
+    subprocess.run(cmd, check=True)
 
 
 def cmd_broadcast(args):
@@ -335,6 +349,16 @@ def main():
     bcast.add_argument("--cc",   help="특정 거점만 발송 (예: JP)")
     bcast.add_argument("--dry-run", action="store_true", dest="dry_run", help="실제 발송 없이 메시지 미리보기")
 
+    evl = sub.add_parser("eval", help="eval_set으로 프리필터/랭커 성능 측정")
+    evl.add_argument("--mode", choices=["prefilter", "ranker"], default="prefilter",
+                     help="평가 모드 (기본: prefilter)")
+    evl.add_argument("--sync", action="store_true", help="배치 대신 동기 호출 (디버깅)")
+    evl.add_argument("--threshold", type=int, default=55, help="[ranker] ACTIVE 임계값 (기본: 55)")
+    evl.add_argument("--eval-file", metavar="PATH", default=None, dest="eval_file",
+                     help="eval_set JSONL 경로 (기본: eval/eval_set.jsonl)")
+    evl.add_argument("--rubric", choices=["old", "new", "both"], default="both",
+                     help="[ranker] 루브릭 선택 (기본: both)")
+
     args = p.parse_args()
     {
         "init": cmd_init, "fetch": cmd_fetch, "filter": cmd_filter,
@@ -342,7 +366,7 @@ def main():
         "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "rank": cmd_rank,
         "translate": cmd_translate, "brief": cmd_brief,
         "ai": cmd_ai, "export": cmd_export, "admin": cmd_admin,
-        "broadcast": cmd_broadcast,
+        "broadcast": cmd_broadcast, "eval": cmd_eval,
     }[args.cmd](args)
 
 

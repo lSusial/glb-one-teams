@@ -542,28 +542,22 @@ def export_regulations(conn, days: int | None = None) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# TopicWatch — 주제별 횡단 이슈 (같은 테마가 여러 거점에 걸쳐 나타나는가)
+# TopicWatch — taxonomy 카테고리별 주간 뉴스
 # ---------------------------------------------------------------------------
 _TOPICS_TEMPLATE = config.ROOT / "web" / "topics.html"
 
-_ISSUES = [
-    ("미국 연준·금리",   "US Fed / Rates",        ["fed", "fomc", "federal reserve", "rate cut", "rate hike"]),
-    ("일본은행·엔화",     "BOJ / Yen",             ["boj", "bank of japan", "yen", "jgb"]),
-    ("중국 경제·부양",    "China Economy",         ["pboc", "china's economic", "china economic", "stimulus", "yuan"]),
-    ("유가·에너지",       "Oil / Energy",          ["oil", "crude", "opec", "brent"]),
-    ("인플레이션·물가",   "Inflation",             ["inflation", "cpi", "ppi"]),
-    ("홍콩 금융",         "Hong Kong Finance",     ["hkma", "hang seng"]),
-    ("인도 시장",         "India Markets",         ["rbi", "rupee", "sensex", "nifty"]),
-    ("무역·관세·제재",    "Trade / Sanctions",     ["tariff", "sanction", "trade war", "export control"]),
-    ("규제·감독",         "Regulation·Supervision",["regulation", "regulator", "supervis", "compliance", "basel", "capital requirement", "audit"]),
-    ("ESG·기후",         "ESG / Climate",         ["esg", "carbon", "climate", "green bond", "net zero"]),
-    ("디지털·AI·반도체",  "Digital / AI / Chips",  ["artificial intelligence", "semiconductor", "fintech"]),
-    ("부동산·모기지",     "Property / Mortgage",   ["property", "real estate", "mortgage", "home price"]),
+_TOPIC_CATS = [
+    ("MARKET",  "economy",  "경제",       "Economy"),
+    ("BANKING", "finance",  "금융산업",    "Banking"),
+    ("DIGITAL", "digital",  "디지털",      "Digital"),
+    ("RISK",    "risk",     "규제·리스크", "Regulation·Risk"),
+    ("GEO",     "geo",      "지정학",      "Geopolitics"),
+    ("ESG",     "esg",      "ESG",         "ESG"),
 ]
 
 
-def _compute_topics(conn, days: int | None = None, max_per: int = 6) -> list[dict]:
-    """이슈 키워드로 ACTIVE 기사를 클러스터링 → 거점 횡단 주제. 거점 수 많은 순."""
+def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[dict]:
+    """taxonomy 카테고리별로 ACTIVE 기사를 묶어 반환."""
     dc, params = _date_clause(days)
     rows = conn.execute(
         f"""SELECT a.ai_score, a.title, a.summary, a.summary_ko, a.kb_implication,
@@ -575,39 +569,43 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 6) -> list[dic
         (config.AI_SCORE_ACTIVE_THRESHOLD, *params),
     ).fetchall()
 
-    clusters = []
-    for label, label_en, kws in _ISSUES:
-        pats = [re.compile(r"\b" + re.escape(k) + r"\b", re.I) for k in kws]
+    categories = []
+    for code, ui, label_ko, label_en in _TOPIC_CATS:
         arts, ccs = [], set()
         for r in rows:
-            hay = (r["title"] or "") + " " + (r["summary"] or "")
-            if any(p.search(hay) for p in pats):
-                codes = [c for c in (r["topics"] or "").split(",") if c]
-                arts.append(dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""), src=r["media_name"],
-                                 d=(r["published_at"] or "")[:10], t=r["title"], q=r["summary_ko"] or "",
-                                 k=r["kb_implication"] or "", q_en=r["summary_en"] or "",
-                                 k_en=r["kb_implication_en"] or "", c=taxonomy.ui_string(codes),
-                                 score=r["ai_score"], u=r["link"]))
-                ccs.add(r["cc"])
-                if len(arts) >= max_per:
-                    break
-        if len(arts) >= 2:
-            clusters.append(dict(label=label, label_en=label_en, ccs=sorted(ccs),
-                                 flags=[_FLAGS_ALL.get(x, "") for x in sorted(ccs)],
-                                 count=len(arts), articles=arts))
-    clusters.sort(key=lambda c: (-len(c["ccs"]), -c["count"]))
-    return clusters
+            codes = [c.strip() for c in (r["topics"] or "").split(",") if c.strip()]
+            if code not in codes:
+                continue
+            arts.append(dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""),
+                             src=r["media_name"],
+                             d=(r["published_at"] or "")[:10],
+                             t=r["title"], q=r["summary_ko"] or "",
+                             k=r["kb_implication"] or "",
+                             q_en=r["summary_en"] or "",
+                             k_en=r["kb_implication_en"] or "",
+                             c=taxonomy.ui_string(codes),
+                             score=r["ai_score"], u=r["link"]))
+            ccs.add(r["cc"])
+            if len(arts) >= max_per:
+                break
+        if arts:
+            categories.append(dict(code=code, ui=ui,
+                                   label=label_ko, label_en=label_en,
+                                   count=len(arts), ccs=sorted(ccs),
+                                   articles=arts))
+    return categories
 
 
 def export_topics(conn, days: int | None = None) -> dict:
     """topics.json + topics.html(TopicWatch 화면) 생성."""
-    if days is None: days = 7          # 주간 흐름
+    if days is None: days = 7
     config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    cats = _compute_topics(conn, days=days)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "snapshot_date": _snapshot_date(),
         "days": days,
-        "clusters": _compute_topics(conn, days=days),
+        "categories": cats,
     }
     _write_json("topics", payload)
     if _TOPICS_TEMPLATE.exists():
@@ -616,5 +614,5 @@ def export_topics(conn, days: int | None = None) -> dict:
             '<script id="topics-data" type="application/json">null</script>',
             f'<script id="topics-data" type="application/json">{data_js}</script>')
         (config.EXPORT_DIR / "topics.html").write_text(html, encoding="utf-8")
-    log.info("topics.json 작성 — 클러스터=%d", len(payload["clusters"]))
-    return {"clusters": len(payload["clusters"]), "path": str(config.EXPORT_DIR / "topics.json")}
+    log.info("topics.json 작성 — 카테고리=%d", len(cats))
+    return {"categories": len(cats), "path": str(config.EXPORT_DIR / "topics.json")}

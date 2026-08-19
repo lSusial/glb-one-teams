@@ -1,0 +1,157 @@
+﻿# eval_set_v2 검수용 CSV
+# 총건수,150
+# 등급분포(초안),3=5  2=46  1=71  0=28
+# 언어분포,en=126  id=7  ja=5  km=3  vi=8  zh=1
+# 거점분포,CN=11  GB=12  GLOBAL=17  HK=12  ID=15  IN=19  JP=9  KH=12  KR=1  MM=10  SG=10  US=10  VN=12
+
+no,id,cc,lang,old_label,grade_draft,grade_final,reason,notes,title
+1,64096,GB,en,,3,,[승격] 미국 재무부의 엔화 개입 정책 전환. KB의 JP·US 거점 환율 리스크 및 통화정책 영향,,Scott Bessent’s yen intervention signals new era of US ‘currency activism’ - Financial Times
+2,8950,JP,en,,3,,[승격] 일본 중앙은행 총재 발언. JP 거점 통화정책 방향 및 경제 전망 파악 필수,,Opening Remarks by Governor UEDA at the 2026 BOJ-IMES Conference - boj.or.jp
+3,18056,KH,km,,3,,[승격] 캄보디아 중앙은행 유동성 공급 경매. KB캄보디아 자금조달·환율 영향 가능,,ANNOUNCEMENT ON The 271st Liquidity Providing Collateralized Operation (LPCO) Auction - ធនាគារជាតិ​ នៃកម្ពុជា
+4,18058,KH,km,,3,,[승격] 캄보디아 중앙은행장 발언. KHQR 국경간 결제 확대로 KB캄보디아 거점 결제·송금 사업 ,,"Remarks by H.E. Dr. Chea Serey, Governor of the National Bank of Cambodia at the Official Launch of Cross-Border QR Code Payments between Cambodia and India (Phase 1: Indians scan Cambodia’s KHQR Codes) - ធនាគារជាតិ​ នៃកម្ពុជា"
+5,30170,MM,en,,3,,[승격] MM 거점 통화 정책 변화. 환율 변동성 증가로 거점 운영 리스크 관리 필요,,Burma sets currency exchange rate as it floats the kyat - BBC
+6,10445,CN,en,0,2,,중국의 지역 안보 입장 변화 모니터링 필요. CN 거점 정책 환경 영향,,China dials down rhetoric but regional risks persist at Shangri-La Dialogue
+7,62832,CN,en,,2,,JPY 급등은 KB 일본 거점 환전·환헤지 영향. 아시아 통화 변동성 모니터링 필수,,Japanese yen rises sharply against US dollar amid warnings of further intervention - China Daily Global Edition
+8,1992,CN,zh,,2,,인도네시아(ID 거점) 대규모 재정조달 계획. KB 지역 신용·투자 기회 및 리스크 평가 필요,,Indonesia seeks 486-bln-USD financing to support 2027 growth target-Xinhua - 新华网
+9,64085,GB,en,,2,,USD/JPY 급변동 관련. KB 거점(JP)의 환율·금리 영향 및 글로벌 포지션 재평가 필요,,How big was the American JPY intervention? - Financial Times
+10,64141,GB,en,,2,,JPY 급변동·미국 개입은 KB 거점(JP·GB) 통화·환헤지 전략에 직접 영향,,America’s puzzling yen intervention - Financial Times
+11,64148,GB,en,,2,,JPY 급변동·미국 개입은 KB 거점(JP·US) 통화·환헤지 전략에 직접 영향,,Transcript: America’s puzzling yen intervention - Financial Times
+12,64164,GB,en,,2,,"유가 급락 가능성, 글로벌 금융시장 변동성 증대. GB 거점 포트폴리오 영향",,FTSE 100 Live: Stocks to jump; oil falls as Trump says Iran has ‘last chance’ for peace - City AM
+13,68743,GB,en,,2,,GB 금융규제 정책 변화. KB 런던 거점의 세제·규제 환경 영향 평가 필요,,"Bank tax raid would hurt Britain, Wall Street chief warns Burnham - The Telegraph"
+14,51077,GB,en,,2,,미국 관세 정책 변화는 KB 글로벌 거점의 무역·환율·금리에 광범위 영향,,Is Trump winning the tariff wars? - Financial Times
+15,59782,GB,en,,2,,"Fed 정책 방향 불확실성은 GB 금리·환율에 영향, KB 런던 거점 운영에 중요",,The Fed’s next step is far from clear - Financial Times
+16,5317,GLOBAL,en,1,2,,EU 중국 수입 제한 논의는 GB·EU 거점 통화·무역정책에 영향. KB 글로벌 거점 리스크 모니터링 필요,,EU to discuss potential restrictions on Chinese imports amid fears of overreliance
+17,22854,GLOBAL,en,0,2,,"중국-북한 관계 변화는 KB 거점국(CN, JP, KR) 지정학 리스크 상승. 러시아 접근으로 역내 정책 불",,"Xi calls China–North Korea ties ""unbreakable,"" but Pyongyang's Russia pivot is testing Beijing's leverage."
+18,34859,GLOBAL,en,0,2,,우크라이나 지원 강화·이란 정책 전환은 글로벌 지정학 리스크 재편. KB 거점국 통화·금리·투자심리 영향,,G7 summit hailed a success by Macron thanks to developments on Ukraine and Iran
+19,38121,GLOBAL,en,0,2,,이란 해협 폐쇄 위협은 유가·환율 변동성 증대로 KB 거점 통화·자산 영향 가능,,What's the state of the Strait?
+20,1113,GLOBAL,en,,2,,유가 급등은 KB 거점국(IN·CN·JP 등) 통화·금리에 영향. 호르무즈 해협 폐쇄 리스크 모니터링 필수,,Crude oil prices rise as Trump calls Iran's offer 'totally unacceptable'
+21,26428,HK,en,,2,,중국-EU 무역갈등 심화 시 HK 금융시장·환율 변동성 증가 우려,,"China-EU tensions, Xi in North Korea, flatlining retail sales"
+22,26466,HK,en,,2,,HK 거점 통화 결제 체계 변화. 위안화-루피아 직거래 확대로 결제 효율성·환전 수요 영향,,"Hong Kong, Indonesia move towards direct transactions in yuan, rupiah"
+23,73578,HK,en,,2,,"HK 거점 영향 미국-중국 무역 긴장 심화, 드론산업 규제 등 역내 통상환경 변화 모니터링 필요",,China retaliates on US sanctions; North Korea’s dog meat advisory: SCMP’s 7 highlights
+24,5591,HK,en,,2,,HK 거점 핵심 고객층(중국인) 자산유출 통제 강화. KB증권·자산운용 영업 영향,,Mainland Chinese react as Hong Kong tightens access to offshore investment accounts
+25,5555,HK,en,,2,,HK 거점 미중 관계 변화가 통상·투자·규제에 영향. 기술·광물 협상 동향 모니터링 필요,,"In Beijing, the US and China tiptoed around tech and critical minerals"
+26,56835,HK,en,,2,,HK 거점 주식시장 변동성 증대. Fed 금리결정과 대형IPO 동시 진행으로 시장 영향 예상,,"Hong Kong investors hunker down for Fed decision, jumbo IPO"
+27,37944,HK,en,,2,,미중 무역 협상 진전이 HK 금융시장·환율·기업 신용도에 영향. KB HK 거점 모니터링 필요,,China’s US envoy calls for 10-fold rise in tariff-free trade under joint board
+28,24668,ID,id,1,2,,"인도네시아 루피아 급락(18,200 근처). KB 인도네시아 거점의 환율 리스크 및 자금 조달 영향 검토 필",,"Rupiah Dekati Rp 18.200, Analis Beberkan Penyebabnya - Kompas.com"
+29,36566,ID,id,,2,,Fed 금리 유지 결정이 ID 거점 통화(루피아) 환율에 직접 영향. KB 환전·송금 업무 관련,,"The Fed Tahan Suku Bunga, Bagaimana Nasib Rupiah Hari Ini? - Kompas.com"
+30,4350,ID,id,,2,,인도네시아 증시 FTSE 제외 가능성. KB 인도네시아 거점의 자본시장 접근성·규제 환경 변화 모니터링 필요,,"Saham RI Didepak FTSE, BEI: Risiko Jangka Pendek Reformasi Pasar Modal - Bisnis.com"
+31,31407,JP,en,0,2,,JP 거점 외교 이슈. 인도태평양 전략·대중국 입장 재확인으로 지역 정책 환경 변화 모니터링 필요,,Takaichi and Trump talk Indo-Pacific as Mideast crisis overshadows G7 summit
+32,28763,JP,ja,,2,,JP 주요 지수 급등. 지정학 리스크 완화로 KB JP 거점 시장 환경 개선,,Nikkei surges over 5% after US-Iran deal to end war - 毎日新聞
+33,29964,KH,en,,2,,캄보디아·베트남 미중 무역전쟁 영향 분석. KB 캄보디아 거점 사업환경 변화 모니터링 필요,,Cambodia and Vietnam in the US-China Trade War: Not All Good News - The Diplomat – Asia-Pacific Current Affairs Magazine
+34,31732,MM,en,,2,,MM 거점 정치 안정성·중국 관계 변화. 인도 국경 무역로 재점유는 지역 지정학 리스크,,Min Aung Hlaing meets Xi Jinping in China; Military to retake vital Myanmar-India border trade route
+35,46022,MM,en,,2,,MM 거점 지정학 변화. 중국·러시아·인도의 영향력 확대는 현지 정치·경제 안정성에 영향,,"China, Russia and India make inroads in Myanmar with transit corridors - Nikkei Asia"
+36,27724,MM,en,,2,,MM 거점 인프라·통상 영향. 인도 국경 무역로 장악 분쟁은 KB 현지 사업 환경·송금로 리스크,,Myanmar regime makes renewed push to retake key India border trade route
+37,30096,MM,en,,2,,MM 거점 인플레이션 급등으로 통화·금융 환경 악화. 현지 사업 리스크 증가.,,Post-coup instability drives inflation to record levels in Myanmar - Radio Free Asia
+38,14696,SG,en,,2,,SG 거점 미국 수출품 관세 인상. 무역 비용 증가로 KB 거점 기업 영향 예상,,ST Explains: What does Trump’s new tariff on ‘forced labour’ mean for Singapore trade?
+39,6141,SG,en,,2,,SG 거점 주요 상장사 Wilmar의 인도네시아 수사 진행. 팜유 수출 규제 리스크 모니터링 필요,,Singapore-listed Wilmar shares dive most in 6 years on Indonesia probe
+40,14602,SG,en,,2,,SG 거점 미국 수출 1/3 영향 가능. 환율·무역 정책 변화로 KB 거점 경영환경 악화 우려,,Potential Trump tariffs of 12.5% could hit one-third of Singapore exports to the US: MTI
+41,14692,SG,en,,2,,"SG 수출 1/3 영향, 반도체·의약품 제외 확인 필요. KB SG 거점 고객사 통상 리스크 평가 필수",,New Trump tariff of 12.5% would cover one-third of Singapore exports to the US: MTI
+42,14698,SG,en,,2,,인도네시아 통화 급락. KB 인도네시아 거점의 환위험·자금조달 영향 검토 필요,,Rupiah breaches key psychological level as market rout deepens
+43,51930,SG,en,,2,,미국 관세 정책 변화는 SG 거점의 무역·환율·투자 환경에 영향. KB 담당자 모니터링 필요,,Commentary: Trump’s tariff wall isn’t going anywhere
+44,30989,SG,en,,2,,중국 부동산 시장 악화는 SG 금융시장·환율·자본유출에 영향. KB SG 거점 리스크 모니터링 필요,,China home prices fall at faster pace in setback to revival
+45,35554,US,en,1,2,,Fed 의장 교체로 통화정책 방향 전환 가능성. KB US 거점의 금리·환율 전망 재검토 필요,,Five Takeaways From Kevin Warsh’s First Meeting as Fed Chairman - WSJ
+46,26059,US,en,1,2,,유가 변동성 지속는 KB 거점국 금리·환율·신용시장에 영향. 미-이란 합의도 불확실성 남음,,Oil shock 'far from over' as analysts warn of new Middle East risk premium
+47,8834,US,en,,2,,미국 연방준비제도 할인율 회의록. KB US 거점의 금리 정책 모니터링 필수 자료,,"Minutes of the Board's discount rate meeting on April 20 and 29, 2026"
+48,8835,US,en,,2,,Fed 정책 방향 확인. US 금리·통화정책 전환 신호 모니터링 필수,,"Minutes of the Federal Open Market Committee, April 28-29, 2026"
+49,567,US,en,,2,,US 관세 정책 변화로 GB 거점 수출 급감. KB 글로벌 거래·환헤지 영향,,UK exports to U.S. plunge by 25% after Trump's 'liberation day' tariffs blitz
+50,569,US,en,,2,,Fed 의장 교체로 인한 정책 방향 변화 가능성. KB US 거점의 금리·통화정책 영향 평가 필요,,"Inside the Fed: Powell vows he won't be a 'shadow chair,' but a Warsh clash will be tough to avoid"
+51,11289,VN,en,1,2,,VN 거점 통화 변동. 달러-동 환율 급변은 현지 자금조달·송금 비용에 직접 영향,,Dollar slips against dong
+52,857,CN,en,1,1,,중국 EV 제조사의 유럽 진출은 글로벌 트렌드이나 KB CN 거점의 직접 영향 제한적,,"As Chinese EV makers expand in Europe, are local automotive suppliers set to benefit?"
+53,8224,CN,en,1,1,,중국 증권사 자본조달 뉴스. KB 중국 거점 간접영향만 있음.,,CITIC Securities plans 16b yuan H-Share placement to boost intl expansion - China Daily
+54,20953,CN,en,0,1,,중동 지정학 긴장. CN 거점 간접영향. 단기 KB 액션 불필요.,,"Iranian parliament speaker vows to halt negotiation process, engage in direct confrontation if Israeli attacks on Lebanon continue - China Daily"
+55,7890,CN,en,0,1,,EU-중국 관계 배경 분석. CN 거점 정책 환경 이해에 참고.,,EU's strategic autonomy on a leash - China Daily
+56,16713,CN,en,0,1,,중국 AI 산업 트렌드 참고. KB 중국 거점 직접 영향 없음.,,BrainCo and Hangzhou's 'Six Little Dragons' drive Zhejiang's AI ambitions - China Daily
+57,6363,CN,en,,1,,중국 신에너지차 배터리 재활용 규제 강화. KB 중국 거점 간접 영향.,,China seeks to step up regulation of NEV battery recycling - People's Daily Online
+58,3862,CN,en,,1,,중국 해양거버넌스 포럼 개최. KB 해양금융·블루이코노미 전략 참고자료.,,"Intl participants highlight China’s key role in global marine governance at Xiamen forum, advancing marine conservation and blue economy - Global Times"
+59,68800,GB,en,,1,,영국 정치인 개인 평가. KB 거점 운영에 직접 영향 없음.,,Ed Miliband’s net zero diplomacy is toxic for Britain’s image in America - The Telegraph
+60,59783,GB,vi,,1,,명품 시장 약세는 배경 정보. KB GB 거점 직접 영향 없음.,,Hermès shares drop as investors fret over weak China luxury market - Financial Times
+61,64146,GB,en,,1,,한국 주식시장 일반 동향. GB 거점 직접영향 없음.,,South Korea’s president wanted a hot stock market. He got more than he bargained for - Financial Times
+62,64125,GB,en,,1,,런던거래소 ETF 상장폐지는 GB 금융시장 이슈지만 KB 직접 영향 제한적,,Amundi Asset Management: Delisting of 26 UCITS ETF Share Classes from London Stock Exchange - Financial Times
+63,20562,GLOBAL,en,1,1,,글로벌 VC 투자자 랭킹. KB 직접 거점 영향 없음. 배경 지식 수준.,,Forbes 2026 Midas List: Top Venture Capital Investors Ranked - Forbes
+64,10438,GLOBAL,en,1,1,,Intel AI칩 개발은 글로벌 IT 트렌드이나 KB 거점 국가 직접영향 없음,,Intel targets new AI data centre chip by year end
+65,1311,GLOBAL,en,0,1,,독일 내 중국 첩보 사건. KB 거점 직접 영향 없으나 지정학 배경 정보로 참고 가치,,German authorities arrest 2 on China high-tech espionage allegations
+66,329,GLOBAL,en,1,1,,BHP 기후공약 후퇴 이슈. KB 거점과 직접 관련 없는 광산업 ESG 리스크 배경정보,,Exclusive: Leaked documents show BHP’s climate backtrack - podcast
+67,19278,GLOBAL,en,0,1,,중동 지정학 긴장 고조이나 KB 거점(GB·US·HK·CN·JP·SG·IN·VN·MM·ID·KH)에 직접 영,,Middle East war live: Israel plans to strike Iran 'with force' once given green light
+68,19174,GLOBAL,en,1,1,,유가 변동성 모니터링 필요하나 KB 거점 직접영향 미미,,OPEC+ to boost oil production as ceasefire in Iran remains elusive
+69,21860,GLOBAL,en,,1,,중국 동물제품 수출 검역 정책. KB 거점 운영에 직접 영향 미미.,,Circular of the State Council Concerning the Quarantine Control System for Animal Products Leaving China for Trade Purpose | ADB’s Law and Policy Reform Program - Law and Policy Reform
+70,14409,HK,en,,1,,HK 거점 직접영향 없음. 한일 군사협력은 지역 지정학 배경정보,,South Korea and Japan eye military logistics pact. Should China be wary?
+71,19097,HK,en,,1,,미국-중국 외교 동향. HK 거점 직접영향 없음. 배경지식 수준.,,Trump urged Xi to help end Ukraine war; China’s tech sanctions list: SCMP’s 7 highlights
+72,871,HK,en,,1,,SpaceX 상장이 HK 유동성에 미치는 영향 제한적. 글로벌 투자자 분산 추세 배경정보.,,Liquidity drain from SpaceX’s mega listing unlikely to ripple into Hong Kong: JPMorgan
+73,37990,HK,en,,1,,HK 거점 IPO 시장 활성화 신호이나 KB 직접 영향 없음,,Apple supplier Lingyi seeks US$1.1 billion Hong Kong IPO to fund AI and robotics push
+74,747,HK,en,,1,,HK 민간 PE사의 중앙아시아 투자 전략. KB 직접 영향 없음.,,Private equity firm Templewater primed as Hong Kong moves to deepen Central Asia ties
+75,28889,ID,en,0,1,,G7 정치 이슈. ID 거점 직접영향 없음. 배경지식 수준.,,"France hosts G7 dominated by Trump, Iran - The Jakarta Post"
+76,36491,ID,en,0,1,,인도네시아 스트리밍 서비스 GoPay 생태계 확대. KB 직접 영향 없음.,,"Folago (IRSX) Masuk Ekosistem GoPay, Perluas Distribusi Streaming Piala Dunia 2026 - Bisnis.com"
+77,38383,ID,en,0,1,,인도네시아 관광도시 순위 변화. KB 거점 운영 환경 참고용 배경정보,,Jakarta ranks 53rd in World's Best Cities 2026 list
+78,24496,ID,en,0,1,,ILO 어업협약 비준은 인도네시아 노동정책 진전이나 ESG 컴플라이언스 배경 정보로 참고 가치 있음,,Indonesia to deposit ILO fishing convention ratification - ANTARA News
+79,14908,ID,en,0,1,,ID 전력화 진전은 배경정보. KB 금융사업 직접영향 미미.,,Indonesia's electrification rate reaches 99.83 percent in Q1 2026
+80,24585,ID,id,,1,,ID 거점 BRI의 QRIS 중국 확대는 참고사항. KB 직접영향 미미.,,"BRI Buka Akses QRIS di China, Belanja Cukup Scan dari Saldo Rupiah - Bisnis.com"
+81,49865,ID,id,,1,,인도네시아 쌀 생산 전망 하락. KB 거점 거시경제 배경정보로 참고 필요.,,"BPS Proyeksi Produksi Beras Turun 0,35% hingga Juli 2026 - Bisnis.com - Foto"
+82,58943,ID,id,,1,,인도네시아 가스 인프라 개발 진행 상황. KB 직접 영향 없음.,,"Pembangunan Pipa Gas Dusem Capai 32,3 Persen, Perkuat Ketahanan Energi - Kompas.com"
+83,36492,ID,id,,1,,인도네시아 개별 기업 주식 거래. KB 직접 영향 없음.,,"Prajogo Pangestu Borong 6,8 Juta Saham BREN - Bisnis.com"
+84,35432,IN,en,1,1,,글로벌 유가 추세 참고. IN 거점 직접영향 제한적.,,OECD oil stocks fall to lowest level since 1990: IEA
+85,29341,IN,en,0,1,,인도 주식지수 실시간 시세. KB 인도 거점 시장 모니터링 참고자료.,,Nifty Alpha 50 Live | NSE Nifty Alpha 50 Index Today - S&P CNX Nifty Alpha 50 - The Economic Times
+86,35307,IN,en,0,1,,G7 우크라이나·러시아 정책은 글로벌 맥락이나 IN 거점 직접영향 제한적,,"Trump says ‘I’m the boss’ at G7 as leaders back Ukraine, tighten stance on Russia"
+87,25083,IN,en,1,1,,인도 주식지수 선물 프리미엄 현상. KB 인도 거점 거시 배경 정보,,Nifty June futures trade at a premium - Business Standard
+88,4865,IN,en,0,1,,인도 주식시장 일일 뉴스. KB 인도 거점 배경 정보로 참고 가치 있음.,,"Share Market, Nifty, Sensex, NSE/BSE Live Updates, Stock Market Today - The Economic Times"
+89,11610,IN,en,1,1,,인도 개별주 단기 매매 추천. KB 거점 운영에 직접 영향 없음.,,Breakout stocks to buy or sell: Sumeet Bagadia recommends five shares to buy today — 1 June 2026
+90,20009,IN,en,1,1,,인도-러시아 FTA 협상은 KB인도 거점의 간접적 배경정보. 직접 영향 미미.,,Indian officials to visit Russia for talks on EAEU free trade deal
+91,11449,IN,en,0,1,,인도 거점 간접 영향. 중동 지정학 긴장 상황 배경 정보,,"‘Ignored over 20 warnings’: US fires Hellfire missile, ‘disables’ cargo ship bound for Iran"
+92,40555,IN,en,0,1,,인도 관광 트렌드. KB 거점 사업과 직접 연관 없음.,,Mountain bookings up 76% in June as urban Indians flock to hills: Report - Business Standard
+93,15273,JP,ja,0,1,,일본 복지정책 판례. KB 거점 운영에 직접 영향 없음.,,VOX POPULI: Supreme Court strikes down ‘victim-blaming’ welfare cuts - 朝日新聞
+94,8951,JP,en,,1,,일본 중앙은행 산하 연구기관 소개. KB 거점 운영에 직접 영향 없음.,,"Institute for Monetary and Economic Studies, Bank of Japan - imes.boj.or.jp"
+95,8952,JP,en,,1,,BOJ 학술회의 개최 공지. 직접 정책 변화 없으나 일본 금융정책 동향 파악용 배경정보,,"Opening Remarks at the 2026 BOJ-IMES Conference Hosted bt the Institute for Monetary and Economic Studies, Bank of Japan - boj.or.jp"
+96,4264,JP,ja,,1,,일본 주가지수 상승. KB JP 거점 시장 배경 정보로 참고 가치 있음.,,"Nikkei index ends above 65,000 for 1st time amid Mideast peace hopes - 毎日新聞"
+97,12762,JP,ja,,1,,JP 주식시장 일중 변동성. KB 거점 운영에 직접 영향 미미.,,"Tokyo stocks mixed in morning as tech issues rise, gains locked in - 毎日新聞"
+98,13725,KH,km,,1,,캄보디아 중앙은행 국제회의. KB 거점 운영에 직접 영향 없음.,,"The National Bank of Cambodia and Banque de France, co-hosted the 28th Conference of Central Bank Governors of French-Speaking Countries (Francophone) under the theme “Central Bank Autonomy in the Face of State and Public Expectation,” which too - ធនាគារជាតិ​ នៃកម្ពុជា"
+99,2548,KH,en,,1,,중국-미국 관세 협상은 글로벌 맥락이나 캄보디아 직접영향 제한적,,China To Work with US On Slashing Tariffs - Cambodianess
+100,2462,KH,en,,1,,캄보디아 현지 은행 브랜드 변경. KB 직접 영향 없음.,,Birth of a New Era: SBI LY HOUR Bank PLC Renamed to SBI Bank (Cambodia) PLC. - Phnom Penh Post
+101,64004,KH,en,,1,,SpaceX 공급망 이슈는 글로벌 우주산업 트렌드. KH 거점 직접영향 없음.,,SpaceX's supply chain clampdown and China's product power - Nikkei Asia
+102,50780,KH,en,,1,,미국 국내 정치 이슈. KH 거점 직접 영향 없음. 배경 지식 수준.,,Trump accuses China of massive US election data breach - Nikkei Asia
+103,50717,KH,en,,1,,미국-중국 AI 기술 제재 논의. KB 캄보디아 거점 직접영향 없음.,,US officials threaten to sanction Chinese AI startups after Moonshot release - Nikkei Asia
+104,46016,KH,en,,1,,KH 거점 관련 사이버범죄 트렌드 참고. 직접 영향은 제한적.,,Sri Lanka emerges as new online scam hub after Cambodia and Myanmar - Nikkei Asia
+105,17431,KH,en,,1,,중국 거버넌스 일반 분석. KB 캄보디아 거점 직접 영향 없음.,,Understanding China’s governance model in the 21st century - Khmer Times
+106,40784,KH,en,,1,,홍콩-광둥 베이 에어리어 발전 계획은 중장기 지역 경제 트렌드이나 캄보디아 거점에 직접 영향 미미,,Hong Kong pushes Beijing's bay area dream as it advances first 5-year plan - Nikkei Asia
+107,34034,MM,en,0,1,,중앙아시아-남아시아 기후·연결성 장기 트렌드. MM 거점 간접 영향.,,Climate Change and the Future of Central Asia-South Asia Connectivity - The Diplomat – Asia-Pacific
+108,30213,MM,en,,1,,"BOJ 정책회의는 JP 거점 관련이며, Min Aung Hlaing 방중은 MM 지정학 배경정보",,"BOJ policy meeting, G7 summit, Min Aung Hlaing visits China - Nikkei Asia"
+109,50809,MM,en,,1,,ASEAN 외교 이슈로 MM 거점 정치 배경 정보. KB 경영 직접영향 없음.,,Philippines’ Lazaro Dismisses Criticisms Over ASEAN’s ‘Informal Meeting’ With Myanmar FM - The Diplomat – Asia-Pacific
+110,34051,MM,en,,1,,미얀마 정치 상황 배경 정보. KB 미얀마 거점 운영에 직접 영향 없음.,,ASEAN Can Still Make a Difference in Myanmar - The Diplomat – Asia-Pacific
+111,42367,SG,en,,1,,"SK하이닉스 미국상장은 글로벌 투자자 접근성 개선이나, KB SG거점 직접영향 제한적",,SK Hynix’s US-listed shares soar to 51% premium over South Korean stock
+112,55965,SG,en,,1,,Mercedes 개별 기업 실적 이슈. SG 거점 간접 영향만 있음.,,Mercedes cuts revenue outlook as China luxury slump deepens - The Business Times
+113,55957,SG,en,,1,,SG 상장사 개별주 시황 정보. KB 직접 투자·거점 운영 영향 없음.,,"Stocks to watch: SIA, Keppel Reit, ST Engineering, DFI Retail, MLT, Hongkong Land, Clint - The Business Times"
+114,14519,US,en,1,1,,글로벌 원자재 거래사 실적 호재지만 KB US 거점 직접영향 제한적,,Trafigura Pays Record Dividend as Profit Hits $4 Billion - Bloomberg
+115,11907,US,en,1,1,,미국 주택보험 산업 구조적 이슈. KB 거점 직접영향 제한적,,The Home-Insurance Coin Flip: Nearly Half of Claims Result in Zero Payout - WSJ
+116,31585,VN,en,1,1,,VN 거점 관련 대형 인프라 프로젝트지만 KB 직접 영향 없음,,Sun Group joins forces with three global aviation leaders to develop 360-million-USD aircraft maintenance complex in Van Don
+117,15675,VN,en,1,1,,VN 휘발유·경유 가격 인하. KB 거점 운영비 절감 긍정적이나 직접 영향 제한적,,"Petrol, diesel prices fall in June 4 adjustment"
+118,40377,VN,en,1,1,,베트남 인프라 개발 트렌드. KB 베트남 거점 장기 사업환경 개선 신호지만 단기 직접영향 없음,,Hanoi to start construction on five key metro lines
+119,24838,VN,vi,,1,,캄보디아-베트남 외교 행사. KB VN 거점 배경정보로 유용하나 직접 영향 없음,,"Cambodian PM arrives in Hà Nội for official visit, ASEAN Future Forum 2026 - vietnamnews.vn"
+120,54703,VN,vi,,1,,VN 지방정부 SOE 디지털화 목표. KB 거점 운영에 직접 영향 미미.,,Bắc Ninh targets full digital governance at all SOEs by 2030 - vietnamnews.vn
+121,29033,VN,vi,,1,,베트남 지방 산업단지 개발 소식. KB 베트남 거점 장기 사업 환경 참고용.,,Phú Thọ establishes first three industrial clusters after provincial merger - vietnamnews.vn
+122,45065,VN,vi,,1,,베트남 지역 항만·물류 투자 수요 정보. KB 거점 운영에 직접 영향 없음.,,"Khánh Hòa calls for investment in ports, logistics - vietnamnews.vn"
+123,16689,CN,en,0,0,,중국 공무원 기술 경진대회는 KB 금융사업과 무관한 행정 이벤트,,China rolls out latest contest for civil affairs skills - China Daily - Global Edition
+124,1145,GLOBAL,en,1,0,,SpaceX IPO는 KB 거점 국가 금융시장·규제와 무관한 개별 기업 이슈,,Will SpaceX's IPO fund life on Mars — and a trillionaire?
+125,32454,GLOBAL,en,1,0,,우주항공 스타트업 M&A. KB 금융사업과 직접 무관.,,SpaceX Buys Cursor In Largest Startup Acquisition Ever At $60 Billion - Forbes
+126,20125,GLOBAL,en,0,0,,CNN 방송 자막 아카이브. KB 경영 관련 뉴스 없음.,,"CNN Transcripts for June 07, 2026 - CNN"
+127,11947,GLOBAL,en,0,0,,CNN 최신 영상 목록. KB 경영과 무관한 뉴스 포털 콘텐츠,,Latest Videos - CNN
+128,7554,GLOBAL,en,,0,,개별 인물의 주식 매매 추천. KB 거점·산업과 무관한 개인 투자 정보,,Here Are Donald Trump’s 10 Best Stock Trades Of 2026 - Forbes
+129,24994,ID,en,0,0,,소비자 전자제품 출시 뉴스. KB 금융사업과 무관.,,"Redmi Pad 2 9.7 Resmi Dijual di Indonesia, Harga Rp 2 Jutaan - detikInet"
+130,33482,ID,en,0,0,,개인 범죄 사건으로 KB 경영과 무관,,Polisi Ungkap Motif Pria Tusuk Tetangga hingga Tewas di Jakpus - detikNews
+131,13189,ID,en,0,0,,스포츠 경기 결과. KB 경영과 무관.,,Jerman Vs Finlandia: Die Mannschaft Pesta Gol 4-0 - detiksport
+132,13585,IN,en,0,0,,일반 금융뉴스 포털 소개. KB 거점 인도 관련 구체적 사건 없음.,,"Business News Live, Share Market News - Read Latest Finance News, IPO, Mutual Funds News - The Economic Times"
+133,25656,IN,en,0,0,,인도 부동산 개별 기업 주가. KB 인도 거점 사업과 무관한 일반 정보.,,Oberoi Realty Share Price - Business Standard
+134,35414,IN,en,1,0,,인도 소형 보석 회사 IPO. KB 인도 거점 사업과 무관한 개별 기업 공모.,,"Advit Jewels IPO GMP signals 46% listing pop: From issue size to key risks, here are 10 things to know from the RHP"
+135,13367,IN,en,0,0,,지역 은행 지점 정보 안내. KB 경영과 무관한 일반 정보.,,"Idbi Bank Gonda Branch IFSC Code, MICR Code, Address & Phone Number - The Economic Times"
+136,23459,IN,en,1,0,,소형주 개별 종목 주가 분석. KB 인도 거점 사업과 무관.,,800% returns in five years! Multibagger stock jumps 4% despite weak trends on Dalal Street
+137,9103,IN,en,1,0,,KB 거점과 무관한 소형 인도 기업의 개별 실적 정보,,Hemang Resources reports standalone net loss of Rs 0.56 crore in the March 2026 quarter - Business Standard
+138,20368,IN,en,0,0,,인도 케밥 회사의 영국 식품 위반 사건. KB 거점·사업과 무관.,,Kebab company fined over Rs 6.3 crore for selling lamb that was 'mostly skin and fat' in UK; given 4 year - The Times of India
+139,13586,IN,en,0,0,,인도 향신료 산업 일반 정보. KB 금융사업과 무관.,,Cardamom - The Economic Times
+140,13301,IN,en,0,0,,인도 의료시험 부정행위 사건. KB금융 거점 운영과 무관한 교육 이슈.,,NEET paper leak: Khan Sir raises questions over delay in punishment to culprits - The Economic Times
+141,25168,IN,en,0,0,,스포츠 뉴스로 KB 경영과 무관,,"Alexander Zverev has turned the page with French Open win, says tennis legend Boris Becker - The Economic Times"
+142,15234,JP,ja,0,0,,스포츠 뉴스로 KB 금융 경영과 무관,,Astros starter Tatsuya Imai and 2 relievers throw combined no-hitter against Rangers - 朝日新聞
+143,9268,KR,en,0,0,,국내 공영방송 이사 추천 절차로 KB 거점·사업과 무관,,"방미통위, 공영방송 이사 추천단체 확정…내달 후보 추천"
+144,6917,MM,en,0,0,,미얀마 거점과 무관한 쿠바-미국 외교 이슈,,"Under US pressure, Cuba appeals for international help - eng.mizzima.com"
+145,12091,US,en,0,0,,스포츠 뉴스. KB 금융·경영과 무관.,,Eintracht Frankfurt brings back Adi Hütter as coach on a 3-year deal - The Washington Post
+146,22760,US,en,0,0,,스포츠 엔터테인먼트 뉴스로 KB 금융 경영과 무관,,The Knicks Have Made a Courtside Chair NYC's Hottest Piece of Real Estate - Bloomberg.com
+147,17630,VN,vi,0,0,,스포츠 연예인 브랜드 앰버서더 발표. KB 경영과 무관.,,XbotGo names Julián Alvarez global brand ambassador ahead of 2026 World Cup - Vietnam Investment Review - VIR
+148,36917,VN,en,0,0,,체스 챔피언 관련 스포츠 뉴스로 KB 경영과 무관,,Tags World Chess Champion - Vietnam Investment Review - VIR
+149,4461,VN,vi,,0,,베트남 지방행정 개선 사안으로 KB 금융사업과 직접 무관,,Đà Nẵng removes bottlenecks to improve the effectiveness of grassroots governance - vietnamnews.vn
+150,8432,VN,vi,,0,,농산물 수출 정책. KB 금융사업과 직접 무관한 지역 산업 뉴스,,Bắc Ninh pushes lychee value chains to boost exports - vietnamnews.vn

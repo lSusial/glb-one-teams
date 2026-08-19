@@ -39,6 +39,12 @@ topics:
     label: { ko: "규제·리스크", en: "Regulation·Risk" }
     seeds: [regulation, supervision, compliance, sanction, fine, fraud,
             default, money laundering, aml, stress test, bank failure]
+  - code: GEO
+    ui: geo
+    label: { ko: "지정학·국가리스크", en: "Geopolitics" }
+    seeds: [political instability, coup, regime, capital control,
+            currency restriction, credit rating, sovereign risk,
+            geopolitical, expropriation, nationalization, foreign exchange control]
 
 # ── 멀티라벨 규칙 ────────────────────────────────────────────────
 # 한 기사에 복수 코드 허용. UI는 c:'esg risk' 처럼 소문자 ui 키를 공백 연결해

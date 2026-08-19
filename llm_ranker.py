@@ -56,8 +56,21 @@ def _system_prompt() -> str:
         '"kb_implication_en": "1-2 sentence KB-perspective implication/action, in English"}\n\n'
         "Choose topics ONLY from these codes (multiple allowed, max 3):\n"
         + taxonomy.prompt_reference()
-        + "\n\nai_score guide: direct impact on KB branch lending/risk/funding = 80+, "
-        "indirect/background = 40-60, weak = under 40.\n"
+        + "\n\nai_score rubric — assign the highest tier that applies:\n"
+        "75-100  DIRECT · IMMEDIATE: KB branch/subsidiary directly affected today.\n"
+        "  Examples: host-country central bank rate decision, capital controls imposed,\n"
+        "  KB entity under regulatory action/sanction, sovereign rating downgrade\n"
+        "  in a KB-presence market, FX convertibility crisis.\n"
+        "50-74   CONTEXTUAL · IMPORTANT: A KB banker at this hub should read this within the day.\n"
+        "  Examples: major currency move in a KB country (VND/IDR/MMK/CNY/INR…),\n"
+        "  Fed/BoJ/ECB rate path shift, oil shock affecting local inflation,\n"
+        "  geopolitical event in KB market (coup, sanctions risk, capital-flow restriction),\n"
+        "  banking-sector M&A or stress in KB geography, significant trade/tariff change.\n"
+        "25-49   BACKGROUND · CONTEXT: Useful context; no near-term KB action needed.\n"
+        "  Examples: global fintech/ESG trends, developed-market macro that only\n"
+        "  indirectly reaches KB geographies, general industry research.\n"
+        "0-24    NOISE / UNRELATED: Sports, entertainment, stock tips for unrelated sectors,\n"
+        "  crime gossip, local events with no macro or financial relevance to KB operations.\n"
         "Write kb_implication_en strictly within the article content; avoid unfounded speculation."
     )
 
