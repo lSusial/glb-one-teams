@@ -76,6 +76,16 @@ USER_AGENT = (
 )
 REQUEST_TIMEOUT_SEC   = 20
 MAX_PARALLEL_FETCH    = 8
-RETRY_DELAYS          = (1, 3)   # 실패 시 재시도 대기(초): 1회→1s, 2회→3s
+RETRY_DELAYS          = (1, 3)   # 일반 5xx/네트워크 오류 재시도 대기(초): 1회→1s, 2회→3s
 GNEWS_RESOLVE_WORKERS = 30       # Google News 리다이렉트 URL 해소 병렬 수
 GNEWS_RESOLVE_TIMEOUT = 5
+
+# 429/503("얌전한 클라이언트" 대응) 전용 — 일반 5xx보다 훨씬 길게 대기 + 지터.
+# Google이 결과 무시(bozo)가 아니라 명시적으로 차단 신호를 보내는 상태코드이므로 별도 취급.
+RATE_LIMIT_STATUSES     = (429, 503)
+RATE_LIMIT_RETRY_DELAYS = (5, 15, 45)   # 1회→5s, 2회→15s, 3회→45s (기본값, Retry-After 있으면 그 값 우선)
+RATE_LIMIT_JITTER_FRAC  = 0.3           # 대기시간에 0~30% 지터 추가(동시 재시도 몰림 방지)
+
+# Google News(news.google.com) 피드는 direct RSS와 분리된 저병렬 풀 + 요청 간 딜레이로 처리.
+GNEWS_FETCH_DELAY  = 1.5   # Google News 요청 사이 최소 간격(초, 지터 포함하면 실제로는 더 김)
+GNEWS_MAX_PARALLEL = 3     # Google News 전용 풀 병렬 수 (direct RSS는 MAX_PARALLEL_FETCH=8 유지)

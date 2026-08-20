@@ -14,9 +14,11 @@ import concurrent.futures as cf
 import dataclasses
 import hashlib
 import html as _html_mod
+import random
 import re as _re_mod
 import logging
 import sqlite3
+import threading
 import time
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -31,10 +33,15 @@ import config
 import db
 
 # 수집 튜닝 상수는 config.py 로 일원화 (이름 유지 — 본문 참조 호환).
-USER_AGENT          = config.USER_AGENT
-REQUEST_TIMEOUT_SEC = config.REQUEST_TIMEOUT_SEC
-MAX_PARALLEL_FETCH  = config.MAX_PARALLEL_FETCH
-RETRY_DELAYS        = config.RETRY_DELAYS
+USER_AGENT              = config.USER_AGENT
+REQUEST_TIMEOUT_SEC     = config.REQUEST_TIMEOUT_SEC
+MAX_PARALLEL_FETCH      = config.MAX_PARALLEL_FETCH
+RETRY_DELAYS            = config.RETRY_DELAYS
+RATE_LIMIT_STATUSES     = config.RATE_LIMIT_STATUSES
+RATE_LIMIT_RETRY_DELAYS = config.RATE_LIMIT_RETRY_DELAYS
+RATE_LIMIT_JITTER_FRAC  = config.RATE_LIMIT_JITTER_FRAC
+GNEWS_FETCH_DELAY       = config.GNEWS_FETCH_DELAY
+GNEWS_MAX_PARALLEL      = config.GNEWS_MAX_PARALLEL
 
 # certifi 번들을 명시적으로 사용 — macOS 시스템 Python의 SSL 인증서 미설치 회피.
 _CA_BUNDLE = certifi.where()
@@ -53,6 +60,8 @@ class FetchResult:
     new_count: int = 0
     dup_count: int = 0
     error: str | None = None
+    hits_429: int = 0    # 이번 fetch 중 429를 받은 횟수(최종 성공해도 기록 — 차단 조짐 관측용)
+    hits_503: int = 0    # 이번 fetch 중 503을 받은 횟수(위와 동일)
 
 
 # ---------------------------------------------------------------------------
@@ -169,6 +178,46 @@ def _content_hash(title: str, link: str) -> str:
     return hashlib.sha256(f"{title}\x1f{link}".encode("utf-8")).hexdigest()
 
 
+_GNEWS_HOST = "news.google.com"
+
+
+def _is_google_news(url: str) -> bool:
+    return _GNEWS_HOST in url
+
+
+def _parse_retry_after(value: str | None) -> float | None:
+    """Retry-After 헤더(초 또는 HTTP-date)를 대기 초로 변환. 파싱 실패 시 None."""
+    if not value:
+        return None
+    value = value.strip()
+    if value.isdigit():
+        return float(value)
+    try:
+        dt = parsedate_to_datetime(value)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return max(0.0, (dt - datetime.now(timezone.utc)).total_seconds())
+    except (TypeError, ValueError):
+        return None
+
+
+# Google News 전용 페이싱 — 풀 병렬 수(GNEWS_MAX_PARALLEL)와 무관하게
+# "요청 사이 최소 간격"을 보장한다 (여러 워커가 동시에 디스패치해도 이 락으로 직렬화).
+_gnews_pace_lock = threading.Lock()
+_gnews_last_dispatch = 0.0
+
+
+def _gnews_pace() -> None:
+    global _gnews_last_dispatch
+    target_gap = GNEWS_FETCH_DELAY * (1 + random.uniform(0, RATE_LIMIT_JITTER_FRAC))
+    with _gnews_pace_lock:
+        now = time.monotonic()
+        wait = _gnews_last_dispatch + target_gap - now
+        if wait > 0:
+            time.sleep(wait)
+        _gnews_last_dispatch = time.monotonic()
+
+
 def _parse_published(entry) -> str | None:
     """feedparser가 파싱한 published_parsed 또는 published 문자열에서 ISO 8601 추출."""
     if getattr(entry, "published_parsed", None):
@@ -195,11 +244,15 @@ def fetch_feed(feed_id: int, source_id: int, url: str) -> tuple[FetchResult, lis
         "Accept": "application/rss+xml, application/atom+xml, application/xml;q=0.9, */*;q=0.5",
         "Accept-Language": "en-US,en;q=0.9,ko;q=0.8",
     }
+    if _is_google_news(url):
+        _gnews_pace()  # 풀 병렬 수와 무관하게 요청 간 최소 간격 보장
+
     last_err: str | None = None
     resp = None
-    for attempt, delay in enumerate([-1] + list(RETRY_DELAYS)):
-        if delay >= 0:
-            time.sleep(delay)
+    hits_429 = hits_503 = 0
+    generic_tries = rate_limit_tries = 0
+
+    while True:
         try:
             resp = requests.get(
                 url,
@@ -213,30 +266,60 @@ def fetch_feed(feed_id: int, source_id: int, url: str) -> tuple[FetchResult, lis
             return FetchResult(feed_id, url, -1, error=f"ssl_error: {e!r}"[:200]), []
         except requests.exceptions.RequestException as e:
             last_err = f"request_error: {e!r}"[:200]
-            log.debug("retry %d/%d  %s  (%s)", attempt + 1, len(RETRY_DELAYS) + 1, url, last_err[:60])
+            if generic_tries >= len(RETRY_DELAYS):
+                return FetchResult(feed_id, url, -1, error=last_err,
+                                    hits_429=hits_429, hits_503=hits_503), []
+            log.debug("retry %d/%d  %s  (%s)", generic_tries + 1, len(RETRY_DELAYS), url, last_err[:60])
+            time.sleep(RETRY_DELAYS[generic_tries])
+            generic_tries += 1
+            continue
+
+        if resp.status_code in RATE_LIMIT_STATUSES:
+            if resp.status_code == 429:
+                hits_429 += 1
+            else:
+                hits_503 += 1
+            last_err = f"http {resp.status_code}"
+            if rate_limit_tries >= len(RATE_LIMIT_RETRY_DELAYS):
+                return FetchResult(feed_id, url, resp.status_code, error=last_err,
+                                    hits_429=hits_429, hits_503=hits_503), []
+            wait = _parse_retry_after(resp.headers.get("Retry-After"))
+            if wait is None:
+                base = RATE_LIMIT_RETRY_DELAYS[rate_limit_tries]
+                wait = base * (1 + random.uniform(0, RATE_LIMIT_JITTER_FRAC))
+            log.debug("rate-limit retry %d/%d  %s  wait=%.1fs (%s)",
+                       rate_limit_tries + 1, len(RATE_LIMIT_RETRY_DELAYS), url, wait, last_err)
+            time.sleep(wait)
+            rate_limit_tries += 1
             continue
 
         if resp.status_code >= 500:
             last_err = f"http {resp.status_code}"
-            log.debug("retry %d/%d  %s  (%s)", attempt + 1, len(RETRY_DELAYS) + 1, url, last_err)
+            if generic_tries >= len(RETRY_DELAYS):
+                return FetchResult(feed_id, url, resp.status_code, error=last_err,
+                                    hits_429=hits_429, hits_503=hits_503), []
+            log.debug("retry %d/%d  %s  (%s)", generic_tries + 1, len(RETRY_DELAYS), url, last_err)
+            time.sleep(RETRY_DELAYS[generic_tries])
+            generic_tries += 1
             continue
 
-        break  # 성공 또는 4xx(재시도 불필요)
-    else:
-        return FetchResult(feed_id, url, -1, error=last_err or "unknown"), []
+        break  # 성공 또는 재시도 불필요한 4xx
 
     status = resp.status_code
     if status >= 400:
-        return FetchResult(feed_id, url, status, error=f"http {status}"), []
+        return FetchResult(feed_id, url, status, error=f"http {status}",
+                            hits_429=hits_429, hits_503=hits_503), []
 
     try:
         parsed = feedparser.parse(resp.content)
     except Exception as e:  # noqa: BLE001
-        return FetchResult(feed_id, url, status, error=f"parse_exception: {e!r}"[:200]), []
+        return FetchResult(feed_id, url, status, error=f"parse_exception: {e!r}"[:200],
+                            hits_429=hits_429, hits_503=hits_503), []
 
     bozo_exc = parsed.get("bozo_exception")
     if not parsed.entries and bozo_exc:
-        return FetchResult(feed_id, url, status, error=f"bozo: {bozo_exc!r}"[:200]), []
+        return FetchResult(feed_id, url, status, error=f"bozo: {bozo_exc!r}"[:200],
+                            hits_429=hits_429, hits_503=hits_503), []
 
     fetched_now = datetime.now(timezone.utc).isoformat()
     rows = []
@@ -257,7 +340,7 @@ def fetch_feed(feed_id: int, source_id: int, url: str) -> tuple[FetchResult, lis
             _content_hash(title, link),
         ))
 
-    return FetchResult(feed_id, url, status), rows
+    return FetchResult(feed_id, url, status, hits_429=hits_429, hits_503=hits_503), rows
 
 
 # ---------------------------------------------------------------------------
@@ -339,24 +422,39 @@ def list_active_feeds(conn: sqlite3.Connection) -> list[sqlite3.Row]:
 
 
 def run_fetch_all(conn: sqlite3.Connection) -> int:
-    """전체 활성 피드를 병렬로 수집. 새 run_id 반환."""
+    """전체 활성 피드를 병렬로 수집. 새 run_id 반환.
+
+    direct RSS(MAX_PARALLEL_FETCH=8, 딜레이 없음)와 Google News
+    (GNEWS_MAX_PARALLEL=3 + 요청 간 딜레이)는 별도 풀로 분리해 Google 쪽
+    요청 패턴을 얌전하게 유지한다 — direct RSS 커버리지·속도는 그대로.
+    """
     cur = conn.cursor()
     cur.execute("INSERT INTO fetch_runs DEFAULT VALUES")
     run_id = cur.lastrowid
     conn.commit()
 
     feeds = list_active_feeds(conn)
-    log.info("fetching %d feeds", len(feeds))
+    direct_feeds = [f for f in feeds if not _is_google_news(f["feed_url"])]
+    gnews_feeds = [f for f in feeds if _is_google_news(f["feed_url"])]
+    log.info("fetching %d feeds (direct RSS %d, Google News %d)",
+              len(feeds), len(direct_feeds), len(gnews_feeds))
 
     total = ok = failed = new_total = dup_total = 0
+    hits_429_total = hits_503_total = 0
+    rate_limited_feeds = rate_limited_final_fail = 0
     new_article_ids: list[int] = []
     started = time.time()
 
-    with cf.ThreadPoolExecutor(max_workers=MAX_PARALLEL_FETCH) as pool:
+    with cf.ThreadPoolExecutor(max_workers=MAX_PARALLEL_FETCH) as direct_pool, \
+         cf.ThreadPoolExecutor(max_workers=GNEWS_MAX_PARALLEL) as gnews_pool:
         futures = {
-            pool.submit(fetch_feed, f["feed_id"], f["source_id"], f["feed_url"]): f
-            for f in feeds
+            direct_pool.submit(fetch_feed, f["feed_id"], f["source_id"], f["feed_url"]): f
+            for f in direct_feeds
         }
+        futures.update({
+            gnews_pool.submit(fetch_feed, f["feed_id"], f["source_id"], f["feed_url"]): f
+            for f in gnews_feeds
+        })
         for fut in cf.as_completed(futures):
             f = futures[fut]
             try:
@@ -366,6 +464,13 @@ def run_fetch_all(conn: sqlite3.Connection) -> int:
                 rows = []
 
             total += 1
+            if result.hits_429 or result.hits_503:
+                rate_limited_feeds += 1
+                hits_429_total += result.hits_429
+                hits_503_total += result.hits_503
+                if result.error and result.status in RATE_LIMIT_STATUSES:
+                    rate_limited_final_fail += 1
+
             if result.error:
                 failed += 1
                 log.warning("FAIL  %-3s  %s  (%s)",
@@ -414,6 +519,14 @@ def run_fetch_all(conn: sqlite3.Connection) -> int:
         (total, ok, failed, new_total, dup_total, run_id),
     )
     conn.commit()
+
+    if hits_429_total or hits_503_total:
+        log.info("rate-limit 신호: 429=%d회 503=%d회 (영향 피드 %d개, 최종실패 %d개) — "
+                  "빈발 시 GNEWS_FETCH_DELAY/GNEWS_MAX_PARALLEL 조정 고려",
+                  hits_429_total, hits_503_total, rate_limited_feeds, rate_limited_final_fail)
+    else:
+        log.info("rate-limit 신호: 없음 (429/503 미검출)")
+
     log.info("done in %.1fs — feeds %d (ok %d / fail %d), new %d, dup %d",
              time.time() - started, total, ok, failed, new_total, dup_total)
     return run_id

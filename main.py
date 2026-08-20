@@ -69,6 +69,20 @@ def cmd_init(_args):
     print(f"[init] db={config.DB_PATH}  sources={n_sources}  feeds={n_feeds}")
 
 
+def _rate_limit_summary(conn) -> str:
+    """직전 run 종료 시점의 media_source_feeds.last_status 기준 429/503 최종실패 건수."""
+    row = conn.execute(
+        """SELECT
+               SUM(CASE WHEN last_status = 429 THEN 1 ELSE 0 END) AS n429,
+               SUM(CASE WHEN last_status = 503 THEN 1 ELSE 0 END) AS n503
+           FROM media_source_feeds WHERE is_active = 1"""
+    ).fetchone()
+    n429, n503 = row["n429"] or 0, row["n503"] or 0
+    if not n429 and not n503:
+        return "rate-limit 최종실패=0"
+    return f"rate-limit 최종실패: 429={n429} 503={n503}"
+
+
 def cmd_fetch(_args):
     if not config.DB_PATH.exists():
         print("DB가 없습니다. 먼저 `python main.py init` 실행하세요.", file=sys.stderr)
@@ -79,7 +93,8 @@ def cmd_fetch(_args):
     run = conn.execute("SELECT * FROM fetch_runs WHERE run_id = ?", (run_id,)).fetchone()
     print(f"[fetch] run_id={run_id}  feeds={run['feeds_total']} "
           f"(ok={run['feeds_ok']} fail={run['feeds_failed']})  "
-          f"new={run['new_articles']} dup={run['dup_articles']}")
+          f"new={run['new_articles']} dup={run['dup_articles']}  "
+          f"[{_rate_limit_summary(conn)}]")
 
 
 def cmd_filter(args):
@@ -117,7 +132,7 @@ def cmd_run(_args):
     run_id = collector.run_fetch_all(conn)
     run = conn.execute("SELECT * FROM fetch_runs WHERE run_id = ?", (run_id,)).fetchone()
     print(f"   feeds={run['feeds_total']} (ok={run['feeds_ok']} fail={run['feeds_failed']})  "
-          f"new={run['new_articles']} dup={run['dup_articles']}")
+          f"new={run['new_articles']} dup={run['dup_articles']}  [{_rate_limit_summary(conn)}]")
 
     conn = db.open_conn()
 
