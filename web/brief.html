@@ -16,7 +16,7 @@
        font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:14px}
   .wrap{max-width:760px;margin:0 auto;padding:22px 16px 0}
   .mast{position:relative;overflow:hidden;border-radius:14px;padding:20px 24px 22px;color:#fff;background:linear-gradient(135deg,#5c574f 0%,#4a453e 100%)}
-  .mast .kbwm{position:absolute;right:-6px;top:-26px;font-size:132px;font-weight:900;color:rgba(255,255,255,.05);letter-spacing:-6px}
+  .mast .kbwm{position:absolute;right:-6px;top:-26px;font-size:132px;font-weight:900;color:rgba(255,255,255,.05);letter-spacing:-6px;pointer-events:none}
   .mast .row{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
   .mast .kb{font-weight:800}.mast .kb b{color:var(--kb-yellow)}.mast .kb span{color:#d9d4cc;font-weight:600;margin-left:4px}
   .mast .rt{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:12px;color:#cfc9c0}
@@ -96,7 +96,7 @@
 
   <section class="sec">
     <div class="sec-h"><div class="num">01</div>
-      <div><div class="tt" data-en="Today's Global Temperature">오늘의 글로벌 온도</div><div class="ds" data-en="Relative attention on key issues at a glance">주요 이슈의 상대적 주목도를 한눈에 봅니다</div></div>
+      <div><div class="tt" data-en="Today's Global Temperature">오늘의 글로벌 온도</div></div>
       <div class="rt" id="asof"></div></div>
     <div class="scale"><span>0°C</span><span class="mid" data-en="Issue attention">이슈 주목도</span><span>100°C</span></div>
     <div id="bars"></div>
@@ -105,7 +105,7 @@
 
   <section class="sec accent">
     <div class="sec-h"><div class="num" style="background:var(--kb-yellow);color:var(--kb-dark)">02</div>
-      <div><div class="tt" data-en="Today's Key News">오늘의 핵심 뉴스</div><div class="ds" data-en="Top AI-scored across all hubs · category badges · click for source">전 거점 AI 중요도 상위 · 국가무관 · 카테고리 배지 · 클릭 시 원문</div></div></div>
+      <div><div class="tt" data-en="Today's Key News">오늘의 핵심 뉴스</div></div></div>
     <div class="news" id="news"></div>
   </section>
 

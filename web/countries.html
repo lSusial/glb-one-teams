@@ -20,7 +20,7 @@
   /* ── 마스트헤드 ── */
   .mast{position:relative;overflow:hidden;border-radius:14px;padding:20px 24px 22px;color:#fff;
         background:linear-gradient(135deg,#5c574f 0%,#4a453e 100%)}
-  .mast .kbwm{position:absolute;right:-6px;top:-26px;font-size:132px;font-weight:900;color:rgba(255,255,255,.05);letter-spacing:-6px}
+  .mast .kbwm{position:absolute;right:-6px;top:-26px;font-size:132px;font-weight:900;color:rgba(255,255,255,.05);letter-spacing:-6px;pointer-events:none}
   .mast .row{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
   .mast .kb{font-weight:800}
   .mast .kb b{color:var(--kb-yellow)}
@@ -127,14 +127,14 @@
 
   <section class="sec" id="secCov">
     <div class="sec-h"><div class="num g">01</div>
-      <div><div class="tt" data-en="Hub Coverage">거점 커버리지</div><div class="ds" data-en="Click a hub to see that country's news">거점을 클릭해 해당 국가의 뉴스를 보세요</div></div>
+      <div><div class="tt" data-en="Hub Coverage">거점 커버리지</div></div>
       <div class="rt" id="covRt"></div></div>
     <div class="cov" id="cov"></div>
   </section>
 
   <section class="sec accent" id="secFeed">
     <div class="sec-h"><div class="num y">02</div>
-      <div><div class="tt" data-en="Local Press Feed">현지언론 피드</div><div class="ds" data-en="On hub select · daily AI briefing + articles by importance">거점 선택 시 · 전일+당일 AI 브리핑 + 기사(중요도순)</div></div></div>
+      <div><div class="tt" data-en="Local Press Feed">현지언론 피드</div></div></div>
     <div id="brief" class="brief" style="display:none"></div>
     <div class="fil" id="cats"></div>
     <div class="fil" style="margin-top:8px"><span class="sp"></span><span class="cnt" id="count"></span></div>
