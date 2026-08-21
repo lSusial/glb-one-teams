@@ -64,10 +64,7 @@ def run_prefilter(conn, provider: LLMProvider | None = None,
     provider = provider or get_provider("fast", use_batch=use_batch)
     limit = limit or config.PREFILTER_LIMIT
 
-    date_clause, params = "", []
-    if days:
-        date_clause = " AND substr(a.published_at, 1, 10) >= date('now', ?)"
-        params.append(f"-{int(days)} days")
+    date_clause, params = db.days_clause_now(days)
 
     rows = conn.execute(
         f"""

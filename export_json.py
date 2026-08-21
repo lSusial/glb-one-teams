@@ -23,11 +23,10 @@ log = logging.getLogger("export_json")
 
 _TEMPLATE = config.ROOT / "web" / "countries.html"   # 현지언론 화면 템플릿
 
-# 현지언론 화면 대상 거점 11개 (ID·KH 자회사의 IR/공시는 향후 자회사 화면, 현지언론 뉴스는 여기 포함)
-_FLAGS = {
-    "GB": "🇬🇧", "US": "🇺🇸", "JP": "🇯🇵", "HK": "🇭🇰", "SG": "🇸🇬",
-    "CN": "🇨🇳", "VN": "🇻🇳", "IN": "🇮🇳", "MM": "🇲🇲", "ID": "🇮🇩", "KH": "🇰🇭",
-}
+# 거점 국기 이모지. GLOBAL은 국가 화면(11개 거점)에서는 제외하고, 횡단 화면(Pulse 등)에서만 사용.
+_FLAGS_ALL = {"GB": "🇬🇧", "US": "🇺🇸", "JP": "🇯🇵", "HK": "🇭🇰", "SG": "🇸🇬", "CN": "🇨🇳",
+              "VN": "🇻🇳", "IN": "🇮🇳", "MM": "🇲🇲", "ID": "🇮🇩", "KH": "🇰🇭", "GLOBAL": "🌐"}
+_FLAGS = {cc: f for cc, f in _FLAGS_ALL.items() if cc != "GLOBAL"}
 
 
 def _snapshot_date(date: str | None = None) -> str:
@@ -49,6 +48,18 @@ def _write_json(name: str, payload: dict) -> None:
         dates.append(date)
         dates.sort(reverse=True)
         idx.write_text(json.dumps(dates, ensure_ascii=False), encoding="utf-8")
+
+
+def _inject_html(template, tag_id: str, out_name: str, payload: dict) -> None:
+    """템플릿(web/*.html)의 <script id="{tag_id}">null</script>에 payload를 주입해
+    자기완결 HTML(data/export/{out_name}.html)로 저장 — 오프라인 열람/Pages 배포 겸용."""
+    if not template.exists():
+        return
+    data_js = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
+    html = template.read_text(encoding="utf-8").replace(
+        f'<script id="{tag_id}" type="application/json">null</script>',
+        f'<script id="{tag_id}" type="application/json">{data_js}</script>')
+    (config.EXPORT_DIR / f"{out_name}.html").write_text(html, encoding="utf-8")
 
 
 def _ensure_ai_columns(conn) -> None:
@@ -172,13 +183,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     _write_json("countries", payload)
     path = config.EXPORT_DIR / "countries.json"
 
-    # 자기완결 HTML (템플릿에 데이터 주입 — 오프라인 열람 / Pages 배포 겸용)
-    if _TEMPLATE.exists():
-        data_js = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
-        html = _TEMPLATE.read_text(encoding="utf-8").replace(
-            '<script id="countries-data" type="application/json">null</script>',
-            f'<script id="countries-data" type="application/json">{data_js}</script>')
-        (config.EXPORT_DIR / "countries.html").write_text(html, encoding="utf-8")
+    _inject_html(_TEMPLATE, "countries-data", "countries", payload)
 
     log.info("countries.json 작성 — 국가=%d  ACTIVE 기사=%d  → %s", len(countries), total, path)
     return {"countries": len(countries), "articles": total, "path": str(path)}
@@ -230,17 +235,9 @@ def _compute_pulse(conn, days: int | None = None) -> list[dict]:
     return cats
 
 
-_FLAGS_ALL = {"GB":"🇬🇧","US":"🇺🇸","JP":"🇯🇵","HK":"🇭🇰","SG":"🇸🇬","CN":"🇨🇳",
-              "VN":"🇻🇳","IN":"🇮🇳","MM":"🇲🇲","ID":"🇮🇩","KH":"🇰🇭","GLOBAL":"🌐"}
-
-
 def _date_clause(days, alias="a"):
     """최신 데이터일 기준 최근 N일 창 (스냅샷·실시간 모두 안전). days 없으면 전체."""
-    if not days:
-        return "", []
-    p = (alias + ".") if alias else ""
-    anchor = "(SELECT MAX(substr(published_at,1,10)) FROM articles_raw)"
-    return f" AND substr({p}published_at, 1, 10) >= date({anchor}, ?)", [f"-{int(days)} days"]
+    return db.days_clause_data(days, alias)
 
 
 def _compute_key_flows(conn, days: int | None = None, limit: int = 6) -> list[dict]:
@@ -340,12 +337,7 @@ def export_pulse(conn, days: int | None = None) -> dict:
     }
     _write_json("pulse", payload)
 
-    if _PULSE_TEMPLATE.exists():
-        data_js = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
-        html = _PULSE_TEMPLATE.read_text(encoding="utf-8").replace(
-            '<script id="pulse-data" type="application/json">null</script>',
-            f'<script id="pulse-data" type="application/json">{data_js}</script>')
-        (config.EXPORT_DIR / "brief.html").write_text(html, encoding="utf-8")
+    _inject_html(_PULSE_TEMPLATE, "pulse-data", "brief", payload)
 
     hottest = max(payload["categories"], key=lambda c: c["temp"], default=None)
     log.info("pulse.json 작성 — 카테고리=%d  최고=%s", len(payload["categories"]),
@@ -411,134 +403,9 @@ def export_weekly(conn) -> dict:
         "countries": _weekly_briefs(conn),
     }
     _write_json("weekly", payload)
-    if _WEEKLY_TEMPLATE.exists():
-        data_js = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
-        html = _WEEKLY_TEMPLATE.read_text(encoding="utf-8").replace(
-            '<script id="weekly-data" type="application/json">null</script>',
-            f'<script id="weekly-data" type="application/json">{data_js}</script>')
-        (config.EXPORT_DIR / "weekly.html").write_text(html, encoding="utf-8")
+    _inject_html(_WEEKLY_TEMPLATE, "weekly-data", "weekly", payload)
     log.info("weekly.json 작성 — 국가=%d", len(payload["countries"]))
     return {"countries": len(payload["countries"]), "path": str(config.EXPORT_DIR / "weekly.json")}
-
-
-# ---------------------------------------------------------------------------
-# Key-man 인사·리더십 동향 (뉴스 기반 키워드 추출) — [폐지] 주간 브리핑으로 대체
-# ---------------------------------------------------------------------------
-_KEYMAN_TEMPLATE = config.ROOT / "web" / "keyman.html"
-
-# 인사·리더십 이동 신호 (제목+원문 요약 대상) — 정밀 우선
-_KEYMAN_KW = [
-    "appoint", "sworn in", "to succeed", "successor", "reshuffle",
-    "steps down", "stepping down", "resign",
-    "nominee", "nominated", "nomination",
-    "new chair", "new chairman", "new governor", "new ceo", "new head", "new chief executive",
-    "incoming chair", "incoming governor", "outgoing chair", "outgoing governor",
-    "as chair", "as governor", "as the new", "named as",
-    "취임", "사임", "임명", "내정", "후임", "선임", "인사이동",
-]
-
-# 단어 경계 매칭 — 'appoint'가 'disappoint'에 걸리는 부분문자열 오탐 방지
-_KEYMAN_RE = re.compile(
-    "|".join((r"\b" + re.escape(k) if k.isascii() else re.escape(k)) for k in _KEYMAN_KW),
-    re.IGNORECASE,
-)
-
-
-def _compute_keyman(conn, days: int | None = None, limit: int = 24) -> list[dict]:
-    """랭킹 기사 중 인사·리더십 이동 키워드가 걸린 기사 = Key-man 동향."""
-    dc, params = _date_clause(days)
-    rows = conn.execute(
-        f"""SELECT a.ai_score, a.title, a.summary, a.summary_ko, a.kb_implication,
-                   a.summary_en, a.kb_implication_en, a.topics, a.link, a.published_at,
-                   m.primary_country_code cc, m.media_name
-            FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
-            WHERE a.ai_score IS NOT NULL AND a.duplicate_of IS NULL
-              AND a.ai_model LIKE '%:%'{dc}
-            ORDER BY a.ai_score DESC""",
-        params,
-    ).fetchall()
-    out = []
-    for r in rows:
-        hay = (r["title"] or "") + " " + (r["summary"] or "")
-        if _KEYMAN_RE.search(hay):
-            codes = [c for c in (r["topics"] or "").split(",") if c]
-            out.append(dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""), src=r["media_name"],
-                            d=(r["published_at"] or "")[:10], t=r["title"], q=r["summary_ko"] or "",
-                            k=r["kb_implication"] or "", q_en=r["summary_en"] or "", k_en=r["kb_implication_en"] or "",
-                            c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"]))
-            if len(out) >= limit:
-                break
-    return out
-
-
-def export_keyman(conn, days: int | None = None) -> dict:
-    """keyman.json + keyman.html(Key-man 동향 화면) 생성."""
-    if days is None: days = 7          # 인사·리더십은 주간 흐름
-    config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "snapshot_date": _snapshot_date(),
-        "days": days,
-        "articles": _compute_keyman(conn, days=days),
-    }
-    _write_json("keyman", payload)
-    if _KEYMAN_TEMPLATE.exists():
-        data_js = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
-        html = _KEYMAN_TEMPLATE.read_text(encoding="utf-8").replace(
-            '<script id="keyman-data" type="application/json">null</script>',
-            f'<script id="keyman-data" type="application/json">{data_js}</script>')
-        (config.EXPORT_DIR / "keyman.html").write_text(html, encoding="utf-8")
-    log.info("keyman.json 작성 — 기사=%d", len(payload["articles"]))
-    return {"articles": len(payload["articles"]), "path": str(config.EXPORT_DIR / "keyman.json")}
-
-
-# ---------------------------------------------------------------------------
-# 규제·정책 동향 (taxonomy RISK 주제 = 규제·리스크, 거점 횡단)
-# ---------------------------------------------------------------------------
-_REG_TEMPLATE = config.ROOT / "web" / "regulations.html"
-
-
-def _compute_regulations(conn, days: int | None = None, limit: int = 24) -> list[dict]:
-    """RISK(규제·리스크) 주제로 태깅된 기사를 거점 횡단 중요도 순으로."""
-    dc, params = _date_clause(days)
-    rows = conn.execute(
-        f"""SELECT a.ai_score, a.title, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
-                   a.topics, a.link, a.published_at, m.primary_country_code cc, m.media_name
-            FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
-            WHERE a.ai_score IS NOT NULL AND a.duplicate_of IS NULL
-              AND a.ai_model LIKE '%:%' AND a.topics LIKE '%RISK%'{dc}
-            ORDER BY a.ai_score DESC LIMIT ?""",
-        (*params, limit),
-    ).fetchall()
-    out = []
-    for r in rows:
-        codes = [c for c in (r["topics"] or "").split(",") if c]
-        out.append(dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""), src=r["media_name"],
-                        d=(r["published_at"] or "")[:10], t=r["title"], q=r["summary_ko"] or "",
-                        k=r["kb_implication"] or "", q_en=r["summary_en"] or "", k_en=r["kb_implication_en"] or "",
-                        c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"]))
-    return out
-
-
-def export_regulations(conn, days: int | None = None) -> dict:
-    """regulations.json + regulations.html(규제·정책 화면) 생성."""
-    if days is None: days = 30         # 규제·정책은 월간 흐름
-    config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "snapshot_date": _snapshot_date(),
-        "days": days,
-        "articles": _compute_regulations(conn, days=days),
-    }
-    _write_json("regulations", payload)
-    if _REG_TEMPLATE.exists():
-        data_js = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
-        html = _REG_TEMPLATE.read_text(encoding="utf-8").replace(
-            '<script id="reg-data" type="application/json">null</script>',
-            f'<script id="reg-data" type="application/json">{data_js}</script>')
-        (config.EXPORT_DIR / "regulations.html").write_text(html, encoding="utf-8")
-    log.info("regulations.json 작성 — 기사=%d", len(payload["articles"]))
-    return {"articles": len(payload["articles"]), "path": str(config.EXPORT_DIR / "regulations.json")}
 
 
 # ---------------------------------------------------------------------------
@@ -608,11 +475,6 @@ def export_topics(conn, days: int | None = None) -> dict:
         "categories": cats,
     }
     _write_json("topics", payload)
-    if _TOPICS_TEMPLATE.exists():
-        data_js = json.dumps(payload, ensure_ascii=False).replace("<", "\\u003c")
-        html = _TOPICS_TEMPLATE.read_text(encoding="utf-8").replace(
-            '<script id="topics-data" type="application/json">null</script>',
-            f'<script id="topics-data" type="application/json">{data_js}</script>')
-        (config.EXPORT_DIR / "topics.html").write_text(html, encoding="utf-8")
+    _inject_html(_TOPICS_TEMPLATE, "topics-data", "topics", payload)
     log.info("topics.json 작성 — 카테고리=%d", len(cats))
     return {"categories": len(cats), "path": str(config.EXPORT_DIR / "topics.json")}

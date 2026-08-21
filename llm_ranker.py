@@ -88,10 +88,7 @@ def run_rank(conn, provider: LLMProvider | None = None,
     limit = limit or config.RANK_LIMIT
     system = _system_prompt()
 
-    date_clause, params = "", []
-    if days:
-        date_clause = " AND substr(a.published_at, 1, 10) >= date('now', ?)"
-        params.append(f"-{int(days)} days")
+    date_clause, params = db.days_clause_now(days)
 
     rows = conn.execute(
         f"""

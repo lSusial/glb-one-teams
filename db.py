@@ -28,6 +28,31 @@ def open_conn(db_path: Path | str | None = None) -> sqlite3.Connection:
     return conn
 
 
+def days_clause_now(days: int | None, alias: str = "a") -> tuple[str, list]:
+    """최근 N일 창(SQLite 서버 시각 'now' 기준) SQL 절. days 없으면 전체(빈 절).
+
+    수집 파이프라인(prefilter/ranker/translate/fulltext)에서 사용 — 실행 시점 기준
+    최신 N일 백로그만 처리해 비용을 절감한다. alias="" 이면 컬럼에 접두사를 붙이지 않는다.
+    """
+    if not days:
+        return "", []
+    p = f"{alias}." if alias else ""
+    return f" AND substr({p}published_at, 1, 10) >= date('now', ?)", [f"-{int(days)} days"]
+
+
+def days_clause_data(days: int | None, alias: str = "a") -> tuple[str, list]:
+    """최근 N일 창(DB 내 최신 게시일 기준) SQL 절. days 없으면 전체(빈 절).
+
+    export/briefing에서 사용 — 수집이 지연돼도 "최근 N일"이 빈 결과가 되지 않도록
+    실행 시각이 아니라 데이터 자체의 최신 게시일을 기준으로 삼는다(스냅샷 재생성에도 안전).
+    """
+    if not days:
+        return "", []
+    p = f"{alias}." if alias else ""
+    anchor = "(SELECT MAX(substr(published_at, 1, 10)) FROM articles_raw)"
+    return f" AND substr({p}published_at, 1, 10) >= date({anchor}, ?)", [f"-{int(days)} days"]
+
+
 def table_columns(conn: sqlite3.Connection, table: str = "articles_raw") -> set[str]:
     return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
 

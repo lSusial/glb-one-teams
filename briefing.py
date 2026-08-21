@@ -14,6 +14,7 @@ import logging
 from datetime import date
 
 import config
+import db
 import kb_network
 from llm_provider import LLMProvider, get_provider
 
@@ -107,11 +108,7 @@ def run_briefing(
     ccs = countries or _target_countries(conn)
     system = _SYSTEM_DAILY if daily else _SYSTEM
 
-    dc, dp = "", []
-    if days:
-        anchor = "(SELECT MAX(substr(published_at,1,10)) FROM articles_raw)"
-        dc = f" AND substr(a.published_at,1,10) >= date({anchor}, ?)"
-        dp = [f"-{int(days)} days"]
+    dc, dp = db.days_clause_data(days)
 
     # 국가별 기사 수집 → 요청 일괄 구성(배치 제출) → custom_id=cc 로 결과 수거
     stats = dict(countries=0, written=0)
@@ -138,7 +135,9 @@ def run_briefing(
             for a in arts
         )
         user = f"국가: {cc} ({kb_network.context_for(cc)})\n기사 목록:\n{bullets}"
-        requests.append((cc, system, user, 900))
+        # weekly는 한/영 요약+이슈 3~4개+전망+키워드까지 daily보다 필드가 훨씬 많아
+        # 900으로는 잘려서 JSON 파싱이 깨진다(생성 도중 max_tokens 도달) — 여유를 둔다.
+        requests.append((cc, system, user, 900 if daily else 2200))
         meta[cc] = arts
 
     results = provider.complete_json_batch(requests) if requests else {}

@@ -502,8 +502,9 @@ def run_fetch_all(conn: sqlite3.Connection) -> int:
                 (result.status, result.error, result.feed_id),
             )
             conn.commit()
-            log.info("OK    %-3s  new=%-3d dup=%-3d  %s",
-                     result.status, new_count, dup_count, result.feed_url)
+            if not result.error:
+                log.info("OK    %-3s  new=%-3d dup=%-3d  %s",
+                         result.status, new_count, dup_count, result.feed_url)
 
     resolve_google_news_links(conn, new_article_ids)
 

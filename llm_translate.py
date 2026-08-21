@@ -64,10 +64,7 @@ def run_translate(conn, provider: LLMProvider | None = None,
     provider = provider or get_provider("fast", use_batch=use_batch)   # 저비용(Haiku)
     limit = limit or 200
 
-    date_clause, params = "", []
-    if days:
-        date_clause = " AND substr(published_at, 1, 10) >= date('now', ?)"
-        params.append(f"-{int(days)} days")
+    date_clause, params = db.days_clause_now(days, alias="")
 
     rows = conn.execute(
         f"""

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import datetime, timezone
 
 import config
 import db
@@ -78,7 +79,6 @@ def build_admin(conn) -> dict:
             ORDER BY a.fetched_at DESC LIMIT ?""", (RECENT_LIMIT,))
     ]
 
-    from datetime import datetime, timezone
     return dict(
         generated_at=datetime.now(timezone.utc).isoformat(),
         overview=overview, countries=countries, sources=sources, articles=articles,

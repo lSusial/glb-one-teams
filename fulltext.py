@@ -94,10 +94,7 @@ def run_fulltext(conn, limit: int | None = None, days: int | None = None,
     limit = limit or config.FULLTEXT_LIMIT
     workers = workers or config.FULLTEXT_WORKERS
 
-    date_clause, params = "", []
-    if days:
-        date_clause = " AND substr(a.published_at, 1, 10) >= date('now', ?)"
-        params.append(f"-{int(days)} days")
+    date_clause, params = db.days_clause_now(days)
 
     rows = conn.execute(
         f"""

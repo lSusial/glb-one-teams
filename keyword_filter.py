@@ -51,10 +51,6 @@ BODY_ONLY_THRESHOLD  =  5   # 제목 금융 키워드 없이 본문만 히트 �
 # 중복 탐지
 DEDUP_THRESHOLD      = 0.75  # 제목 유사도 임계값 (0.60은 "rate hike" vs "rate hold" 같은 다른 기사도 합침)
 
-# 레거시 호환 (report 등에서 참조)
-FINANCE_SCORE  = FINANCE_SCORE_BODY
-COUNTRY_SCORE  = COUNTRY_SCORE_BODY
-
 # ---------------------------------------------------------------------------
 # 글로벌 카테고리 코드 (리포트용)
 # ---------------------------------------------------------------------------
@@ -484,6 +480,25 @@ def _first_match(haystack: str, keywords: list[str]) -> str | None:
     return None
 
 
+def _score_countries(title_text: str, body_text: str, kw_map: dict) -> tuple[int, str | None]:
+    """국가 키워드 매칭(국가당 1회, 제목 우선) — 한국어/영문 분기에서 공통으로 쓰는 로직.
+
+    Returns: (합산 점수, 첫 히트 국가의 reason 문자열 또는 None)
+    """
+    score = 0
+    first_reason: str | None = None
+    for country, kws in kw_map.items():
+        if _first_match(title_text, kws):
+            score += COUNTRY_SCORE_TITLE
+            if first_reason is None:
+                first_reason = f"country_title:{country}"
+        elif _first_match(body_text, kws):
+            score += COUNTRY_SCORE_BODY
+            if first_reason is None:
+                first_reason = f"country_body:{country}"
+    return score, first_reason
+
+
 # ---------------------------------------------------------------------------
 # 핵심 필터 함수 — 제목/본문 분리 점수제 (v3)
 # ---------------------------------------------------------------------------
@@ -526,15 +541,10 @@ def _apply_keyword_filter(
                 top_reason = f"ko_fin_body:{fin_b}"
 
         # ── 한국어 국가 키워드 (국가당 1회) ──────────────────
-        for country, kws in KOREAN_COUNTRY_KEYWORDS.items():
-            if _first_match(title_text, kws):
-                score += COUNTRY_SCORE_TITLE
-                if top_reason is None:
-                    top_reason = f"country_title:{country}"
-            elif _first_match(body_text, kws):
-                score += COUNTRY_SCORE_BODY
-                if top_reason is None:
-                    top_reason = f"country_body:{country}"
+        c_score, c_reason = _score_countries(title_text, body_text, KOREAN_COUNTRY_KEYWORDS)
+        score += c_score
+        if top_reason is None:
+            top_reason = c_reason
 
     else:
         # ── 영문/기타 금융 키워드 ─────────────────────────────
@@ -578,15 +588,10 @@ def _apply_keyword_filter(
                         top_reason = f"vi_fin_body:{vi_b}"
 
         # ── 국가 키워드 (국가당 1회) ──────────────────────────
-        for country, kws in COUNTRY_KEYWORDS.items():
-            if _first_match(title_text, kws):
-                score += COUNTRY_SCORE_TITLE
-                if top_reason is None:
-                    top_reason = f"country_title:{country}"
-            elif _first_match(body_text, kws):
-                score += COUNTRY_SCORE_BODY
-                if top_reason is None:
-                    top_reason = f"country_body:{country}"
+        c_score, c_reason = _score_countries(title_text, body_text, COUNTRY_KEYWORDS)
+        score += c_score
+        if top_reason is None:
+            top_reason = c_reason
 
     # ── 판정 ─────────────────────────────────────────────────
     # 제목에 금융 키워드가 없으면(body-only) 더 높은 기준 적용 → 오탐 감소
