@@ -112,11 +112,13 @@
   cov.innerHTML=cos.map(c=>`<span class="cc" data-cc="${c.cc}"><span>${c.flag||''}</span>${NAMES[c.cc]||c.cc}</span>`).join('');
   cov.onclick=e=>{const el=e.target.closest('.cc');if(!el)return;fCC=(fCC===el.dataset.cc?'':el.dataset.cc);render();};
 
+  const mdSlash=s=>String(s||'').slice(5).replace('-','/');
   function card(c){
     const iss=ti(c), kw=(c.keywords||[]);
+    const range=(c.week_start&&c.week_end)?`${mdSlash(c.week_start)} ~ ${mdSlash(c.week_end)}`:'';
     return `<div class="wk">
       <div class="wh"><span class="flag">${c.flag||''}</span> <b>${NAMES[c.cc]||c.cc}</b>
-        <span class="meta">${c.n!=null?c.n+(EN?' articles · ':'건 · '):''}${esc(c.date||'')}</span>
+        <span class="meta">${esc(range)}</span>
         ${c.key_stat?`<span class="stat">${esc(c.key_stat)}</span>`:''}</div>
       <div class="wsum">${esc(ts(c))}</div>
       ${iss.length?`<div class="blk"><div class="lbl">${LANG==='en'?'KEY ISSUES':'핵심 이슈'}</div>

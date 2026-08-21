@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date
+from datetime import date, timedelta
 
 import config
 import db
@@ -67,7 +67,7 @@ def ensure_table(conn) -> None:
     conn.execute(_CREATE)
     # 구 DB 호환: 일일 브리핑 영어본 컬럼 보강
     cols = [r[1] for r in conn.execute("PRAGMA table_info(country_briefings)")]
-    for col in ("summary_en", "issues_en", "outlook_en"):   # 이중언어 컬럼 보강
+    for col in ("summary_en", "issues_en", "outlook_en", "week_start", "week_end"):
         if col not in cols:
             conn.execute(f"ALTER TABLE country_briefings ADD COLUMN {col} TEXT")
     conn.commit()
@@ -83,6 +83,20 @@ def _target_countries(conn) -> list[str]:
     ]
 
 
+def _last_completed_week(today: date | None = None) -> tuple[str, str]:
+    """직전에 완료된 월~일 주(월요일 시작) 범위를 (시작일, 종료일) ISO 문자열로 반환.
+
+    스케줄이 월요일에 못 돌고 늦게(예: 수요일에) 실행돼도 같은 주를 가리키도록
+    "오늘이 속한 주의 월요일"을 기준으로 그 직전 주를 계산한다(고정 달력 주 —
+    실행 시각 기준 상대창(days_clause_*)과 달리 실행이 늦어져도 밀리지 않음).
+    """
+    today = today or date.today()
+    this_monday = today - timedelta(days=today.weekday())  # weekday(): 월=0
+    week_start = this_monday - timedelta(days=7)
+    week_end = this_monday - timedelta(days=1)
+    return week_start.isoformat(), week_end.isoformat()
+
+
 def run_briefing(
     conn,
     provider: LLMProvider | None = None,
@@ -96,19 +110,30 @@ def run_briefing(
 
     briefing_type='daily': 현지언론 화면 상단용. 전일+당일(days 기본 1) 기사를
       4~5문장 한/영 동시로 종합해 summary·summary_en 에 저장.
-    days: 지정 시 최근 N일 게시분만(데이터 기준 앵커). daily 는 미지정 시 1.
+    briefing_type='weekly': days 미지정 시 "직전에 완료된 월~일 주"를 고정 사용
+      (매주 월요일 실행 전제 — 스케줄이 늦게 돌아도 같은 주를 요약).
+      days를 명시하면 그 대신 실행 시점 기준 최근 N일(상대창)을 쓴다.
     use_batch: None=배치(50% 할인, 기본) / False=동기.
     """
     ensure_table(conn)
     daily = (briefing_type == "daily")
-    if daily and days is None:
-        days = 1  # 전일+당일
+    week_start = week_end = None
+    if daily:
+        if days is None:
+            days = 1  # 전일+당일
+        dc, dp = db.days_clause_data(days)
+    elif days is not None:
+        dc, dp = db.days_clause_data(days)
+        week_end = (date.today() - timedelta(days=1)).isoformat()
+        week_start = (date.today() - timedelta(days=days)).isoformat()
+    else:
+        week_start, week_end = _last_completed_week()
+        dc, dp = db.date_range_clause(week_start, week_end)
+
     provider = provider or get_provider("smart", use_batch=use_batch)
     bdate = briefing_date or date.today().isoformat()
     ccs = countries or _target_countries(conn)
     system = _SYSTEM_DAILY if daily else _SYSTEM
-
-    dc, dp = db.days_clause_data(days)
 
     # 국가별 기사 수집 → 요청 일괄 구성(배치 제출) → custom_id=cc 로 결과 수거
     stats = dict(countries=0, written=0)
@@ -166,8 +191,8 @@ def run_briefing(
             INSERT INTO country_briefings
                 (cc, briefing_date, briefing_type, generated_at, summary, summary_en,
                  issues, issues_en, outlook, outlook_en, keywords, key_stat,
-                 model, article_count, source_articles)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 model, article_count, source_articles, week_start, week_end)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(cc, briefing_date, briefing_type) DO UPDATE SET
                 generated_at    = CURRENT_TIMESTAMP,
                 summary         = excluded.summary,
@@ -180,13 +205,16 @@ def run_briefing(
                 key_stat        = excluded.key_stat,
                 model           = excluded.model,
                 article_count   = excluded.article_count,
-                source_articles = excluded.source_articles
+                source_articles = excluded.source_articles,
+                week_start      = excluded.week_start,
+                week_end        = excluded.week_end
             """,
             (
                 cc, bdate, briefing_type, summary, summary_en,
                 issues, issues_en, outlook, outlook_en, keywords, key_stat,
                 provider.model_id, len(arts),
                 json.dumps([a["link"] for a in arts], ensure_ascii=False),
+                week_start, week_end,
             ),
         )
         stats["written"] += 1

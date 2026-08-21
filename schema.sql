@@ -107,6 +107,8 @@ CREATE TABLE IF NOT EXISTS country_briefings (
     model           TEXT,
     article_count   INTEGER,
     source_articles TEXT,
+    week_start      TEXT,   -- weekly 전용: 참고 기사 기간 시작일(YYYY-MM-DD)
+    week_end        TEXT,   -- weekly 전용: 참고 기사 기간 종료일(YYYY-MM-DD)
     UNIQUE(cc, briefing_date, briefing_type)
 );
 

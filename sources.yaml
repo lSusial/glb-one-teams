@@ -131,6 +131,16 @@ sources:
       - section: business
         url: https://news.google.com/rss/search?q=site:bloomberg.com+when:1d&hl=en-US&gl=US&ceid=US:en
 
+  - media_name: American Banker
+    country: US
+    language: en
+    tier: 2
+    categories: [US]
+    feeds:
+      # 미국 은행업 전문지 — 공식 RSS는 페이월 안내 페이지만 반환 → Google News 우회
+      - section: top
+        url: https://news.google.com/rss/search?q=site:americanbanker.com+when:1d&hl=en-US&gl=US&ceid=US:en
+
   - media_name: FT
     country: GLOBAL
     language: en
@@ -274,6 +284,16 @@ sources:
     feeds:
       - section: business
         url: https://news.google.com/rss/search?q=site:news.sky.com+(business+OR+economy+OR+money)+when:1d&hl=en-GB&gl=GB&ceid=GB:en
+
+  - media_name: Reuters (UK)
+    country: GB
+    language: en
+    tier: 1
+    categories: [GB]
+    feeds:
+      # 기존 Reuters(GLOBAL) 엔트리는 영국 태그가 없어 별도 국가필터 쿼리로 추가
+      - section: business
+        url: https://news.google.com/rss/search?q=site:reuters.com+(UK+OR+Britain+OR+London)+when:1d&hl=en-GB&gl=GB&ceid=GB:en
 
   # ============================================================
   # 시사·비즈니스 (2): Time, Forbes
@@ -645,6 +665,9 @@ sources:
       # khmertimeskh.com/feed/ → 403 차단 → Google News 우회
       - section: top
         url: https://news.google.com/rss/search?q=site:khmertimeskh.com+when:2d&hl=en-US&gl=US&ceid=US:en
+      # KH는 경제전문 매체가 없어 top 쿼리에 business 필터를 추가로 확보 (물량 풍부함 확인)
+      - section: business
+        url: https://news.google.com/rss/search?q=site:khmertimeskh.com+business+when:1d&hl=en-US&gl=US&ceid=US:en
 
   - media_name: Cambodianess
     country: KH
@@ -731,6 +754,9 @@ sources:
     feeds:
       - section: top
         url: https://news.google.com/rss/search?q=site:elevenmyanmar.com+when:7d&hl=en-US&gl=US&ceid=US:en
+      # MM은 정치·인권 매체 위주라 경제전문 소스가 없음 → business 필터로 별도 확보
+      - section: business
+        url: https://news.google.com/rss/search?q=site:elevenmyanmar.com+business+OR+economy+when:3d&hl=en-US&gl=US&ceid=US:en
 
   - media_name: DVB English
     country: MM

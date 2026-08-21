@@ -53,6 +53,17 @@ def days_clause_data(days: int | None, alias: str = "a") -> tuple[str, list]:
     return f" AND substr({p}published_at, 1, 10) >= date({anchor}, ?)", [f"-{int(days)} days"]
 
 
+def date_range_clause(start: str, end: str, alias: str = "a") -> tuple[str, list]:
+    """[start, end] 날짜(YYYY-MM-DD, 양끝 포함) 범위 SQL 절.
+
+    주간 브리핑처럼 "실행 시각과 무관하게 항상 같은 달력 주(월~일)"를 고정하고
+    싶을 때 사용 — days_clause_*는 실행 시점 기준 상대창이라 스케줄이 늦게
+    돌면 대상 기간이 밀리는데, 이건 절대 날짜 범위라 밀리지 않는다.
+    """
+    p = f"{alias}." if alias else ""
+    return f" AND substr({p}published_at, 1, 10) BETWEEN ? AND ?", [start, end]
+
+
 def table_columns(conn: sqlite3.Connection, table: str = "articles_raw") -> set[str]:
     return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
 
