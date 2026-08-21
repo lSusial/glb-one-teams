@@ -3,6 +3,5 @@
   <component name="Black">
     <option name="sdkName" value="Python 3.11 (glb-one-teams)" />
   </component>
-  <component name="KubernetesApiProvider"><![CDATA[{}]]></component>
   <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.11 (glb-one-teams)" project-jdk-type="Python SDK" />
 </project>

@@ -1,0 +1,134 @@
+[
+  {
+    "country": "영국",
+    "total": 22920,
+    "samples": [
+      "[Reuters] London's FTSE 100 slips after inflation report; Smith+Nephew",
+      "[Devdiscourse] London Shares Slip Amid Inflation Report and Corporate Shake",
+      "[My London] London weather forecast predicts 4 days of rain and thunder ",
+      "[LBC] Britain must end the scandal of rough sleeping - and our £44",
+      "[The Globe and Mail] Trump made new trade deals with countries around the world. "
+    ],
+    "error": null
+  },
+  {
+    "country": "미국",
+    "total": 38886,
+    "samples": [
+      "[New York Post] Latest Federal Reserve minutes show more support for rate hi",
+      "[WTOP] ‘Many’ Fed officials think higher rates will be needed if in",
+      "[CP24 Toronto] U.S. Fed officials think higher rates needed if inflation st",
+      "[Bnn Bloomberg] U.S. Fed officials think higher rates needed if inflation st",
+      "[Boulder Daily Camera] Many Fed officials think higher rates needed if inflation st"
+    ],
+    "error": null
+  },
+  {
+    "country": "홍콩",
+    "total": 4852,
+    "samples": [
+      "[The Manila Times] 51WORLD Unveils Two Embodied AI Products and Reveals Aerospa",
+      "[The Manila Times] USDGO Lists for Custody on Ceffu, Widening Institutional Acc",
+      "[Devdiscourse] Chinese Stocks Tumble Amid Economic Concerns",
+      "[The Manila Times] Business Leaders from Seven International Markets Converge i",
+      "[The Economic Times] Global Market: Chinese stocks slide as semiconductor and rob"
+    ],
+    "error": null
+  },
+  {
+    "country": "중국",
+    "total": 39414,
+    "samples": [
+      "[The Economic Times] India must turn Chinese investment into trade leverage",
+      "[Deadline] Vertical Video Economy Worth $150B, Even Without China",
+      "[The New Zealand Herald] NZ infrastructure: China Construction Bank’s Yong Wang on ho",
+      "[The Guardian] Is the US actually too chicken to take on China for trade?",
+      "[Modern Diplomacy] China: Panda-powered tourism fuels summer resort economy (VI"
+    ],
+    "error": null
+  },
+  {
+    "country": "일본",
+    "total": 7847,
+    "samples": [
+      "[PetaPixel] Japanese Government Says the Digital Camera Industry Is In R",
+      "[South China Morning Post] Why the historic US-Japan intervention has failed to lift pr",
+      "[Livemint] Uttar Pradesh moving strongly towards $1 trillion economy: C",
+      "[Devdiscourse] Uttar Pradesh on the Fast Track to USD 1 Trillion Economy wi",
+      "[The Hindu Business Line] India-Japan trade at $27.5 billion still a fraction of poten"
+    ],
+    "error": null
+  },
+  {
+    "country": "싱가포르",
+    "total": 6308,
+    "samples": [
+      "[The Economic Times] Nirmala Sitharaman, Piyush Goyal visit Singapore to boost ti",
+      "[The Manila Times] DBS working on succession plan for long-time chairman",
+      "[The Economic Times] Commerce minister Piyush Goyal leads 70-member business dele",
+      "[South China Morning Post] Singapore plans tax, visa incentives to boost fund industry",
+      "[Deccan Chronicle] Nirmala Sitharaman Leads Key Ministerial Team To Singapore T"
+    ],
+    "error": null
+  },
+  {
+    "country": "인도",
+    "total": 41392,
+    "samples": [
+      "[The Hindu] India to build hospital in West Bank; seeks to deploy field ",
+      "[The Economic Times] India expresses concern over worsening humanitarian situatio",
+      "[The Economic Times] ET World Leaders Forum: It's time for Indian cos to scale ac",
+      "[Deccan Chronicle] Palestine Envoy Hopes India-Built West Bank Hospital Ready i",
+      "[The New Indian Express] India, Palestine finalise plans for 200-bed super-speciality"
+    ],
+    "error": null
+  },
+  {
+    "country": "베트남",
+    "total": 1811,
+    "samples": [
+      "[EUROPE SAYS] Australian dies in Vietnam, DFAT confirms it is assisting fa",
+      "[Free Press Journal] Dawood Network, Extortion & A Bakery Shooting: How Akhtar Me",
+      "[7NEWS Australia] Australian dies in Vietnam as the Department of Foreign Affa",
+      "[SteelOrbis] Vietnam maintains strong steel sales growth in Jan-July 2026",
+      "[The Manila Times] MSD appoints Mary Srethapakdi as Managing Director for the P"
+    ],
+    "error": null
+  },
+  {
+    "country": "미얀마",
+    "total": 845,
+    "samples": [
+      "[CNA] US envoy to ASEAN reaffirms commitment to Southeast Asia ami",
+      "[South China Morning Post] Myanmar touts economic potential but is it pie in the sky wi",
+      "[Bangkok Post] Myanmar targets growth in trade",
+      "[Lokmat Times] ED raids 10 locations in Assam, Delhi over Myanmar areca nut",
+      "[Lokmat Times] ED raids 10 locations in Assam, Delhi over Myanmar areca nut"
+    ],
+    "error": null
+  },
+  {
+    "country": "인도네시아",
+    "total": 2865,
+    "samples": [
+      "[The Star] Affin, BCA forge strategic partnership to boost cross-border",
+      "[India Today] India replaces Indonesia as Asia's least-preferred stock mar",
+      "[Business Today] India becomes Asia's least preferred market, replaces Indone",
+      "[NewsBytes] Why foreign inflows in Asian bonds have hit 4-month low",
+      "[Free Press Journal] India Replaces Indonesia As Asia’s Least-Preferred Stock Mar"
+    ],
+    "error": null
+  },
+  {
+    "country": "캄보디아",
+    "total": 532,
+    "samples": [
+      "[The Manila Times] Business Leaders from Seven International Markets Converge i",
+      "[The Manila Times] Fair Finance Asia calls on Asian Banks and Regulators to Pro",
+      "[Free Press Journal] Rajasthan Police Arrests 10th Accused In Cambodia-Based Inte",
+      "[Modern Diplomacy] Agentic Financial Fraud Is Becoming a Test of State Capacity",
+      "[The Manila Times] Fair Finance Asia Calls on Banks to End Coal Financing in AS"
+    ],
+    "error": null
+  }
+]

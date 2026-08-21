@@ -4,6 +4,9 @@
 KB 글로벌 거점(11개국) 뉴스 데일리. 파이프라인: 수집 → 필터 → AI 분석 → export → **정적 4탭 UI**.
 **★ 이 레포(glb-one-teams)가 메인이자 go-forward 레포다.** 신규 작업은 전부 여기서 한다.
 
+## 코드 작성 AIs
+claude_skill.md 내용을 참조 
+
 ## 관련 레포
 - **glb-one-teams** (이 레포, ★메인): 수집 코어 + AI 레이어 + 정적 4탭 UI. GitHub: https://github.com/lSusial/glb-one-teams.git
 - **glb-news-rss/prototype**: 구 Streamlit 대시보드 (로컬 전용, **참조·아카이브 레거시** — 여기서 신규 작업 안 함)
