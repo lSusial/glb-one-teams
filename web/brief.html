@@ -106,7 +106,7 @@
       <div class="rt" id="asof"></div></div>
     <div class="scale"><span>0°C</span><span class="mid" data-en="Issue attention">이슈 주목도</span><span>100°C</span></div>
     <div id="bars"></div>
-    <div class="cap"><span data-en="Bar length = attention, color = news area.">막대 길이는 이슈 주목도를, 색상은 뉴스 영역을 나타냅니다.</span> <span class="n" id="method"></span></div>
+    <div class="cap"><span class="n" id="method"></span></div>
   </section>
 
   <section class="sec hl" id="secHl" style="display:none">
@@ -184,7 +184,7 @@
     <div class="nc"><div class="nt"><span class="fg">${a.flag||''}</span>${badges(a.c)}<span class="nd">${esc(md(a.d))}</span></div>
       <h4>${a.u?`<a href="${esc(a.u)}" target="_blank" rel="noopener">${esc(tt(a))}</a>`:esc(tt(a))}</h4>
       ${tq(a)?`<div class="nq">${esc(tq(a))}</div>`:''}
-      ${(a.rl||[]).length?`<div class="rl"><span class="rh">${EN?'Sources':'관련 기사'}</span>${(a.rl||[]).map(r=>`<a href="${esc(r.u)}" target="_blank" rel="noopener">${esc(r.t)} ↗</a>`).join('')}</div>`:''}
+      ${(a.rl||[]).length?`<div class="rl">${(a.rl||[]).map(r=>`<a href="${esc(r.u)}" target="_blank" rel="noopener">${esc(r.t)} ↗</a>`).join('')}</div>`:''}
       </div>`).join('')
     || `<div style="color:var(--sub);font-size:13px">${EN?'No data':'데이터 없음'}</div>`;
 

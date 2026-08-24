@@ -262,7 +262,7 @@
       <div class="top"><span class="flag">${a.flag||''}</span>${badges(a.c)}<span class="ad">${esc(md(a.d))}</span></div>
       <div class="t">${esc(tt(a))}</div>
       ${tq(a)?`<div class="q">${esc(tq(a))}</div>`:''}
-      ${(a.rl||[]).length?`<div class="rl"><span class="rh">${EN?'Sources':'관련 기사'}</span>${(a.rl||[]).map(r=>`<a href="${esc(r.u)}" target="_blank" rel="noopener">${esc(r.t)} ↗</a>`).join('')}</div>`:''}</div>`).join('');
+      ${(a.rl||[]).length?`<div class="rl">${(a.rl||[]).map(r=>`<a href="${esc(r.u)}" target="_blank" rel="noopener">${esc(r.t)} ↗</a>`).join('')}</div>`:''}</div>`).join('');
     feed._rows=rows;
   }
   document.getElementById('feed').onclick=e=>{
