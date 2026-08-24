@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>KB 글로벌 데일리 브리핑 — 이슈 트래커</title>
+<title>KB 글로벌 데일리 브리핑 — 모니터링</title>
 <script id="topics-data" type="application/json">null</script>
 <style>
   :root{--kb-yellow:#FFBC00;--kb-dark:#545045;--kb-gold:#85754E;--kb-silver:#8A8D8F;
@@ -77,12 +77,12 @@
         <select id="dsel" class="dsel"></select>
       </span>
     </div>
-    <h1 data-en="Issue Tracker">이슈 트래커</h1>
+    <h1 data-en="Monitoring">모니터링</h1>
     <div class="nav">
       <a href="brief.html" data-en="Today's Global">오늘의 글로벌</a>
       <a href="countries.html" data-en="Country News">국가별 뉴스</a>
       <a href="weekly.html" data-en="Weekly Report">주간 리포트</a>
-      <a class="on" href="topics.html" data-en="Issue Tracker">이슈 트래커</a>
+      <a class="on" href="topics.html" data-en="Monitoring">모니터링</a>
     </div>
   </div>
 
@@ -108,7 +108,7 @@
 
   const feed = document.getElementById('feed');
   if (!D || !D.categories || !D.categories.length) {
-    feed.innerHTML = '<div class="empty">이슈 트래커 데이터가 없습니다.<br><code>python main.py export</code> 로 생성하세요.</div>';
+    feed.innerHTML = '<div class="empty">모니터링 데이터가 없습니다.<br><code>python main.py export</code> 로 생성하세요.</div>';
     return;
   }
 
