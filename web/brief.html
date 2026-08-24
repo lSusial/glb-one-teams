@@ -106,7 +106,6 @@
       <div class="rt" id="asof"></div></div>
     <div class="scale"><span>0°C</span><span class="mid" data-en="Issue attention">이슈 주목도</span><span>100°C</span></div>
     <div id="bars"></div>
-    <div class="cap"><span class="n" id="method"></span></div>
   </section>
 
   <section class="sec hl" id="secHl" style="display:none">
@@ -136,7 +135,6 @@
   const gen=(D.generated_at||'').slice(0,16).replace('T',' ');
   document.getElementById('asof').textContent=EN?('as of '+gen.slice(0,10)):(gen.slice(0,10)+' 기준');
   document.getElementById('gen').textContent=(EN?'Updated ':'업데이트 ')+gen;
-  document.getElementById('method').textContent=(D.days?(EN?`Last ${D.days}d · `:`최근 ${D.days}일 · `):'')+(EN?'Temp = importance × frequency':'온도=중요도·빈도 종합');
   document.getElementById('bars').innerHTML=(D.categories||[]).map(c=>`
     <div class="temp">
       <span class="lb">${EN?(c.label_en||c.label):c.label}</span>
