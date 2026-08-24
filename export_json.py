@@ -472,7 +472,7 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
     """taxonomy 카테고리별로 ACTIVE 기사를 묶어 반환."""
     dc, params = _date_clause(days)
     rows = conn.execute(
-        f"""SELECT a.ai_score, a.title, a.summary, a.summary_ko, a.kb_implication,
+        f"""SELECT a.ai_score, a.title, a.title_ko, a.summary, a.summary_ko, a.kb_implication,
                    a.summary_en, a.kb_implication_en, a.topics, a.link, a.published_at,
                    m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
@@ -491,7 +491,7 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
             arts.append(dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""),
                              src=r["media_name"],
                              d=(r["published_at"] or "")[:10],
-                             t=r["title"], q=r["summary_ko"] or "",
+                             t=r["title_ko"] or r["title"], q=r["summary_ko"] or "",
                              k=r["kb_implication"] or "",
                              q_en=r["summary_en"] or "",
                              k_en=r["kb_implication_en"] or "",

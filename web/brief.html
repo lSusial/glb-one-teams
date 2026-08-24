@@ -110,8 +110,7 @@
 
   <section class="sec hl" id="secHl" style="display:none">
     <div class="sec-h"><div class="num" style="background:var(--kb-dark)">📌</div>
-      <div><div class="tt" data-en="Today's Global Highlights">오늘의 글로벌 핵심</div></div>
-      <div class="rt" id="hlDate"></div></div>
+      <div><div class="tt" data-en="Today's Global Highlights">오늘의 글로벌 핵심</div></div></div>
     <div id="hlList"></div>
   </section>
 
@@ -168,7 +167,6 @@
   const highlights=D.daily_highlights||[];
   if(highlights.length){
     document.getElementById('secHl').style.display='';
-    document.getElementById('hlDate').textContent=gen.slice(0,10);
     document.getElementById('hlList').innerHTML=highlights.map(h=>`
       <div class="hlrow">
         <span class="hlcat" style="background:${HLCAT[h.category]||'#7a746c'}">${esc(HLCATLBL[h.category]||h.category||'')}</span>
