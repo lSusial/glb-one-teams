@@ -62,6 +62,24 @@ _SYSTEM_DAILY = (
     '{"summary_ko": "4~5문장 한국어 브리핑", "summary_en": "4-5 sentence English briefing"}'
 )
 
+# 오늘의 글로벌 핵심 3줄 — 전 거점 횡단 종합(하루 1회 1콜). 겹치는 주제는 하나로 묶는다.
+_SYSTEM_HIGHLIGHTS = (
+    "You are a global intelligence analyst at KB Financial Group. Given today's top-scored "
+    "news across ALL KB overseas hubs, synthesize EXACTLY 3 headline items a KB bank executive "
+    "must read today — merge overlapping stories into a single item where relevant, and pick "
+    "the 3 most important distinct developments overall (not one per hub). "
+    "Base strictly on the provided items; no speculation. Output ONLY JSON:\n"
+    '{"highlights": [{'
+    '"category": "금리|FX|규제|시장|디지털|지정학 중 하나", '
+    '"headline_ko": "건조한 신문 헤드라인 1줄(한국어, 설명체 금지)", '
+    '"headline_en": "one-line dry newspaper headline (English)", '
+    '"impact_ko": "어느 KB 거점/자회사에 어떤 영향인지 1줄(한국어)", '
+    '"impact_en": "one-line note on which KB hub/subsidiary this affects and how (English)", '
+    '"country_codes": ["관련 거점 코드(예: GB, US)"]'
+    '}]}\n'
+    "The \"highlights\" array must have exactly 3 items, ordered by importance."
+)
+
 
 def ensure_table(conn) -> None:
     conn.execute(_CREATE)
@@ -225,3 +243,82 @@ def run_briefing(
         stats["countries"], stats["written"], bdate, briefing_type,
     )
     return stats
+
+
+_CREATE_HIGHLIGHTS = """
+CREATE TABLE IF NOT EXISTS daily_highlights (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    date         TEXT NOT NULL,
+    items        TEXT NOT NULL,
+    model        TEXT,
+    generated_at TEXT,
+    UNIQUE(date)
+)
+"""
+
+
+def ensure_highlights_table(conn) -> None:
+    conn.execute(_CREATE_HIGHLIGHTS)
+    conn.commit()
+
+
+def generate_daily_highlights(
+    conn,
+    provider: LLMProvider | None = None,
+    target_date: str | None = None,
+) -> dict:
+    """당일 ACTIVE 상위 기사를 전 거점 횡단으로 종합해 '오늘의 글로벌 핵심 3줄' 생성.
+
+    LLM은 하루 1회 1콜만 사용(배치 아님 — 요청 1건은 배치 이득이 없음).
+    기사가 없거나 LLM이 0개를 반환하면 아무것도 저장하지 않는다(화면은 블록을 숨김).
+    """
+    ensure_highlights_table(conn)
+    tdate = target_date or date.today().isoformat()
+    dc, dp = db.days_clause_data(1)
+
+    rows = conn.execute(
+        f"""
+        SELECT a.title, a.summary_ko, a.summary_en, a.kb_implication, a.kb_implication_en,
+               a.topics, a.ai_score, m.primary_country_code AS cc
+        FROM articles_raw a
+        JOIN media_sources m ON m.source_id = a.source_id
+        WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}
+        ORDER BY a.ai_score DESC
+        LIMIT ?
+        """,
+        (config.AI_SCORE_ACTIVE_THRESHOLD, *dp, config.HIGHLIGHTS_MAX_ARTICLES),
+    ).fetchall()
+
+    if not rows:
+        log.info("글로벌 핵심 3줄 — 대상 기사 없음, 스킵")
+        return {"written": 0}
+
+    bullets = "\n".join(
+        f"- [{r['cc']}] ({r['ai_score']}) {r['title']} :: "
+        f"{((r['summary_ko'] or r['summary_en']) or '')[:160]} "
+        f"| KB 시사점: {((r['kb_implication'] or r['kb_implication_en']) or '')[:120]}"
+        for r in rows
+    )
+    user = f"KB 거점 네트워크: {kb_network.all_context()}\n\n오늘의 상위 기사:\n{bullets}"
+
+    provider = provider or get_provider("smart", use_batch=False)
+    data = provider.complete_json(_SYSTEM_HIGHLIGHTS, user, max_tokens=1200)
+    items = (data.get("highlights") or [])[:3]
+
+    if not items:
+        log.info("글로벌 핵심 3줄 — LLM이 0개 반환, 스킵")
+        return {"written": 0}
+
+    conn.execute(
+        """
+        INSERT INTO daily_highlights (date, items, model, generated_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(date) DO UPDATE SET
+            items = excluded.items, model = excluded.model, generated_at = CURRENT_TIMESTAMP
+        """,
+        (tdate, json.dumps(items, ensure_ascii=False), provider.model_id),
+    )
+    conn.commit()
+
+    log.info("글로벌 핵심 3줄 완료 — 항목=%d  (%s)", len(items), tdate)
+    return {"written": len(items)}

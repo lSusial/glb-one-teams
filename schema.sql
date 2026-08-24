@@ -133,6 +133,16 @@ CREATE TABLE IF NOT EXISTS indicators (
 
 CREATE INDEX IF NOT EXISTS idx_indicators_country_date ON indicators(country, date DESC);
 
+-- '오늘의 글로벌 핵심 3줄' (briefing.generate_daily_highlights) — 일자당 1행, 3개 항목을 JSON 배열로
+CREATE TABLE IF NOT EXISTS daily_highlights (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    date         TEXT NOT NULL,
+    items        TEXT NOT NULL,   -- JSON 배열: [{category,headline_ko,headline_en,impact_ko,impact_en,country_codes}, ...]
+    model        TEXT,
+    generated_at TEXT,
+    UNIQUE(date)
+);
+
 -- 브로드캐스트 발송 (broadcaster.py)
 CREATE TABLE IF NOT EXISTS broadcast_targets (
     cc        TEXT NOT NULL,

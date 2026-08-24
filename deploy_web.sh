@@ -10,32 +10,30 @@ REMOTE="ubuntu@168.107.56.139"
 PORT="${1:-8080}"
 DIR="$(cd "$(dirname "$0")" && pwd)"
 
-echo "▶ [1/3] 최신 화면 생성 (export)..."
+echo "▶ [1/2] 최신 화면 생성 (export)..."
 cd "$DIR"
 .venv/bin/python main.py export
 
-echo "▶ [2/3] 화면 파일 업로드 (rsync)..."
-rsync -avz --delete \
-    -e "ssh -i $SSH_KEY -p 22" \
-    data/export/ \
-    "$REMOTE:~/glb-one-teams/data/export/"
+# ── Oracle Cloud 동기화 임시 비활성화 (SSH 22번 포트 타임아웃, 2026-08-24) ──
+# 복구되면 아래 두 블록 주석 해제.
+# echo "▶ [2/4] 화면 파일 업로드 (rsync)..."
+# rsync -avz --delete \
+#     -e "ssh -i $SSH_KEY -p 22" \
+#     data/export/ \
+#     "$REMOTE:~/glb-one-teams/data/export/"
+#
+# echo "▶ [3/4] 웹서버(포트 $PORT) 재기동..."
+# ssh -i "$SSH_KEY" "$REMOTE" bash -s <<REMOTE_EOF
+# pkill -f 'http.server $PORT' 2>/dev/null || true
+# sleep 1
+# cd ~/glb-one-teams/data/export
+# nohup python3 -m http.server $PORT >/tmp/glbweb.log 2>&1 &
+# echo '  서버 기동됨'
+# REMOTE_EOF
 
-echo "▶ [3/3] 웹서버(포트 $PORT) 재기동..."
-ssh -i "$SSH_KEY" "$REMOTE" bash -s <<REMOTE_EOF
-pkill -f 'http.server $PORT' 2>/dev/null || true
-sleep 1
-cd ~/glb-one-teams/data/export
-nohup python3 -m http.server $PORT >/tmp/glbweb.log 2>&1 &
-echo '  서버 기동됨'
-REMOTE_EOF
-
-echo "▶ [4/4] Cloudflare Pages 배포..."
+echo "▶ [2/2] Cloudflare Pages 배포..."
 wrangler pages deploy data/export --project-name kb-global-daily --commit-dirty=true 2>&1 | tail -3
 
 echo ""
-echo "✓ 완료"
-echo "   Oracle Cloud  →  http://168.107.56.139:$PORT/brief.html"
+echo "✓ 완료 (Oracle 동기화는 스킵됨 — SSH 복구 후 deploy_web.sh 주석 해제 필요)"
 echo "   Cloudflare    →  https://kb-global-daily.pages.dev"
-echo "   접속 안 되면 포트 $PORT 가 오라클 보안목록 + 인스턴스 방화벽에 열려 있는지 확인:"
-echo "     서버에서: sudo iptables -I INPUT -p tcp --dport $PORT -j ACCEPT"
-echo "     오라클 콘솔: VCN > 보안목록 > 수신규칙에 $PORT/TCP 추가"

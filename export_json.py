@@ -122,6 +122,25 @@ def _country_indicators(conn) -> dict:
     return out
 
 
+def _daily_highlights(conn) -> list:
+    """오늘의 글로벌 핵심 3줄(briefing.generate_daily_highlights) 최신본. 없으면 빈 리스트."""
+    try:
+        cols = [c[1] for c in conn.execute("PRAGMA table_info(daily_highlights)")]
+    except Exception:
+        return []
+    if "items" not in cols:
+        return []
+    row = conn.execute(
+        "SELECT items FROM daily_highlights ORDER BY date DESC LIMIT 1"
+    ).fetchone()
+    if not row:
+        return []
+    try:
+        return json.loads(row["items"]) or []
+    except Exception:
+        return []
+
+
 def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     _ensure_ai_columns(conn)
     dc, dparams = _date_clause(days)   # 현지언론 = 전일+당일 (max-1일 이후)
@@ -359,6 +378,7 @@ def export_pulse(conn, days: int | None = None) -> dict:
         "days": days,
         "categories": _compute_pulse(conn, days=days),
         "top_news": _compute_top_news(conn, days=days, limit=8),
+        "daily_highlights": _daily_highlights(conn),
     }
     _write_json("pulse", payload)
 

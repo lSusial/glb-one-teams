@@ -64,6 +64,9 @@ AI_SCORE_ACTIVE_THRESHOLD = 55
 # 국가 브리핑에 투입할 기사 상한(국가·기간당)
 BRIEFING_MAX_ARTICLES = 25
 
+# '오늘의 글로벌 핵심 3줄'(briefing.generate_daily_highlights)에 투입할 기사 상한
+HIGHLIGHTS_MAX_ARTICLES = 25
+
 # '오늘의 핵심 뉴스'(Global) 다양성 — 한 나라·같은 사건 도배 방지
 TOP_NEWS_PER_COUNTRY = 2      # 핵심 뉴스 블록에서 한 국가 최대 노출 수
 TOP_NEWS_SIM         = 0.5    # 제목 유사도 이 이상이면 근접 중복으로 제외(0~1)

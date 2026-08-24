@@ -17,7 +17,8 @@ AI 레이어(별도 — ANTHROPIC_API_KEY 필요, 미설정 시 즉시 안내 �
   python main.py rank [--days N]       # AI 분석[영어] (score/summary_en/topics/kb_implication_en)
   python main.py translate [--days N]  # 영어 기준본 → 한국어 번역 (표시분만, 저비용)
   python main.py brief                 # 국가별 브리핑 생성
-  python main.py ai [--days N]         # prefilter → rank → translate → brief 한 번에
+  python main.py highlights            # 오늘의 글로벌 핵심 3줄 생성(전 거점 횡단)
+  python main.py ai [--days N]         # prefilter → rank → translate → brief → highlights 한 번에
   python main.py export            # DB → data/export/countries.json (ACTIVE)
   python main.py export --passed   # AI 없이 필터 통과 기사로 export (Phase 1)
   python main.py admin             # 관리자 페이지 생성 (data/export/admin.html)
@@ -241,8 +242,15 @@ def cmd_brief(args):
     print(f"[brief] 국가={s['countries']}  작성={s['written']}")
 
 
+def cmd_highlights(_args):
+    import briefing
+    conn = db.open_conn()
+    s = _ai_guard(lambda: briefing.generate_daily_highlights(conn), "highlights")
+    print(f"[highlights] 작성={s['written']}")
+
+
 def cmd_ai(args):
-    """prefilter → rank → translate → brief 순서 실행."""
+    """prefilter → rank → translate → brief → highlights 순서 실행."""
     import briefing
     import llm_prefilter
     import llm_ranker
@@ -251,21 +259,24 @@ def cmd_ai(args):
     conn = db.open_conn()
     days = getattr(args, "days", None)
     ub = _batch_flag(args)
-    print("▶ [1/5] LLM 프리필터...")
+    print("▶ [1/6] LLM 프리필터...")
     s1 = _ai_guard(lambda: llm_prefilter.run_prefilter(conn, days=days, use_batch=ub), "ai")
     print(f"   keep={s1['keep']} drop={s1['drop']}")
-    print("▶ [2/5] 본문 추출(keep 원문)...")
+    print("▶ [2/6] 본문 추출(keep 원문)...")
     sf = _ai_guard(lambda: fulltext.run_fulltext(conn, days=days), "ai")
     print(f"   본문={sf['extracted']} URL해소={sf['resolved']} 실패={sf['failed']}")
-    print("▶ [3/5] AI 분석[영어]...")
+    print("▶ [3/6] AI 분석[영어]...")
     s2 = _ai_guard(lambda: llm_ranker.run_rank(conn, days=days, use_batch=ub), "ai")
     print(f"   ranked={s2['ranked']} ACTIVE={s2['active']}")
-    print("▶ [4/5] 한국어 번역(표시분)...")
+    print("▶ [4/6] 한국어 번역(표시분)...")
     st = _ai_guard(lambda: llm_translate.run_translate(conn, days=days, use_batch=ub), "ai")
     print(f"   KO채움={st['ko']} EN채움={st['en']}")
-    print("▶ [5/5] 국가 일일 브리핑(현지언론 상단, 전일+당일)...")
+    print("▶ [5/6] 국가 일일 브리핑(현지언론 상단, 전일+당일)...")
     s3 = _ai_guard(lambda: briefing.run_briefing(conn, briefing_type="daily", days=days, use_batch=ub), "ai")
     print(f"   written={s3['written']}")
+    print("▶ [6/6] 오늘의 글로벌 핵심 3줄...")
+    s4 = _ai_guard(lambda: briefing.generate_daily_highlights(conn), "ai")
+    print(f"   written={s4['written']}")
 
 
 def cmd_export(args):
@@ -359,7 +370,8 @@ def main():
     brf.add_argument("--type", default="weekly", help="브리핑 유형 (weekly|daily). daily=현지언론 상단 전일+당일 종합")
     brf.add_argument("--days", type=int, help="최근 N일 게시분만 (daily 기본 1=전일+당일)")
     brf.add_argument("--sync", action="store_true", help=_SYNC_HELP)
-    aip = sub.add_parser("ai",        help="prefilter → rank → brief 일괄")
+    sub.add_parser("highlights", help="오늘의 글로벌 핵심 3줄 생성(전 거점 횡단, LLM 1콜)")
+    aip = sub.add_parser("ai",        help="prefilter → rank → brief → highlights 일괄")
     aip.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
     aip.add_argument("--sync", action="store_true", help=_SYNC_HELP)
     exp = sub.add_parser("export", help="DB → data/export/*.json (UI 데이터)")
@@ -389,7 +401,7 @@ def main():
         "dedup": cmd_dedup, "run": cmd_run, "report": cmd_report, "list": cmd_list,
         "indicators": cmd_indicators,
         "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "rank": cmd_rank,
-        "translate": cmd_translate, "brief": cmd_brief,
+        "translate": cmd_translate, "brief": cmd_brief, "highlights": cmd_highlights,
         "ai": cmd_ai, "export": cmd_export, "admin": cmd_admin,
         "broadcast": cmd_broadcast, "eval": cmd_eval,
     }[args.cmd](args)
