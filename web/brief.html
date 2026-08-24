@@ -58,6 +58,14 @@
   .hl .hlhead{font-weight:700;font-size:13.5px;line-height:1.5}
   .hl .hlimp{color:#463f37;font-size:12.5px;line-height:1.5;margin-top:4px}
   .hl .hlflags{margin-top:4px;font-size:13px;letter-spacing:2px}
+  .cs .csrow{padding:10px 0;border-top:1px solid var(--line)}
+  .cs .csrow:first-child{border-top:0;padding-top:2px}
+  .cs .csh{display:flex;align-items:center;gap:6px;font-weight:800;font-size:13.5px}
+  .cs .csh .fg{font-size:15px}
+  .cs .csh .mood{margin-left:auto;font-size:15px;display:flex;align-items:center;gap:4px}
+  .cs .csh .mood .trend{font-size:12px;color:var(--sub);font-weight:700}
+  .cs .csissues{color:#463f37;font-size:12.5px;line-height:1.55;margin-top:4px}
+  .cs .csmeta{color:var(--sub);font-size:11px;margin-top:4px}
   .news{display:flex;flex-direction:column;gap:9px}
   .nc{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fff}
   .nc .nt{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:5px}
@@ -112,6 +120,12 @@
     <div class="sec-h"><div class="num" style="background:var(--kb-dark)">📌</div>
       <div><div class="tt" data-en="Today's Global Highlights">오늘의 글로벌 핵심</div></div></div>
     <div id="hlList"></div>
+  </section>
+
+  <section class="sec cs" id="secCS" style="display:none">
+    <div class="sec-h"><div class="num" style="background:var(--kb-gold)">🌍</div>
+      <div><div class="tt" data-en="Today's Hub Snapshot">국가별 오늘의 이슈</div></div></div>
+    <div id="csList"></div>
   </section>
 
   <section class="sec accent">
@@ -174,6 +188,22 @@
         ${hlImp(h)?`<div class="hlimp">${esc(hlImp(h))}</div>`:''}
         <div class="hlflags">${(h.country_codes||[]).map(cc=>HLFLAGS[cc]||'').join(' ')}</div>
       </div>`).join('');
+  }
+
+  // 국가별 오늘의 이슈 + 시장 무드 배지 (country_section) — 없으면 블록 숨김
+  const cs=D.country_section||[];
+  if(cs.length){
+    document.getElementById('secCS').style.display='';
+    document.getElementById('csList').innerHTML=cs.map(s=>{
+      const issues=(EN?(s.issues_en&&s.issues_en.length?s.issues_en:s.issues):(s.issues&&s.issues.length?s.issues:s.issues_en))||[];
+      const moodLbl=EN?s.mood_en:s.mood_ko;
+      return `<div class="csrow">
+        <div class="csh"><span class="fg">${s.flag||''}</span>${NAMES[s.cc]||s.cc}
+          <span class="mood">${s.mood_icon||''}<span class="trend">${esc(s.trend||'')}</span></span></div>
+        <div class="csissues">${issues.map(esc).join(' · ')}</div>
+        <div class="csmeta">${EN?`Based on ${s.basis_count} articles · ${esc(moodLbl||'')}`:`최근 ${s.basis_count}건 기준 · ${esc(moodLbl||'')}`}</div>
+      </div>`;
+    }).join('');
   }
 
   document.getElementById('news').innerHTML=(D.top_news||[]).map(a=>`

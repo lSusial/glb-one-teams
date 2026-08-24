@@ -141,6 +141,39 @@ def _daily_highlights(conn) -> list:
         return []
 
 
+def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
+    """KB 미진출국(14개, docs/design_미진출국.md) 통합 피드 — 국가 구분 없이
+    ai_score 상위 limit개. ACTIVE 임계(55점) 게이트는 적용하지 않는다 — 거점이
+    없는 시장이라 점수 루브릭 자체가 낮게 잡히므로, 랭킹만 됐으면(ai_score IS
+    NOT NULL) 상대적으로 중요한 순서로 노출한다."""
+    if not config.NON_PRESENCE_CODES:
+        return []
+    dc, dparams = _date_clause(days)
+    ph = ",".join("?" * len(config.NON_PRESENCE_CODES))
+    rows = conn.execute(
+        f"""SELECT a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics,
+                   a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name
+            FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
+            WHERE a.ai_score IS NOT NULL AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'
+              AND m.primary_country_code IN ({ph}){dc}
+            ORDER BY a.ai_score DESC LIMIT ?""",
+        (*config.NON_PRESENCE_CODES, *dparams, limit),
+    ).fetchall()
+    out = []
+    for r in rows:
+        cc = r["cc"]
+        meta = config.NON_PRESENCE_COUNTRIES.get(cc, {})
+        codes = [c for c in (r["topics"] or "").split(",") if c]
+        out.append(dict(
+            cc=cc, flag=meta.get("flag", ""),
+            cc_label=meta.get("name_ko", cc), cc_label_en=meta.get("name_en", cc),
+            src=r["media_name"], d=(r["published_at"] or "")[:10],
+            t=r["title_ko"] or r["title"], q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
+            c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
+        ))
+    return out
+
+
 def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     _ensure_ai_columns(conn)
     dc, dparams = _date_clause(days)   # 현지언론 = 전일+당일 (max-1일 이후)
@@ -210,6 +243,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
         countries.append({
             "cc": cc,
             "flag": flag,
+            "presence": "진출",                 # KB 진출국 — docs/design_미진출국.md
             "status": "ACTIVE" if articles else "SOURCE WATCH",
             "count": len(articles),
             "brief": briefs.get(cc),            # 전일+당일 AI 브리핑(한/영) — 없으면 null
@@ -217,19 +251,23 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
             "indicators": indicators.get(cc, []),  # 환율·주가지수 최신 스냅샷 — 없으면 빈 리스트
         })
 
+    non_presence = _compute_non_presence(conn)
+
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "snapshot_date": _snapshot_date(),
         "mode": "active" if active_only else "passed",
         "active_threshold": config.AI_SCORE_ACTIVE_THRESHOLD if active_only else None,
         "countries": countries,
+        "non_presence": {"count": len(non_presence), "articles": non_presence},
     }
     _write_json("countries", payload)
     path = config.EXPORT_DIR / "countries.json"
 
     _inject_html(_TEMPLATE, "countries-data", "countries", payload)
 
-    log.info("countries.json 작성 — 국가=%d  ACTIVE 기사=%d  → %s", len(countries), total, path)
+    log.info("countries.json 작성 — 국가=%d  ACTIVE 기사=%d  미진출국 기사=%d  → %s",
+             len(countries), total, len(non_presence), path)
     return {"countries": len(countries), "articles": total, "path": str(path)}
 
 
@@ -253,11 +291,14 @@ def _compute_pulse(conn, days: int | None = None) -> list[dict]:
 
     온도 = 0.6×평균중요도 + 0.4×상대물량  (주목도=강도+빈도). days 지정 시 최근 N일만.
     """
-    date_clause, params = _date_clause(days, alias="")
+    date_clause, params = _date_clause(days, alias="a")
+    # KB 미진출국은 온도 집계에서 제외 — 거점 없는 시장 뉴스가 카테고리 온도를 왜곡하지 않도록.
+    exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
     rows = conn.execute(
-        f"SELECT ai_score, topics FROM articles_raw "
-        f"WHERE ai_score IS NOT NULL AND topics IS NOT NULL AND topics <> ''{date_clause}",
-        params,
+        f"SELECT a.ai_score, a.topics FROM articles_raw a "
+        f"JOIN media_sources m ON m.source_id = a.source_id "
+        f"WHERE a.ai_score IS NOT NULL AND a.topics IS NOT NULL AND a.topics <> ''{date_clause}{exc}",
+        (*params, *exp),
     ).fetchall()
 
     buckets: dict[str, list[int]] = {code: [] for code, _, _, _ in _PULSE_CATS}
@@ -327,13 +368,15 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
     후보 풀을 넉넉히 뽑아 위 규칙 적용 후 limit 만큼.
     """
     dc, params = _date_clause(days)
+    # KB 미진출국은 제외 — 이 블록은 진출 11개 거점 횡단 요약용.
+    exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
     rows = conn.execute(
         f"""SELECT a.ai_score, a.title, a.title_ko, a.summary_ko, a.summary_en,
                    a.topics, a.link, a.published_at, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
-            WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}
+            WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}{exc}
             ORDER BY a.ai_score DESC, a.published_at DESC LIMIT 60""",
-        (config.AI_SCORE_ACTIVE_THRESHOLD, *params),
+        (config.AI_SCORE_ACTIVE_THRESHOLD, *params, *exp),
     ).fetchall()
 
     out, seen_tokens, per_cc = [], [], {}
@@ -368,6 +411,97 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
     return out
 
 
+_MOOD_TIERS = [  # (mood_level 하한, 아이콘, 라벨ko, 라벨en)
+    (80, "☀️", "맑음",     "Clear"),
+    (60, "⛅", "구름조금", "Partly Cloudy"),
+    (40, "☁️", "흐림",     "Cloudy"),
+    (20, "🌧️", "비",       "Rainy"),
+    (0,  "🌀", "태풍",     "Storm"),
+]
+
+
+def _mood_tier(level: int) -> tuple[str, str, str]:
+    for floor, icon, ko, en in _MOOD_TIERS:
+        if level >= floor:
+            return icon, ko, en
+    return _MOOD_TIERS[-1][1:]
+
+
+def _compute_country_section(conn, days: int | None = 1, top_n: int = 5) -> list[dict]:
+    """brief.html '국가별 오늘의 이슈' + '시장 무드 배지'가 공유하는 top-N 국가 블록.
+
+    docs/신규기능_설계_20260821.md ④⑤. 대상 풀 = 진출국 11개(미진출국 제외).
+    선정 = 그날 ACTIVE 기사의 ai_score 합(이슈 강도) 상위 top_n — 조용한 날은
+    소형 거점도 자연히 진입한다. 신규 LLM 호출 없음: title_ko(랭킹 시 이미
+    생성됨)를 이슈 문구·대표 키워드로 재활용한다.
+    """
+    dc, params = _date_clause(days)
+    ph = ",".join("?" * len(_FLAGS))
+    rows = conn.execute(
+        f"""SELECT a.ai_score, a.title, a.title_ko, a.topics, m.primary_country_code cc
+            FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
+            WHERE a.ai_score >= ? AND a.duplicate_of IS NULL
+              AND m.primary_country_code IN ({ph}){dc}
+            ORDER BY a.ai_score DESC""",
+        (config.AI_SCORE_ACTIVE_THRESHOLD, *_FLAGS.keys(), *params),
+    ).fetchall()
+
+    by_cc: dict[str, list] = {}
+    for r in rows:
+        by_cc.setdefault(r["cc"], []).append(r)
+    if not by_cc:
+        return []
+
+    intensity = {cc: sum(r["ai_score"] for r in arts) for cc, arts in by_cc.items()}
+    top_ccs = sorted(by_cc, key=lambda cc: intensity[cc], reverse=True)[:top_n]
+
+    indicators = _country_indicators(conn)
+
+    out = []
+    for cc in top_ccs:
+        arts = by_cc[cc]
+        n = len(arts)
+        avg_score = sum(r["ai_score"] for r in arts) / n
+        risk_n = sum(1 for r in arts if "RISK" in (r["topics"] or "").split(","))
+        risk_pct = risk_n / n * 100
+        score_norm = max(0.0, min(100.0, (avg_score - config.AI_SCORE_ACTIVE_THRESHOLD)
+                                   / (100 - config.AI_SCORE_ACTIVE_THRESHOLD) * 100))
+
+        badness = []
+        for ind in indicators.get(cc, []):
+            if ind.get("change_pct") is None:
+                continue
+            pct = ind["change_pct"]
+            # fx: 값 상승=현지통화 약세(나쁨) / index: 하락=나쁨 — 일간 변동폭이 보통
+            # ±0.5%대라 ±2.5%를 0~100 스케일로 잡아야 추세가 실제로 갈린다.
+            b = (50 + pct * 20) if ind["kind"] == "fx" else (50 - pct * 20)
+            badness.append(max(0.0, min(100.0, b)))
+
+        if badness:
+            ind_avg = sum(badness) / len(badness)
+            stress = 0.4 * risk_pct + 0.3 * score_norm + 0.3 * ind_avg
+            trend = "▼" if ind_avg > 55 else ("▲" if ind_avg < 45 else "→")
+        else:
+            stress = 0.6 * risk_pct + 0.4 * score_norm
+            trend = "→"   # 지표 없음 — 모멘텀 이력 스냅샷이 없어 중립 처리
+
+        mood_level = round(max(0, min(100, 100 - stress)))
+        icon, mood_ko, mood_en = _mood_tier(mood_level)
+
+        titles_ko = [r["title_ko"] or r["title"] for r in arts[:3]]
+        titles_en = [r["title"] for r in arts[:3]]
+
+        out.append(dict(
+            cc=cc, flag=_FLAGS_ALL.get(cc, ""),
+            mood_level=mood_level, mood_icon=icon, mood_ko=mood_ko, mood_en=mood_en,
+            trend=trend,
+            keyword=titles_ko[0] if titles_ko else "", keyword_en=titles_en[0] if titles_en else "",
+            issues=titles_ko, issues_en=titles_en,
+            basis_count=n,
+        ))
+    return out
+
+
 def export_pulse(conn, days: int | None = None) -> dict:
     """pulse.json + brief.html(온도계 화면) 생성."""
     if days is None: days = 1          # 첫 화면 = 전일+당일 ('오늘의 ...')
@@ -379,6 +513,7 @@ def export_pulse(conn, days: int | None = None) -> dict:
         "categories": _compute_pulse(conn, days=days),
         "top_news": _compute_top_news(conn, days=days, limit=8),
         "daily_highlights": _daily_highlights(conn),
+        "country_section": _compute_country_section(conn, days=days),
     }
     _write_json("pulse", payload)
 
@@ -471,14 +606,16 @@ _TOPIC_CATS = [
 def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[dict]:
     """taxonomy 카테고리별로 ACTIVE 기사를 묶어 반환."""
     dc, params = _date_clause(days)
+    # KB 미진출국은 모니터링(topics) 집계에서도 제외 — 통합피드에서만 노출.
+    exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
     rows = conn.execute(
         f"""SELECT a.ai_score, a.title, a.title_ko, a.summary, a.summary_ko, a.kb_implication,
                    a.summary_en, a.kb_implication_en, a.topics, a.link, a.published_at,
                    m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
-            WHERE a.ai_score >= ? AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'{dc}
+            WHERE a.ai_score >= ? AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'{dc}{exc}
             ORDER BY a.ai_score DESC""",
-        (config.AI_SCORE_ACTIVE_THRESHOLD, *params),
+        (config.AI_SCORE_ACTIVE_THRESHOLD, *params, *exp),
     ).fetchall()
 
     categories = []

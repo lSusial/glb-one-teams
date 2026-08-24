@@ -136,6 +136,11 @@
     <div class="nav"><a href="brief.html" data-en="Today's Global">글로벌 원팀 뉴스</a><a class="on" href="countries.html" data-en="Country News">국가별 뉴스</a><a href="weekly.html" data-en="Weekly Report">주간 리포트</a><a href="topics.html" data-en="Monitoring">모니터링</a></div>
   </div>
 
+  <div class="fil" id="presenceSel" style="margin:14px 0 0">
+    <span class="chip on" data-p="presence">진출국</span>
+    <span class="chip" data-p="non">KB 미진출국</span>
+  </div>
+
   <section class="sec" id="secCov">
     <div class="sec-h"><div class="num g">🗺️</div>
       <div><div class="tt" data-en="Hub Coverage">거점 커버리지</div></div>
@@ -145,7 +150,7 @@
 
   <section class="sec accent" id="secFeed">
     <div class="sec-h"><div class="num y">📡</div>
-      <div><div class="tt" data-en="Local Press Feed">현지언론 피드</div></div></div>
+      <div><div class="tt" id="feedTitle" data-en="Local Press Feed">현지언론 피드</div></div></div>
     <div id="bignum" class="bignum" style="display:none"></div>
     <div id="brief" class="brief" style="display:none"></div>
     <div class="fil" id="cats"></div>
@@ -177,10 +182,12 @@
   document.getElementById('gen').textContent=(EN?'Updated ':'업데이트 ')+gen+(DATA.mode?(' · '+DATA.mode):'');
 
   const arts=[]; (DATA.countries||[]).forEach(c=>(c.articles||[]).forEach(a=>arts.push({...a,cc:c.cc,flag:c.flag})));
+  const nonArts=(DATA.non_presence&&DATA.non_presence.articles)||[];
   document.getElementById('covRt').textContent='';
 
-  let fCat='', fCC='';
-  const catCount=k=>{const pool=fCC?arts.filter(a=>a.cc===fCC):arts;return k?pool.filter(a=>(a.c||'').includes(k)).length:pool.length;};
+  let fCat='', fCC='', pMode='presence';
+  const pool=()=>pMode==='non'?nonArts:(fCC?arts.filter(a=>a.cc===fCC):arts);
+  const catCount=k=>{const p=pool();return k?p.filter(a=>(a.c||'').includes(k)).length:p.length;};
 
   document.getElementById('cats').innerHTML=CATS.map(([k,l])=>
     `<span class="chip${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
@@ -189,6 +196,16 @@
   document.getElementById('cov').innerHTML=(DATA.countries||[]).map(c=>
     `<span class="cc${c.count?'':' dim'}" data-cc="${c.cc}"><span>${c.flag||''}</span>${NAMES[c.cc]||c.cc}</span>`).join('');
   document.getElementById('cov').onclick=e=>{const c=e.target.closest('.cc');if(!c)return;fCC=(fCC===c.dataset.cc?'':c.dataset.cc);render();};
+
+  document.getElementById('presenceSel').onclick=e=>{
+    const c=e.target.closest('.chip'); if(!c)return;
+    pMode=c.dataset.p; fCat='';
+    document.querySelectorAll('#presenceSel .chip').forEach(x=>x.classList.toggle('on',x.dataset.p===pMode));
+    render();
+  };
+  if(EN) document.querySelectorAll('#presenceSel .chip').forEach(c=>{
+    c.textContent=c.dataset.p==='presence'?'Presence':'KB Non-Presence';
+  });
 
   const BL=EN?{economy:'Economy',finance:'Banking',digital:'Digital',esg:'ESG',risk:'Risk',geo:'Geopolitics'}:{economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크',geo:'지정학'};
   const badges=cstr=>(cstr||'').split(/\s+/).filter(Boolean).map(k=>{
@@ -224,9 +241,31 @@
   }
 
   function render(){
-    document.querySelectorAll('#cov .cc').forEach(c=>c.classList.toggle('sel',c.dataset.cc===fCC));
+    const secCov=document.getElementById('secCov'), feedTitle=document.getElementById('feedTitle');
     const catsEl=document.getElementById('cats'), bx=document.getElementById('brief'), feed=document.getElementById('feed');
     const bn=document.getElementById('bignum');
+
+    // KB 미진출국 — 국가 구분 없는 통합 피드(네비 없음), 주제 필터만 유지
+    if(pMode==='non'){
+      secCov.style.display='none';
+      feedTitle.textContent=EN?'KB Non-Presence Feed':'KB 미진출국 통합 피드';
+      bx.style.display='none'; bn.style.display='none';
+      catsEl.style.display='';
+      catsEl.innerHTML=CATS.map(([k,l])=>`<span class="chip${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
+      let rows=nonArts.filter(a=>!fCat||(a.c||'').includes(fCat));
+      document.getElementById('count').textContent=rows.length+(EN?' articles':' 건');
+      if(!rows.length){feed.innerHTML=`<div class="empty">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;feed._rows=[];return;}
+      feed.innerHTML=rows.map((a,i)=>`<div class="art" data-i="${i}">
+        <div class="top"><span class="flag">${a.flag||''}</span><b>${esc(EN?(a.cc_label_en||a.cc):(a.cc_label||a.cc))}</b>${badges(a.c)}<span class="ad">${esc(md(a.d))}</span></div>
+        <div class="t">${esc(tt(a))}</div>
+        ${tq(a)?`<div class="q">${esc(tq(a))}</div>`:''}</div>`).join('');
+      feed._rows=rows;
+      return;
+    }
+
+    secCov.style.display='';
+    feedTitle.textContent=EN?'Local Press Feed':'현지언론 피드';
+    document.querySelectorAll('#cov .cc').forEach(c=>c.classList.toggle('sel',c.dataset.cc===fCC));
 
     // 국가 미선택 → 목록·브리핑·빅넘버 숨기고 안내
     if(!fCC){
@@ -269,7 +308,7 @@
     const el=e.target.closest('.art'); if(!el||e.target.tagName==='A')return;
     const a=document.getElementById('feed')._rows[+el.dataset.i];
     document.getElementById('modal').innerHTML=`<span class="x" id="mx">×</span>
-      <div class="mt">${a.flag||''} ${esc(md(a.d))} ${badges(a.c)}</div>
+      <div class="mt">${a.flag||''} ${a.cc_label?esc(EN?(a.cc_label_en||a.cc_label):a.cc_label)+' · ':''}${esc(md(a.d))} ${badges(a.c)}</div>
       <h2>${esc(tt(a))}</h2>
       ${tq(a)?`<div class="s"><h3>${EN?'Summary':'요약'}</h3><div>${esc(tq(a))}</div></div>`:''}
       ${a.u?`<a class="lk" href="${esc(a.u)}" target="_blank" rel="noopener">${EN?'View source ↗':'원문 보기 ↗'}</a>`:''}`;

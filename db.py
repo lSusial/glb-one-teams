@@ -64,6 +64,21 @@ def date_range_clause(start: str, end: str, alias: str = "a") -> tuple[str, list
     return f" AND substr({p}published_at, 1, 10) BETWEEN ? AND ?", [start, end]
 
 
+def exclude_countries_clause(codes, alias: str = "m") -> tuple[str, list]:
+    """codes(국가코드 목록)를 제외하는 SQL 절(NOT IN). codes가 비면 빈 절.
+
+    KB 미진출국(config.NON_PRESENCE_CODES) 기사를 기존 국가횡단 집계
+    (온도·핵심뉴스·모니터링·국가브리핑)에서 제외할 때 사용 — 미진출국은
+    countries.html의 별도 통합피드에서만 노출한다(docs/design_미진출국.md).
+    """
+    codes = tuple(codes)
+    if not codes:
+        return "", []
+    ph = ",".join("?" * len(codes))
+    p = f"{alias}." if alias else ""
+    return f" AND {p}primary_country_code NOT IN ({ph})", list(codes)
+
+
 def table_columns(conn: sqlite3.Connection, table: str = "articles_raw") -> set[str]:
     return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
 

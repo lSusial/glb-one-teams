@@ -111,3 +111,31 @@ INDICATOR_MAP: dict[str, dict] = {
     "MM": {"fx": "MMK", "indices": []},   # 지수 없음, 환율만(공식환율 — indicators.py 참조)
     "KH": {"fx": "KHR", "indices": []},   # 지수 없음, 환율만
 }
+
+# ── KB 진출국 / 미진출국 (docs/design_미진출국.md) ─────────────────
+# 진출국 11개(위 INDICATOR_MAP·kb_network.KB_NETWORK와 동일 거점)는 국가별 화면
+# 그대로 유지. 아래 14개국은 "한국계 은행은 있지만 KB는 없는" 시장 — 국가 구분
+# 없이 통합 피드로만 노출한다(⚠️ 잠정 리스트, 이 한 곳에서만 수정하면 됨).
+NON_PRESENCE_COUNTRIES: dict[str, dict] = {
+    "PH": {"name_ko": "필리핀",     "name_en": "Philippines", "flag": "🇵🇭"},
+    "TH": {"name_ko": "태국",       "name_en": "Thailand",    "flag": "🇹🇭"},
+    "MY": {"name_ko": "말레이시아", "name_en": "Malaysia",    "flag": "🇲🇾"},
+    "BD": {"name_ko": "방글라데시", "name_en": "Bangladesh",  "flag": "🇧🇩"},
+    "PL": {"name_ko": "폴란드",     "name_en": "Poland",      "flag": "🇵🇱"},
+    "DE": {"name_ko": "독일",       "name_en": "Germany",     "flag": "🇩🇪"},
+    "FR": {"name_ko": "프랑스",     "name_en": "France",      "flag": "🇫🇷"},
+    "KZ": {"name_ko": "카자흐스탄", "name_en": "Kazakhstan",  "flag": "🇰🇿"},
+    "UZ": {"name_ko": "우즈베키스탄", "name_en": "Uzbekistan", "flag": "🇺🇿"},
+    "AE": {"name_ko": "UAE",        "name_en": "UAE",         "flag": "🇦🇪"},
+    "BR": {"name_ko": "브라질",     "name_en": "Brazil",      "flag": "🇧🇷"},
+    "MX": {"name_ko": "멕시코",     "name_en": "Mexico",      "flag": "🇲🇽"},
+    "AU": {"name_ko": "호주",       "name_en": "Australia",   "flag": "🇦🇺"},
+    "CA": {"name_ko": "캐나다",     "name_en": "Canada",      "flag": "🇨🇦"},
+}
+NON_PRESENCE_CODES = tuple(NON_PRESENCE_COUNTRIES.keys())
+
+
+def is_presence(cc: str) -> bool:
+    """KB 진출국이면 True. 14개 미진출국 화이트리스트에 없는 코드는 전부 True
+    (GLOBAL 등 기존 코드의 동작을 바꾸지 않기 위한 안전한 기본값)."""
+    return cc not in NON_PRESENCE_COUNTRIES

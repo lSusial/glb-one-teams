@@ -92,11 +92,15 @@ def ensure_table(conn) -> None:
 
 
 def _target_countries(conn) -> list[str]:
+    """국가 브리핑 대상 국가 목록. KB 미진출국은 국가 브리핑을 만들지 않는다
+    (docs/design_미진출국.md — 통합 피드만 제공, countries.html에서 처리)."""
+    exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
     return [
         r["cc"] for r in conn.execute(
-            """SELECT DISTINCT m.primary_country_code AS cc
-               FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
-               WHERE a.ai_score IS NOT NULL"""
+            f"""SELECT DISTINCT m.primary_country_code AS cc
+                FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
+                WHERE a.ai_score IS NOT NULL{exc}""",
+            exp,
         )
     ]
 
@@ -275,6 +279,8 @@ def generate_daily_highlights(
     ensure_highlights_table(conn)
     tdate = target_date or date.today().isoformat()
     dc, dp = db.days_clause_data(1)
+    # KB 미진출국 제외 — impact 필드가 "어느 KB 거점" 전제라 거점 없는 시장엔 안 맞음.
+    exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
 
     rows = conn.execute(
         f"""
@@ -282,11 +288,11 @@ def generate_daily_highlights(
                a.topics, a.ai_score, m.primary_country_code AS cc
         FROM articles_raw a
         JOIN media_sources m ON m.source_id = a.source_id
-        WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}
+        WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}{exc}
         ORDER BY a.ai_score DESC
         LIMIT ?
         """,
-        (config.AI_SCORE_ACTIVE_THRESHOLD, *dp, config.HIGHLIGHTS_MAX_ARTICLES),
+        (config.AI_SCORE_ACTIVE_THRESHOLD, *dp, *exp, config.HIGHLIGHTS_MAX_ARTICLES),
     ).fetchall()
 
     if not rows:

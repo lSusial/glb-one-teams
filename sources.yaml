@@ -1022,3 +1022,133 @@ sources:
       # 국제결제은행 — 직접 RSS 404 → Google News 우회
       - section: news
         url: https://news.google.com/rss/search?q=site:bis.org+(speech+OR+press+OR+report+OR+statement)+when:7d&hl=en-US&gl=US&ceid=US:en
+
+  # ============================================================
+  # KB 미진출국 (14) — 통합 피드 전용, 경량 수집(Google News 국가명+금융 키워드)
+  #   docs/design_미진출국.md — 개별 매체 큐레이션 안 함, 국가별 쿼리 1개씩
+  # ============================================================
+  - media_name: GNews Philippines
+    country: PH
+    language: en
+    tier: 2
+    categories: [PH]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=Philippines+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: GNews Thailand
+    country: TH
+    language: en
+    tier: 2
+    categories: [TH]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=Thailand+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: GNews Malaysia
+    country: MY
+    language: en
+    tier: 2
+    categories: [MY]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=Malaysia+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: GNews Bangladesh
+    country: BD
+    language: en
+    tier: 2
+    categories: [BD]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=Bangladesh+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: GNews Poland
+    country: PL
+    language: en
+    tier: 2
+    categories: [PL]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=Poland+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: GNews Germany
+    country: DE
+    language: en
+    tier: 2
+    categories: [DE]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=Germany+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: GNews France
+    country: FR
+    language: en
+    tier: 2
+    categories: [FR]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=France+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: GNews Kazakhstan
+    country: KZ
+    language: en
+    tier: 2
+    categories: [KZ]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=Kazakhstan+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: GNews Uzbekistan
+    country: UZ
+    language: en
+    tier: 2
+    categories: [UZ]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=Uzbekistan+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: GNews UAE
+    country: AE
+    language: en
+    tier: 2
+    categories: [AE]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=UAE+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: GNews Brazil
+    country: BR
+    language: en
+    tier: 2
+    categories: [BR]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=Brazil+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: GNews Mexico
+    country: MX
+    language: en
+    tier: 2
+    categories: [MX]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=Mexico+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: GNews Australia
+    country: AU
+    language: en
+    tier: 2
+    categories: [AU]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=Australia+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: GNews Canada
+    country: CA
+    language: en
+    tier: 2
+    categories: [CA]
+    feeds:
+      - section: top
+        url: https://news.google.com/rss/search?q=Canada+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en

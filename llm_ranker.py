@@ -75,6 +75,32 @@ def _system_prompt() -> str:
     )
 
 
+# KB 미진출국(config.NON_PRESENCE_COUNTRIES) 전용 경량 프롬프트 — kb_implication_en
+# 필드를 아예 요청하지 않는다(거점이 없어 "KB 시사점"이 성립하지 않음 + 토큰 절감).
+def _system_prompt_light() -> str:
+    return (
+        "You are a global intelligence analyst at KB Financial Group. KB has NO branch in "
+        "this market — you are scanning it only because Korean competitor banks operate there. "
+        "Analyze one news article and output ONLY this JSON:\n"
+        '{"ai_score": (importance, integer 0-100), '
+        '"title_ko": "15자 이내 신문 헤드라인 스타일 한국어 제목", '
+        '"summary_en": "2-3 sentence English summary", '
+        '"topics": ["TOPIC_CODE", ...]}\n\n'
+        "Choose topics ONLY from these codes (multiple allowed, max 3):\n"
+        + taxonomy.prompt_reference()
+        + "\n\nai_score rubric — score general macro/financial materiality for a market with "
+        "no KB entity (assign the highest tier that applies):\n"
+        "75-100  Major sovereign/macro event: central bank decision, currency crisis, "
+        "sovereign rating action, major bank failure or large M&A.\n"
+        "50-74   Significant market-moving financial/economic news: rate moves, major bank "
+        "earnings, regulatory change, large FX swings.\n"
+        "25-49   Useful background: routine economic data, minor market moves, general "
+        "fintech/ESG news.\n"
+        "0-24    Noise: sports, entertainment, crime, local news with no macro/financial "
+        "relevance."
+    )
+
+
 def run_rank(conn, provider: LLMProvider | None = None,
              limit: int | None = None, days: int | None = None,
              use_batch: bool | None = None) -> dict:
@@ -86,7 +112,8 @@ def run_rank(conn, provider: LLMProvider | None = None,
     ensure_columns(conn)
     provider = provider or get_provider("smart", use_batch=use_batch)
     limit = limit or config.RANK_LIMIT
-    system = _system_prompt()
+    system_full = _system_prompt()
+    system_light = _system_prompt_light()
 
     date_clause, params = db.days_clause_now(days)
 
@@ -110,19 +137,29 @@ def run_rank(conn, provider: LLMProvider | None = None,
     requests, row_by_id = [], {}
     for i, r in enumerate(rows):
         cid = str(i)
-        ctx = kb_network.context_for(r["cc"])
         # 본문 추출본이 있으면 본문으로, 없으면 RSS 스니펫으로 (자동 폴백)
         body = (r["full_text"] or "").strip()
         if body:
             body_line = f"본문: {body[:config.RANK_BODY_MAXLEN]}"
         else:
             body_line = f"요약: {(r['summary'] or '')[:1200]}"
-        user = (
-            f"[거점 맥락: {ctx}]\n"
-            f"매체: {r['media_name']}  국가: {r['cc']}\n"
-            f"제목: {r['title']}\n"
-            f"{body_line}"
-        )
+        if config.is_presence(r["cc"]):
+            ctx = kb_network.context_for(r["cc"])
+            system = system_full
+            user = (
+                f"[거점 맥락: {ctx}]\n"
+                f"매체: {r['media_name']}  국가: {r['cc']}\n"
+                f"제목: {r['title']}\n"
+                f"{body_line}"
+            )
+        else:
+            # KB 미진출국 — 거점 맥락 없이 경량 프롬프트(kb_implication_en 생략)
+            system = system_light
+            user = (
+                f"매체: {r['media_name']}  국가: {r['cc']}\n"
+                f"제목: {r['title']}\n"
+                f"{body_line}"
+            )
         requests.append((cid, system, user, 600))
         row_by_id[cid] = r
 
