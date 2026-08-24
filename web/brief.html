@@ -58,11 +58,33 @@
   .hl .hlhead{font-weight:700;font-size:13.5px;line-height:1.5}
   .hl .hlimp{color:#463f37;font-size:12.5px;line-height:1.5;margin-top:4px}
   .hl .hlflags{margin-top:4px;font-size:13px;letter-spacing:2px}
-  .mdrow{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
-  .mdbadge{flex:none;min-width:76px;border:2px solid var(--line);border-radius:12px;padding:9px 10px;background:#fdfcfa;text-align:center}
-  .mdbadge .mdtop{display:flex;align-items:center;justify-content:center;gap:4px;font-size:19px}
-  .mdbadge .mdtop .trend{font-size:12px;color:var(--sub);font-weight:800}
-  .mdbadge .mdname{font-size:11.5px;font-weight:800;margin-top:5px}
+  /* 국가별 시장 신호 보드 — docs/mockups/국가신호_board.html 스타일 재현 */
+  .sgboard{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+  .sgcell{padding:9px 9px;border-right:1px solid var(--line);border-top:1px solid var(--line);min-width:0;background:#fff}
+  .sgcell:nth-child(4n){border-right:none}
+  .sgcell:nth-child(-n+4){border-top:none}
+  .sgr1{display:flex;align-items:center;gap:6px;margin-bottom:5px}
+  .sgdot{width:7px;height:7px;border-radius:50%;flex:none}
+  .sgdot.go{background:#188a54}.sgdot.warn{background:#c98a1e}.sgdot.stop{background:#cf3d3d}
+  .sgcty{font-size:12.5px;font-weight:800;letter-spacing:-.01em;flex:1 1 auto;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+  .sgstate{margin-left:auto;font-size:10px;font-weight:800;flex:none;white-space:nowrap}
+  .sgstate.go{color:#188a54}.sgstate.warn{color:#c98a1e}.sgstate.stop{color:#cf3d3d}
+  .sgline{display:block;font-size:9.5px;font-variant-numeric:tabular-nums;
+    margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--sub)}
+  .sgline .nm{font-weight:800;color:var(--ink);margin-right:2px}
+  .sgline .chg{font-weight:800}
+  .sgline .chg.up{color:#188a54}.sgline .chg.down{color:#cf3d3d}.sgline .chg.flat{color:var(--sub)}
+  .sgline .sep{color:var(--sub);opacity:.6;margin:0 2px}
+  .sgkw{font-size:11px;color:var(--sub);line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .sgfoot{display:flex;gap:14px;align-items:center;margin-top:10px;font-size:11px;color:var(--sub)}
+  .sglg{display:flex;align-items:center;gap:5px}
+  @media(max-width:520px){
+    .sgboard{grid-template-columns:repeat(2,1fr)}
+    .sgcell:nth-child(4n){border-right:1px solid var(--line)}
+    .sgcell:nth-child(2n){border-right:none}
+    .sgcell:nth-child(-n+4){border-top:1px solid var(--line)}
+    .sgcell:nth-child(-n+2){border-top:none}
+  }
   .hl .cshlrow{font-size:12.5px;line-height:1.6;color:#463f37}
   .hl .cshlrow b{color:var(--ink)}
   .news{display:flex;flex-direction:column;gap:9px}
@@ -107,18 +129,23 @@
     <div class="nav"><a class="on" href="brief.html" data-en="Today's Global">글로벌 원팀 뉴스</a><a href="countries.html" data-en="Country News">국가별 뉴스</a><a href="weekly.html" data-en="Weekly Report">주간 리포트</a><a href="topics.html" data-en="Monitoring">모니터링</a></div>
   </div>
 
-  <section class="sec md" id="secMood" style="display:none">
-    <div class="sec-h"><div class="num" style="background:var(--kb-gold)">🌍</div>
-      <div><div class="tt" data-en="Market Mood">시장 무드</div></div></div>
-    <div id="moodList" class="mdrow"></div>
-  </section>
-
   <section class="sec">
     <div class="sec-h"><div class="num">🌡️</div>
       <div><div class="tt" data-en="Today's Global Temperature">오늘의 글로벌 온도</div></div>
       <div class="rt" id="asof"></div></div>
     <div class="scale"><span>0°C</span><span class="mid" data-en="Issue attention">이슈 주목도</span><span>100°C</span></div>
     <div id="bars"></div>
+  </section>
+
+  <section class="sec sg" id="secSignals" style="display:none">
+    <div class="sec-h"><div class="num" style="background:var(--kb-gold)">🚦</div>
+      <div><div class="tt" data-en="Hub Market Signals">국가별 시장 신호</div></div></div>
+    <div id="sgBoard" class="sgboard"></div>
+    <div class="sgfoot">
+      <span class="sglg"><span class="sgdot go"></span><span data-en="Stable">안정</span></span>
+      <span class="sglg"><span class="sgdot warn"></span><span data-en="Caution">주의</span></span>
+      <span class="sglg"><span class="sgdot stop"></span><span data-en="Alert">경계</span></span>
+    </div>
   </section>
 
   <section class="sec hl" id="secHl" style="display:none">
@@ -178,17 +205,42 @@
   const hlHead=h=>EN?(h.headline_en||h.headline_ko):(h.headline_ko||h.headline_en);
   const hlImp=h=>EN?(h.impact_en||h.impact_ko):(h.impact_ko||h.impact_en);
   const highlights=D.daily_highlights||[];
-  const cs=D.country_section||[];   // 시장 무드 배지(최상단) + 핵심 블록 내 국가별 이슈가 공유
+  const cs=D.country_section||[];   // 핵심 블록 내 국가별 이슈(top-5)에서만 사용 — 그대로 유지
 
-  // 시장 무드 배지 — 최상단, country_section 그대로 재사용(계산 로직 변경 없음)
-  const moodColor=lv=>lv>=80?'#1e8a4c':lv>=60?'#4a9d6e':lv>=40?'#b0a26a':lv>=20?'#c07a3b':'#c23b3b';
-  if(cs.length){
-    document.getElementById('secMood').style.display='';
-    document.getElementById('moodList').innerHTML=cs.map(s=>`
-      <div class="mdbadge" style="border-color:${moodColor(s.mood_level)}">
-        <div class="mdtop"><span class="fg">${s.flag||''}</span>${s.mood_icon||''}<span class="trend">${esc(s.trend||'')}</span></div>
-        <div class="mdname">${esc(NAMES[s.cc]||s.cc)}</div>
-      </div>`).join('');
+  // 국가별 시장 신호 보드 — 진출국 11개 전부, 온도 섹션 바로 아래
+  const SGSTATE=EN?{go:'Stable',warn:'Caution',stop:'Alert'}:{go:'안정',warn:'주의',stop:'경계'};
+  const fmtPct=v=>v==null?'-':Math.abs(v).toFixed(2)+'%';
+  const fmtFx=v=>{
+    if(v==null) return '-';
+    const abs=Math.abs(v), d=abs>=100?0:2;
+    return Number(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+  };
+  const signals=D.country_signals||[];
+  if(signals.length){
+    document.getElementById('secSignals').style.display='';
+    let cells=signals.map(s=>{
+      let mline;
+      if(s.index&&s.index.length){
+        mline=s.index.map(i=>{
+          const pct=i.change_pct;
+          const cls=pct==null?'flat':(pct>0?'up':(pct<0?'down':'flat'));
+          const arrow=pct==null?'':(pct>0?'▲':(pct<0?'▼':''));
+          return `<span class="nm">${esc(i.label)}</span><span class="chg ${cls}">${arrow}${fmtPct(pct)}</span>`;
+        }).join('<span class="sep">·</span>');
+        if(s.fx) mline+=`<span class="sep">·</span><span class="nm">${esc(s.fx.symbol)}</span> ${fmtFx(s.fx.value)}`;
+      } else if(s.fx){
+        mline=`<span class="na">${EN?'No index':'지수 없음'}</span><span class="sep">·</span><span class="nm">${esc(s.fx.symbol)}</span> ${fmtFx(s.fx.value)}${s.fx.note?` (${esc(s.fx.note)})`:''}`;
+      } else {
+        mline=`<span class="na">${EN?'No data':'데이터 없음'}</span>`;
+      }
+      return `<div class="sgcell">
+        <div class="sgr1"><span class="sgdot ${s.state}"></span><span class="fg">${s.flag||''}</span><span class="sgcty">${esc(EN?(s.name_en||s.name):(s.name||s.name_en))}</span><span class="sgstate ${s.state}">${SGSTATE[s.state]||''}</span></div>
+        <div class="sgline">${mline}</div>
+        <div class="sgkw">${esc(EN?(s.keyword_en||s.keyword):(s.keyword||s.keyword_en))}</div>
+      </div>`;
+    });
+    while(cells.length%4!==0) cells.push('<div class="sgcell" style="background:#fbfbf9"></div>');
+    document.getElementById('sgBoard').innerHTML=cells.join('');
   }
 
   // 오늘의 글로벌 핵심 = 핵심 3줄 + 국가별 이슈(같은 top-5, 한 줄 형식) — 하나로 합쳐 렌더
@@ -203,7 +255,7 @@
     const issues=(EN?(s.issues_en&&s.issues_en.length?s.issues_en:s.issues):(s.issues&&s.issues.length?s.issues:s.issues_en))||[];
     return `<div class="hlrow cshlrow">
       <span class="fg">${s.flag||''}</span> <b>${esc(NAMES[s.cc]||s.cc)}</b> ${s.mood_icon||''} <span class="trend">${esc(s.trend||'')}</span>
-      → ${issues.map(esc).join(' · ')}
+      · ${issues.map(esc).join(' · ')}
     </div>`;
   });
   if(hlRows.length || csRows.length){

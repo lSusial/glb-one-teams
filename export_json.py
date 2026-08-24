@@ -28,6 +28,17 @@ _FLAGS_ALL = {"GB": "🇬🇧", "US": "🇺🇸", "JP": "🇯🇵", "HK": "🇭�
               "VN": "🇻🇳", "IN": "🇮🇳", "MM": "🇲🇲", "ID": "🇮🇩", "KH": "🇰🇭", "GLOBAL": "🌐"}
 _FLAGS = {cc: f for cc, f in _FLAGS_ALL.items() if cc != "GLOBAL"}
 
+# 진출국 11개 한/영 국가명 — country_signals(국가별 시장 신호 보드)에서 사용.
+_PRESENCE_NAMES_KO = {"GB": "영국", "US": "미국", "HK": "홍콩", "CN": "중국", "JP": "일본",
+                       "SG": "싱가포르", "IN": "인도", "VN": "베트남", "MM": "미얀마",
+                       "ID": "인도네시아", "KH": "캄보디아"}
+_PRESENCE_NAMES_EN = {"GB": "UK", "US": "US", "HK": "Hong Kong", "CN": "China", "JP": "Japan",
+                       "SG": "Singapore", "IN": "India", "VN": "Vietnam", "MM": "Myanmar",
+                       "ID": "Indonesia", "KH": "Cambodia"}
+
+# MMK/KHR — 시장환율이 아닌 별도 체계임을 보드에 짧게 표시.
+_FX_NOTE = {"MMK": "공식", "KHR": "페그"}
+
 
 def _snapshot_date(date: str | None = None) -> str:
     """스냅샷 라벨 날짜 (기본: 오늘, 로컬)."""
@@ -427,6 +438,53 @@ def _mood_tier(level: int) -> tuple[str, str, str]:
     return _MOOD_TIERS[-1][1:]
 
 
+def _mood_level(arts: list, cc_indicators: list) -> tuple[int, str]:
+    """국가별 무드 스코어(0~100, 높을수록 안정) + 추세(▲안정화/▼악화/→중립).
+
+    country_section(top-5 이슈)·country_signals(11개 전부 신호판)가 공유하는
+    핵심 계산 — 여기 로직을 바꾸면 두 화면 모두 바뀐다.
+    arts 가 비어있으면(그날 ACTIVE 기사 없음) 중립값(70·→)을 반환한다.
+    """
+    if not arts:
+        return 70, "→"
+    n = len(arts)
+    avg_score = sum(r["ai_score"] for r in arts) / n
+    risk_n = sum(1 for r in arts if "RISK" in (r["topics"] or "").split(","))
+    risk_pct = risk_n / n * 100
+    score_norm = max(0.0, min(100.0, (avg_score - config.AI_SCORE_ACTIVE_THRESHOLD)
+                               / (100 - config.AI_SCORE_ACTIVE_THRESHOLD) * 100))
+
+    badness = []
+    for ind in cc_indicators:
+        if ind.get("change_pct") is None:
+            continue
+        pct = ind["change_pct"]
+        # fx: 값 상승=현지통화 약세(나쁨) / index: 하락=나쁨 — 일간 변동폭이 보통
+        # ±0.5%대라 ±2.5%를 0~100 스케일로 잡아야 추세가 실제로 갈린다.
+        b = (50 + pct * 20) if ind["kind"] == "fx" else (50 - pct * 20)
+        badness.append(max(0.0, min(100.0, b)))
+
+    if badness:
+        ind_avg = sum(badness) / len(badness)
+        stress = 0.4 * risk_pct + 0.3 * score_norm + 0.3 * ind_avg
+        trend = "▼" if ind_avg > 55 else ("▲" if ind_avg < 45 else "→")
+    else:
+        stress = 0.6 * risk_pct + 0.4 * score_norm
+        trend = "→"   # 지표 없음 — 모멘텀 이력 스냅샷이 없어 중립 처리
+
+    mood_level = round(max(0, min(100, 100 - stress)))
+    return mood_level, trend
+
+
+def _signal_band(mood_level: int) -> str:
+    """mood_level → 3단계 신호(go/warn/stop). 임계는 config에서 조정."""
+    if mood_level >= config.SIGNAL_GO_THRESHOLD:
+        return "go"
+    if mood_level >= config.SIGNAL_WARN_THRESHOLD:
+        return "warn"
+    return "stop"
+
+
 def _compute_country_section(conn, days: int | None = 1, top_n: int = 5) -> list[dict]:
     """brief.html '국가별 오늘의 이슈' + '시장 무드 배지'가 공유하는 top-N 국가 블록.
 
@@ -461,31 +519,7 @@ def _compute_country_section(conn, days: int | None = 1, top_n: int = 5) -> list
     for cc in top_ccs:
         arts = by_cc[cc]
         n = len(arts)
-        avg_score = sum(r["ai_score"] for r in arts) / n
-        risk_n = sum(1 for r in arts if "RISK" in (r["topics"] or "").split(","))
-        risk_pct = risk_n / n * 100
-        score_norm = max(0.0, min(100.0, (avg_score - config.AI_SCORE_ACTIVE_THRESHOLD)
-                                   / (100 - config.AI_SCORE_ACTIVE_THRESHOLD) * 100))
-
-        badness = []
-        for ind in indicators.get(cc, []):
-            if ind.get("change_pct") is None:
-                continue
-            pct = ind["change_pct"]
-            # fx: 값 상승=현지통화 약세(나쁨) / index: 하락=나쁨 — 일간 변동폭이 보통
-            # ±0.5%대라 ±2.5%를 0~100 스케일로 잡아야 추세가 실제로 갈린다.
-            b = (50 + pct * 20) if ind["kind"] == "fx" else (50 - pct * 20)
-            badness.append(max(0.0, min(100.0, b)))
-
-        if badness:
-            ind_avg = sum(badness) / len(badness)
-            stress = 0.4 * risk_pct + 0.3 * score_norm + 0.3 * ind_avg
-            trend = "▼" if ind_avg > 55 else ("▲" if ind_avg < 45 else "→")
-        else:
-            stress = 0.6 * risk_pct + 0.4 * score_norm
-            trend = "→"   # 지표 없음 — 모멘텀 이력 스냅샷이 없어 중립 처리
-
-        mood_level = round(max(0, min(100, 100 - stress)))
+        mood_level, trend = _mood_level(arts, indicators.get(cc, []))
         icon, mood_ko, mood_en = _mood_tier(mood_level)
 
         titles_ko = [r["title_ko"] or r["title"] for r in arts[:3]]
@@ -502,6 +536,69 @@ def _compute_country_section(conn, days: int | None = 1, top_n: int = 5) -> list
     return out
 
 
+def _index_short_label(symbol: str) -> str | None:
+    for spec in config.INDICATOR_MAP.values():
+        for idx in spec.get("indices", []):
+            if idx["symbol"] == symbol:
+                return idx.get("short") or idx.get("label")
+    return None
+
+
+def _compute_country_signals(conn, days: int | None = 1) -> list[dict]:
+    """국가별 시장 신호 보드(진출국 11개 전부) — docs/mockups/국가신호_board.html.
+
+    country_section(top-5 이슈)과 같은 _mood_level() 계산을 재사용하되, 제한
+    없이 11개 전부 반환한다. 그날 기사가 없는 국가는 중립값(go)으로 표시.
+    """
+    dc, params = _date_clause(days)
+    ph = ",".join("?" * len(_FLAGS))
+    rows = conn.execute(
+        f"""SELECT a.ai_score, a.title, a.title_ko, a.topics, m.primary_country_code cc
+            FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
+            WHERE a.ai_score >= ? AND a.duplicate_of IS NULL
+              AND m.primary_country_code IN ({ph}){dc}
+            ORDER BY a.ai_score DESC""",
+        (config.AI_SCORE_ACTIVE_THRESHOLD, *_FLAGS.keys(), *params),
+    ).fetchall()
+
+    by_cc: dict[str, list] = {cc: [] for cc in _FLAGS}
+    for r in rows:
+        by_cc[r["cc"]].append(r)
+
+    indicators = _country_indicators(conn)
+
+    out = []
+    for cc, flag in _FLAGS.items():
+        arts = by_cc[cc]
+        cc_inds = indicators.get(cc, [])
+        mood_level, _trend = _mood_level(arts, cc_inds)
+        state = _signal_band(mood_level)
+
+        idx_list, fx = [], None
+        for ind in cc_inds:
+            if ind["kind"] == "index":
+                idx_list.append({
+                    "label": _index_short_label(ind["symbol"]) or ind.get("label") or ind["symbol"],
+                    "change_pct": ind.get("change_pct"),
+                })
+            elif ind["kind"] == "fx":
+                fx = {"symbol": ind["symbol"], "value": ind.get("value"),
+                      "note": _FX_NOTE.get(ind["symbol"])}
+
+        if arts:
+            keyword, keyword_en = arts[0]["title_ko"] or arts[0]["title"], arts[0]["title"]
+        else:
+            keyword, keyword_en = "오늘 특이사항 없음", "No notable news today"
+
+        out.append(dict(
+            cc=cc, flag=flag, name=_PRESENCE_NAMES_KO.get(cc, cc), name_en=_PRESENCE_NAMES_EN.get(cc, cc),
+            state=state, mood_level=mood_level,
+            index=idx_list, fx=fx,
+            keyword=keyword, keyword_en=keyword_en,
+        ))
+    return out
+
+
 def export_pulse(conn, days: int | None = None) -> dict:
     """pulse.json + brief.html(온도계 화면) 생성."""
     if days is None: days = 1          # 첫 화면 = 전일+당일 ('오늘의 ...')
@@ -514,6 +611,7 @@ def export_pulse(conn, days: int | None = None) -> dict:
         "top_news": _compute_top_news(conn, days=days, limit=8),
         "daily_highlights": _daily_highlights(conn),
         "country_section": _compute_country_section(conn, days=days),
+        "country_signals": _compute_country_signals(conn, days=days),
     }
     _write_json("pulse", payload)
 

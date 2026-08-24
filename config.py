@@ -96,21 +96,26 @@ GNEWS_MAX_PARALLEL = 3     # Google News 전용 풀 병렬 수 (direct RSS는 MA
 # ── 국가별 거시지표(indicators.py) ────────────────────────────────
 # fx: open.er-api.com 통화코드(1 USD = X {통화}). None이면 환율 카드 없음(예: US).
 # indices: yfinance 티커 목록(화면 표시 라벨 포함). 국가에 지수가 없으면 빈 리스트.
+# short: 국가별 시장 신호 보드(compact) 등 좁은 공간용 축약 라벨.
 INDICATOR_MAP: dict[str, dict] = {
-    "GB": {"fx": "GBP", "indices": [{"symbol": "^FTSE",     "label": "FTSE100"}]},
-    "US": {"fx": None,  "indices": [{"symbol": "^GSPC",     "label": "S&P500"},
-                                     {"symbol": "^IXIC",     "label": "나스닥종합"}]},
-    "HK": {"fx": "HKD", "indices": [{"symbol": "^HSI",      "label": "항셍지수"}]},
-    "CN": {"fx": "CNY", "indices": [{"symbol": "000001.SS", "label": "상하이종합"}]},
-    "JP": {"fx": "JPY", "indices": [{"symbol": "^N225",     "label": "닛케이225"}]},
-    "SG": {"fx": "SGD", "indices": [{"symbol": "^STI",      "label": "STI"}]},
-    "IN": {"fx": "INR", "indices": [{"symbol": "^NSEI",     "label": "NIFTY50"}]},
+    "GB": {"fx": "GBP", "indices": [{"symbol": "^FTSE",     "label": "FTSE100",   "short": "FTSE"}]},
+    "US": {"fx": None,  "indices": [{"symbol": "^GSPC",     "label": "S&P500",    "short": "S&P"},
+                                     {"symbol": "^IXIC",     "label": "나스닥종합", "short": "나스닥"}]},
+    "HK": {"fx": "HKD", "indices": [{"symbol": "^HSI",      "label": "항셍지수",   "short": "항셍"}]},
+    "CN": {"fx": "CNY", "indices": [{"symbol": "000001.SS", "label": "상하이종합", "short": "상해"}]},
+    "JP": {"fx": "JPY", "indices": [{"symbol": "^N225",     "label": "닛케이225",  "short": "닛케이"}]},
+    "SG": {"fx": "SGD", "indices": [{"symbol": "^STI",      "label": "STI",       "short": "STI"}]},
+    "IN": {"fx": "INR", "indices": [{"symbol": "^NSEI",     "label": "NIFTY50",   "short": "Nifty"}]},
     # VN: 베트남 지수를 직접 커버하는 무료 티커가 없어 미국 상장 VanEck Vietnam ETF로 대체
-    "VN": {"fx": "VND", "indices": [{"symbol": "VNM",       "label": "VN (VNM ETF)"}]},
-    "ID": {"fx": "IDR", "indices": [{"symbol": "^JKSE",     "label": "자카르타종합"}]},
+    "VN": {"fx": "VND", "indices": [{"symbol": "VNM",       "label": "VN (VNM ETF)", "short": "VNM"}]},
+    "ID": {"fx": "IDR", "indices": [{"symbol": "^JKSE",     "label": "자카르타종합", "short": "JCI"}]},
     "MM": {"fx": "MMK", "indices": []},   # 지수 없음, 환율만(공식환율 — indicators.py 참조)
     "KH": {"fx": "KHR", "indices": []},   # 지수 없음, 환율만
 }
+
+# 국가별 시장 신호 보드 3단계(go/warn/stop) 임계 — mood_level(0~100, 높을수록 안정) 기준.
+SIGNAL_GO_THRESHOLD   = 70   # 이상 = 안정
+SIGNAL_WARN_THRESHOLD = 55   # 이상(70 미만) = 주의, 그 미만 = 경계
 
 # ── KB 진출국 / 미진출국 (docs/design_미진출국.md) ─────────────────
 # 진출국 11개(위 INDICATOR_MAP·kb_network.KB_NETWORK와 동일 거점)는 국가별 화면
