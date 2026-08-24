@@ -114,6 +114,25 @@ CREATE TABLE IF NOT EXISTS country_briefings (
 
 CREATE INDEX IF NOT EXISTS idx_briefings_cc_date ON country_briefings(cc, briefing_date DESC);
 
+-- 국가별 거시지표 스냅샷 (indicators.py) — 환율(fx)·주가지수(index) 일자별 기록
+CREATE TABLE IF NOT EXISTS indicators (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    date        TEXT NOT NULL,       -- 수집 기준일(YYYY-MM-DD)
+    country     TEXT NOT NULL,       -- KB 거점 국가 코드
+    kind        TEXT NOT NULL,       -- 'fx' | 'index'
+    symbol      TEXT NOT NULL,       -- 통화코드(fx) 또는 yfinance 티커(index)
+    label       TEXT,                -- 화면 표시용 라벨(지수명 등)
+    value       REAL,
+    prev_value  REAL,
+    change      REAL,
+    change_pct  REAL,
+    note        TEXT,                -- 예: MMK 공식환율(시장환율과 괴리) 주석
+    fetched_at  TEXT,
+    UNIQUE(date, country, kind, symbol)
+);
+
+CREATE INDEX IF NOT EXISTS idx_indicators_country_date ON indicators(country, date DESC);
+
 -- 브로드캐스트 발송 (broadcaster.py)
 CREATE TABLE IF NOT EXISTS broadcast_targets (
     cc        TEXT NOT NULL,

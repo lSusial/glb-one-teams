@@ -82,8 +82,8 @@ python main.py list    # 최근 기사 확인
 2. ✅ `articles_raw.kb_implication` 컬럼 (KB 시사점) — `schema.sql` 반영 완료
 3. ✅ `llm_prefilter.py`·`llm_ranker.py`·`briefing.py` 이식 + 프로바이더 추상화(`llm_provider.py`) — 코드 이식 완료, **미실행**
 4. 새 UI 데이터 연동(현지언론 화면부터, `export_json`→`countries.json`), AI 레이어 실제 실행·평가셋 검증
-5. 수집원 보강 — OFFICIAL/tier0 활성화(규제), 자회사 IR(ID·KH), 거시지표 피드
+5. 수집원 보강 — OFFICIAL/tier0 활성화(규제), 자회사 IR(ID·KH). ✅ 거시지표(환율·주가지수, `indicators.py`) 완료
 6. 정기 수집 자동화
 
-> ⛔ **현재 진행 범위(2026-07-23 갱신):** 원칙 = **뉴스 분석으로 도출 가능한 항목 포함 / 비-뉴스 소스 필요 항목 보류.** 포함: 현지언론+AI(요약·시사점·분류·**국가 일일 브리핑**)·Global Pulse 온도계·Key-man 인사동향(뉴스)·**TopicWatch(규제·감독 클러스터 포함, 규제 화면 흡수)**. 보류: 재미요소·참여형, 자회사 IR 링크, OFFICIAL 당국 원천 피드, 거시지표 빅넘버. 상세는 `PLAN.md`의 '이번 진행 범위' + `docs/work_log.md` 세션 8.
+> ⛔ **현재 진행 범위(2026-08-24 갱신):** 원칙 = **뉴스 분석으로 도출 가능한 항목 포함 / 비-뉴스 소스 필요 항목 보류.** 포함: 현지언론+AI(요약·시사점·분류·**국가 일일 브리핑**)·Global Pulse 온도계·Key-man 인사동향(뉴스)·**TopicWatch(규제·감독 클러스터 포함, 규제 화면 흡수)**·**국가별 거시지표 빅넘버(환율·주가지수, `indicators.py`)**. 보류: 재미요소·참여형, 자회사 IR 링크, OFFICIAL 당국 원천 피드. 상세는 `PLAN.md`의 '이번 진행 범위' + `docs/work_log.md` 세션 8.
 > 상세 계획·로드맵은 `PLAN.md`(11장)·`STATUS.md` 및 위 설계 문서·`docs/work_log.md` 참조

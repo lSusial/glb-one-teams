@@ -83,6 +83,17 @@
   .brief .bt.bempty{color:var(--sub);font-weight:400}
   .brief .bt code{background:#efe7d2;padding:1px 5px;border-radius:4px;font-size:12px}
 
+  /* ── 거시지표 빅넘버 ── */
+  .bignum{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px}
+  .bnc{flex:1;min-width:120px;border:1px solid var(--line);border-radius:8px;padding:9px 12px;background:#fdfcfa}
+  .bnc .bnl{font-size:11px;color:var(--sub);font-weight:700;display:flex;align-items:center;gap:4px}
+  .bnc .bnl .note{cursor:help;opacity:.6}
+  .bnc .bnv{font-size:16px;font-weight:800;color:var(--ink);margin-top:2px}
+  .bnc .bnc2{font-size:11.5px;font-weight:700;margin-top:2px}
+  .bnc .bnc2.up{color:#1e8a4c}
+  .bnc .bnc2.down{color:#c23b3b}
+  .bnc .bnc2.flat{color:var(--sub)}
+
   /* ── 푸터 ── */
   footer{text-align:center;color:var(--kb-silver);font-size:11.5px;letter-spacing:.5px;padding:22px 0 34px}
   footer .tag{color:var(--kb-gold);font-weight:800;letter-spacing:1px}
@@ -135,6 +146,7 @@
   <section class="sec accent" id="secFeed">
     <div class="sec-h"><div class="num y">02</div>
       <div><div class="tt" data-en="Local Press Feed">현지언론 피드</div></div></div>
+    <div id="bignum" class="bignum" style="display:none"></div>
     <div id="brief" class="brief" style="display:none"></div>
     <div class="fil" id="cats"></div>
     <div class="fil" style="margin-top:8px"><span class="sp"></span><span class="cnt" id="count"></span></div>
@@ -193,13 +205,32 @@
   document.querySelectorAll('.nav a').forEach(a=>{ a.href=a.getAttribute('href').split('?')[0]+location.search; });
   if(EN) document.querySelectorAll('[data-en]').forEach(el=>{ el.textContent=el.getAttribute('data-en'); });
 
+  // 거시지표 빅넘버 카드 — kind: 'fx'(환율) | 'index'(주가지수)
+  const fmtNum=(v,d)=>v==null?'-':Number(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+  function bnCard(ind){
+    const isFx=ind.kind==='fx';
+    const dec=isFx?(Math.abs(ind.value)>=100?0:(Math.abs(ind.value)>=1?2:4)):2;
+    const lbl=isFx?'1 USD':(ind.label||ind.symbol);
+    const val=isFx?`${fmtNum(ind.value,dec)} ${ind.symbol}`:fmtNum(ind.value,dec);
+    let chCls='flat', chTxt='-';
+    if(ind.change!=null&&ind.change_pct!=null){
+      const up=ind.change>0, flat=ind.change===0;
+      chCls=flat?'flat':(up?'up':'down');
+      const arrow=flat?'':(up?'▲':'▼');
+      chTxt=`${arrow} ${fmtNum(Math.abs(ind.change),dec)} (${flat?'':(up?'+':'-')}${fmtNum(Math.abs(ind.change_pct),2)}%)`;
+    }
+    const noteEl=ind.note?`<span class="note" title="${esc(ind.note)}">ⓘ</span>`:'';
+    return `<div class="bnc"><div class="bnl">${esc(lbl)}${noteEl}</div><div class="bnv">${esc(val)}</div><div class="bnc2 ${chCls}">${esc(chTxt)}</div></div>`;
+  }
+
   function render(){
     document.querySelectorAll('#cov .cc').forEach(c=>c.classList.toggle('sel',c.dataset.cc===fCC));
     const catsEl=document.getElementById('cats'), bx=document.getElementById('brief'), feed=document.getElementById('feed');
+    const bn=document.getElementById('bignum');
 
-    // 국가 미선택 → 목록·브리핑 숨기고 안내
+    // 국가 미선택 → 목록·브리핑·빅넘버 숨기고 안내
     if(!fCC){
-      bx.style.display='none'; catsEl.style.display='none';
+      bx.style.display='none'; catsEl.style.display='none'; bn.style.display='none';
       document.getElementById('count').textContent='';
       feed.innerHTML=EN?'<div class="empty">Select a hub in <b>Hub Coverage</b> above to see its<br><b>daily briefing</b> and articles.</div>':'<div class="empty">위 <b>거점 커버리지</b>에서 국가를 선택하면<br>해당 거점의 <b>일일 브리핑</b>과 기사가 표시됩니다.</div>';
       feed._rows=[]; return;
@@ -208,8 +239,14 @@
     catsEl.style.display='';
     catsEl.innerHTML=CATS.map(([k,l])=>`<span class="chip${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
 
+    // 거시지표 빅넘버(환율·주가지수) — 국가에 데이터 있을 때만 노출
+    const co=(DATA.countries||[]).find(c=>c.cc===fCC);
+    const inds=(co&&co.indicators)||[];
+    if(inds.length){ bn.style.display=''; bn.innerHTML=inds.map(bnCard).join(''); }
+    else{ bn.style.display='none'; }
+
     // 일일 브리핑 박스 (전일+당일 AI 종합)
-    const co=(DATA.countries||[]).find(c=>c.cc===fCC), br=co&&co.brief;
+    const br=co&&co.brief;
     const btxt=br?(LANG==='en'?(br.en||br.ko):(br.ko||br.en)):'';
     const label=LANG==='en'?'Daily Briefing':'일일 브리핑';
     const bd=br&&br.date?`<span class="bd">${esc(br.date)}</span>`:'';

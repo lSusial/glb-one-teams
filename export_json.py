@@ -99,10 +99,34 @@ def _daily_briefs(conn) -> dict:
     return out
 
 
+def _country_indicators(conn) -> dict:
+    """국가별 최신 거시지표 스냅샷(indicators.py) — {cc: [{kind,symbol,label,value,change,change_pct,note}, ...]}."""
+    try:
+        cols = [c[1] for c in conn.execute("PRAGMA table_info(indicators)")]
+    except Exception:
+        return {}
+    if "country" not in cols:
+        return {}
+    rows = conn.execute(
+        """SELECT country, kind, symbol, label, value, change, change_pct, note
+           FROM indicators WHERE date = (SELECT MAX(date) FROM indicators)
+           ORDER BY country, kind ASC"""   # 'fx' < 'index' 알파벳 순 → 환율 카드가 먼저 나오도록
+    ).fetchall()
+    out: dict[str, list] = {}
+    for r in rows:
+        out.setdefault(r["country"], []).append({
+            "kind": r["kind"], "symbol": r["symbol"], "label": r["label"],
+            "value": r["value"], "change": r["change"], "change_pct": r["change_pct"],
+            "note": r["note"],
+        })
+    return out
+
+
 def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     _ensure_ai_columns(conn)
     dc, dparams = _date_clause(days)   # 현지언론 = 전일+당일 (max-1일 이후)
     briefs = _daily_briefs(conn)
+    indicators = _country_indicators(conn)
     """국가별 기사를 UI 데이터 계약(countries.json)으로 내보낸다.
 
     active_only=True  (기본, AI 실행 후): ai_score >= AI_SCORE_ACTIVE_THRESHOLD 인 ACTIVE 기사만.
@@ -171,6 +195,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
             "count": len(articles),
             "brief": briefs.get(cc),            # 전일+당일 AI 브리핑(한/영) — 없으면 null
             "articles": articles,
+            "indicators": indicators.get(cc, []),  # 환율·주가지수 최신 스냅샷 — 없으면 빈 리스트
         })
 
     payload = {

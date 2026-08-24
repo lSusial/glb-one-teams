@@ -89,3 +89,22 @@ RATE_LIMIT_JITTER_FRAC  = 0.3           # 대기시간에 0~30% 지터 추가(�
 # Google News(news.google.com) 피드는 direct RSS와 분리된 저병렬 풀 + 요청 간 딜레이로 처리.
 GNEWS_FETCH_DELAY  = 1.5   # Google News 요청 사이 최소 간격(초, 지터 포함하면 실제로는 더 김)
 GNEWS_MAX_PARALLEL = 3     # Google News 전용 풀 병렬 수 (direct RSS는 MAX_PARALLEL_FETCH=8 유지)
+
+# ── 국가별 거시지표(indicators.py) ────────────────────────────────
+# fx: open.er-api.com 통화코드(1 USD = X {통화}). None이면 환율 카드 없음(예: US).
+# indices: yfinance 티커 목록(화면 표시 라벨 포함). 국가에 지수가 없으면 빈 리스트.
+INDICATOR_MAP: dict[str, dict] = {
+    "GB": {"fx": "GBP", "indices": [{"symbol": "^FTSE",     "label": "FTSE100"}]},
+    "US": {"fx": None,  "indices": [{"symbol": "^GSPC",     "label": "S&P500"},
+                                     {"symbol": "^IXIC",     "label": "나스닥종합"}]},
+    "HK": {"fx": "HKD", "indices": [{"symbol": "^HSI",      "label": "항셍지수"}]},
+    "CN": {"fx": "CNY", "indices": [{"symbol": "000001.SS", "label": "상하이종합"}]},
+    "JP": {"fx": "JPY", "indices": [{"symbol": "^N225",     "label": "닛케이225"}]},
+    "SG": {"fx": "SGD", "indices": [{"symbol": "^STI",      "label": "STI"}]},
+    "IN": {"fx": "INR", "indices": [{"symbol": "^NSEI",     "label": "NIFTY50"}]},
+    # VN: 베트남 지수를 직접 커버하는 무료 티커가 없어 미국 상장 VanEck Vietnam ETF로 대체
+    "VN": {"fx": "VND", "indices": [{"symbol": "VNM",       "label": "VN (VNM ETF)"}]},
+    "ID": {"fx": "IDR", "indices": [{"symbol": "^JKSE",     "label": "자카르타종합"}]},
+    "MM": {"fx": "MMK", "indices": []},   # 지수 없음, 환율만(공식환율 — indicators.py 참조)
+    "KH": {"fx": "KHR", "indices": []},   # 지수 없음, 환율만
+}

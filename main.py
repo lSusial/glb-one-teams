@@ -9,6 +9,7 @@ glb-one-teams 파이프라인 CLI
   python main.py dedup             # 중복 탐지만 별도 실행
   python main.py run               # fetch → filter → dedup 한 번에
   python main.py report            # 매체 가용성 리포트
+  python main.py indicators        # 국가별 거시지표(환율·주가지수) 수집
   python main.py list [--limit N]  # 최근 수집 기사 출력
 
 AI 레이어(별도 — ANTHROPIC_API_KEY 필요, 미설정 시 즉시 안내 후 중단):
@@ -160,6 +161,13 @@ def cmd_report(_args):
     conn = db.open_conn()
     REPORT_PATH.write_text(collector.build_availability_report(conn), encoding="utf-8")
     print(f"[report] wrote {REPORT_PATH}")
+
+
+def cmd_indicators(_args):
+    import indicators
+    conn = db.open_conn()
+    s = indicators.fetch_indicators(conn)
+    print(f"[indicators] 환율={s['fx']}  지수={s['index']}(스킵={s['index_skipped']})")
 
 
 def cmd_list(args):
@@ -323,6 +331,7 @@ def main():
     sub.add_parser("fetch",  help="전체 활성 피드 1회 수집")
     sub.add_parser("report", help="매체 가용성 리포트 생성")
     sub.add_parser("run",    help="fetch → filter → dedup 순서 실행")
+    sub.add_parser("indicators", help="국가별 거시지표(환율·주가지수) 수집")
 
     flt = sub.add_parser("filter", help="키워드 필터 실행")
     flt.add_argument("--refilter", action="store_true", help="전체 기사 재처리")
@@ -378,6 +387,7 @@ def main():
     {
         "init": cmd_init, "fetch": cmd_fetch, "filter": cmd_filter,
         "dedup": cmd_dedup, "run": cmd_run, "report": cmd_report, "list": cmd_list,
+        "indicators": cmd_indicators,
         "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "rank": cmd_rank,
         "translate": cmd_translate, "brief": cmd_brief,
         "ai": cmd_ai, "export": cmd_export, "admin": cmd_admin,

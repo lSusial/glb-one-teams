@@ -8,3 +8,6 @@ anthropic>=0.40.0
 # openai>=1.0.0   # OpenAI 어댑터 사용 시 주석 해제
 trafilatura
 googlenewsdecoder
+
+# 국가별 거시지표(indicators.py) — 주가지수 조회(무료, 키 불필요)
+yfinance
