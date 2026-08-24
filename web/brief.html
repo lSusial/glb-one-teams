@@ -58,14 +58,15 @@
   .hl .hlhead{font-weight:700;font-size:13.5px;line-height:1.5}
   .hl .hlimp{color:#463f37;font-size:12.5px;line-height:1.5;margin-top:4px}
   .hl .hlflags{margin-top:4px;font-size:13px;letter-spacing:2px}
-  .cs .csrow{padding:10px 0;border-top:1px solid var(--line)}
-  .cs .csrow:first-child{border-top:0;padding-top:2px}
-  .cs .csh{display:flex;align-items:center;gap:6px;font-weight:800;font-size:13.5px}
-  .cs .csh .fg{font-size:15px}
-  .cs .csh .mood{margin-left:auto;font-size:15px;display:flex;align-items:center;gap:4px}
-  .cs .csh .mood .trend{font-size:12px;color:var(--sub);font-weight:700}
-  .cs .csissues{color:#463f37;font-size:12.5px;line-height:1.55;margin-top:4px}
-  .cs .csmeta{color:var(--sub);font-size:11px;margin-top:4px}
+  .mdrow{display:flex;gap:8px;overflow-x:auto;padding-bottom:2px}
+  .mdbadge{flex:none;min-width:92px;border:2px solid var(--line);border-radius:12px;padding:9px 10px;background:#fdfcfa}
+  .mdbadge .mdtop{display:flex;align-items:center;gap:4px;font-size:16px}
+  .mdbadge .mdtop .trend{font-size:12px;color:var(--sub);font-weight:800;margin-left:auto}
+  .mdbadge .mdname{font-size:11.5px;font-weight:800;margin-top:4px}
+  .mdbadge .mdkw{font-size:11px;color:var(--sub);line-height:1.4;margin-top:2px;
+                 display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .hl .cshlrow{font-size:12.5px;line-height:1.6;color:#463f37}
+  .hl .cshlrow b{color:var(--ink)}
   .news{display:flex;flex-direction:column;gap:9px}
   .nc{border:1px solid var(--line);border-radius:10px;padding:12px 14px;background:#fff}
   .nc .nt{display:flex;flex-wrap:wrap;gap:5px;align-items:center;margin-bottom:5px}
@@ -108,6 +109,12 @@
     <div class="nav"><a class="on" href="brief.html" data-en="Today's Global">글로벌 원팀 뉴스</a><a href="countries.html" data-en="Country News">국가별 뉴스</a><a href="weekly.html" data-en="Weekly Report">주간 리포트</a><a href="topics.html" data-en="Monitoring">모니터링</a></div>
   </div>
 
+  <section class="sec md" id="secMood" style="display:none">
+    <div class="sec-h"><div class="num" style="background:var(--kb-gold)">🌍</div>
+      <div><div class="tt" data-en="Market Mood">시장 무드</div></div></div>
+    <div id="moodList" class="mdrow"></div>
+  </section>
+
   <section class="sec">
     <div class="sec-h"><div class="num">🌡️</div>
       <div><div class="tt" data-en="Today's Global Temperature">오늘의 글로벌 온도</div></div>
@@ -120,12 +127,6 @@
     <div class="sec-h"><div class="num" style="background:var(--kb-dark)">📌</div>
       <div><div class="tt" data-en="Today's Global Highlights">오늘의 글로벌 핵심</div></div></div>
     <div id="hlList"></div>
-  </section>
-
-  <section class="sec cs" id="secCS" style="display:none">
-    <div class="sec-h"><div class="num" style="background:var(--kb-gold)">🌍</div>
-      <div><div class="tt" data-en="Today's Hub Snapshot">국가별 오늘의 이슈</div></div></div>
-    <div id="csList"></div>
   </section>
 
   <section class="sec accent">
@@ -179,31 +180,38 @@
   const hlHead=h=>EN?(h.headline_en||h.headline_ko):(h.headline_ko||h.headline_en);
   const hlImp=h=>EN?(h.impact_en||h.impact_ko):(h.impact_ko||h.impact_en);
   const highlights=D.daily_highlights||[];
-  if(highlights.length){
-    document.getElementById('secHl').style.display='';
-    document.getElementById('hlList').innerHTML=highlights.map(h=>`
-      <div class="hlrow">
-        <span class="hlcat" style="background:${HLCAT[h.category]||'#7a746c'}">${esc(HLCATLBL[h.category]||h.category||'')}</span>
-        <span class="hlhead">${esc(hlHead(h))}</span>
-        ${hlImp(h)?`<div class="hlimp">${esc(hlImp(h))}</div>`:''}
-        <div class="hlflags">${(h.country_codes||[]).map(cc=>HLFLAGS[cc]||'').join(' ')}</div>
+  const cs=D.country_section||[];   // 시장 무드 배지(최상단) + 핵심 블록 내 국가별 이슈가 공유
+
+  // 시장 무드 배지 — 최상단, country_section 그대로 재사용(계산 로직 변경 없음)
+  const moodColor=lv=>lv>=80?'#1e8a4c':lv>=60?'#4a9d6e':lv>=40?'#b0a26a':lv>=20?'#c07a3b':'#c23b3b';
+  if(cs.length){
+    document.getElementById('secMood').style.display='';
+    document.getElementById('moodList').innerHTML=cs.map(s=>`
+      <div class="mdbadge" style="border-color:${moodColor(s.mood_level)}">
+        <div class="mdtop"><span class="fg">${s.flag||''}</span>${s.mood_icon||''}<span class="trend">${esc(s.trend||'')}</span></div>
+        <div class="mdname">${esc(NAMES[s.cc]||s.cc)}</div>
+        <div class="mdkw">${esc(EN?(s.keyword_en||s.keyword):(s.keyword||s.keyword_en))}</div>
       </div>`).join('');
   }
 
-  // 국가별 오늘의 이슈 + 시장 무드 배지 (country_section) — 없으면 블록 숨김
-  const cs=D.country_section||[];
-  if(cs.length){
-    document.getElementById('secCS').style.display='';
-    document.getElementById('csList').innerHTML=cs.map(s=>{
-      const issues=(EN?(s.issues_en&&s.issues_en.length?s.issues_en:s.issues):(s.issues&&s.issues.length?s.issues:s.issues_en))||[];
-      const moodLbl=EN?s.mood_en:s.mood_ko;
-      return `<div class="csrow">
-        <div class="csh"><span class="fg">${s.flag||''}</span>${NAMES[s.cc]||s.cc}
-          <span class="mood">${s.mood_icon||''}<span class="trend">${esc(s.trend||'')}</span></span></div>
-        <div class="csissues">${issues.map(esc).join(' · ')}</div>
-        <div class="csmeta">${EN?`Based on ${s.basis_count} articles · ${esc(moodLbl||'')}`:`최근 ${s.basis_count}건 기준 · ${esc(moodLbl||'')}`}</div>
-      </div>`;
-    }).join('');
+  // 오늘의 글로벌 핵심 = 핵심 3줄 + 국가별 이슈(같은 top-5, 한 줄 형식) — 하나로 합쳐 렌더
+  const hlRows=highlights.map(h=>`
+    <div class="hlrow">
+      <span class="hlcat" style="background:${HLCAT[h.category]||'#7a746c'}">${esc(HLCATLBL[h.category]||h.category||'')}</span>
+      <span class="hlhead">${esc(hlHead(h))}</span>
+      ${hlImp(h)?`<div class="hlimp">${esc(hlImp(h))}</div>`:''}
+      <div class="hlflags">${(h.country_codes||[]).map(cc=>HLFLAGS[cc]||'').join(' ')}</div>
+    </div>`);
+  const csRows=cs.map(s=>{
+    const issues=(EN?(s.issues_en&&s.issues_en.length?s.issues_en:s.issues):(s.issues&&s.issues.length?s.issues:s.issues_en))||[];
+    return `<div class="hlrow cshlrow">
+      <span class="fg">${s.flag||''}</span> <b>${esc(NAMES[s.cc]||s.cc)}</b> ${s.mood_icon||''} <span class="trend">${esc(s.trend||'')}</span>
+      → ${issues.map(esc).join(' · ')}
+    </div>`;
+  });
+  if(hlRows.length || csRows.length){
+    document.getElementById('secHl').style.display='';
+    document.getElementById('hlList').innerHTML=hlRows.join('')+csRows.join('');
   }
 
   document.getElementById('news').innerHTML=(D.top_news||[]).map(a=>`
