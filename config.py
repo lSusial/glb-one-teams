@@ -139,6 +139,10 @@ NON_PRESENCE_COUNTRIES: dict[str, dict] = {
 }
 NON_PRESENCE_CODES = tuple(NON_PRESENCE_COUNTRIES.keys())
 
+# 미진출국 통합 피드 근접중복(의역) 클러스터링 — 같은 국가 내 제목 토큰 Jaccard 유사도가
+# 이 값 이상이면 같은 사건으로 보고 대표 1건만 남긴다(export_json._compute_non_presence).
+NON_PRESENCE_DEDUP_SIM = 0.5
+
 
 def is_presence(cc: str) -> bool:
     """KB 진출국이면 True. 14개 미진출국 화이트리스트에 없는 코드는 전부 True

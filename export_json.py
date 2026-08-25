@@ -156,31 +156,56 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
     """KB 미진출국(14개, docs/design_미진출국.md) 통합 피드 — 국가 구분 없이
     ai_score 상위 limit개. ACTIVE 임계(55점) 게이트는 적용하지 않는다 — 거점이
     없는 시장이라 점수 루브릭 자체가 낮게 잡히므로, 랭킹만 됐으면(ai_score IS
-    NOT NULL) 상대적으로 중요한 순서로 노출한다."""
+    NOT NULL) 상대적으로 중요한 순서로 노출한다.
+
+    근접중복(의역) 클러스터링: 같은 국가(cc) 내에서 제목 토큰 겹침 비율(교집합/min,
+    Jaccard와 동등한 대안 — 길이가 다른 헤드라인 쌍에서도 안정적)이
+    config.NON_PRESENCE_DEDUP_SIM 이상이면 같은 사건으로 보고 대표 1건만 남긴다.
+    후보를 (ai_score DESC, published_at DESC)로 뽑으므로 각 클러스터에서 가장
+    먼저 나오는 기사가 곧 대표(점수 최고 → 동점이면 최신)가 된다."""
     if not config.NON_PRESENCE_CODES:
         return []
     dc, dparams = _date_clause(days)
     ph = ",".join("?" * len(config.NON_PRESENCE_CODES))
+    fetch_limit = limit * 5   # 클러스터링으로 줄어들 것을 감안해 후보를 넉넉히 뽑음
     rows = conn.execute(
         f"""SELECT a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics,
                    a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score IS NOT NULL AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'
               AND m.primary_country_code IN ({ph}){dc}
-            ORDER BY a.ai_score DESC LIMIT ?""",
-        (*config.NON_PRESENCE_CODES, *dparams, limit),
+            ORDER BY a.ai_score DESC, a.published_at DESC LIMIT ?""",
+        (*config.NON_PRESENCE_CODES, *dparams, fetch_limit),
     ).fetchall()
-    out = []
+
+    clusters: dict[str, list[dict]] = {}   # cc -> [{"row": Row, "tk": set, "n": int}, ...]
     for r in rows:
+        bucket = clusters.setdefault(r["cc"], [])
+        tk = _sig_tokens(_strip_source_suffix(r["title"]))
+        for c in bucket:
+            if _overlap_ratio(tk, c["tk"]) >= config.NON_PRESENCE_DEDUP_SIM:
+                c["n"] += 1
+                break
+        else:
+            bucket.append({"row": r, "tk": tk, "n": 1})
+
+    reps = [c for bucket in clusters.values() for c in bucket]
+    reps.sort(key=lambda c: c["row"]["ai_score"], reverse=True)
+    reps = reps[:limit]
+
+    out = []
+    for c in reps:
+        r = c["row"]
         cc = r["cc"]
         meta = config.NON_PRESENCE_COUNTRIES.get(cc, {})
-        codes = [c for c in (r["topics"] or "").split(",") if c]
+        codes = [x for x in (r["topics"] or "").split(",") if x]
         out.append(dict(
             cc=cc, flag=meta.get("flag", ""),
             cc_label=meta.get("name_ko", cc), cc_label_en=meta.get("name_en", cc),
             src=r["media_name"], d=(r["published_at"] or "")[:10],
             t=r["title_ko"] or r["title"], q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
             c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
+            related_count=c["n"] - 1,
         ))
     return out
 
@@ -370,6 +395,22 @@ def _sig_tokens(text: str) -> set:
 
 def _jaccard(a: set, b: set) -> float:
     return len(a & b) / len(a | b) if a and b else 0.0
+
+
+_SRC_SUFFIX_RE = re.compile(r"\s+-\s+[^-]{2,40}$")
+
+
+def _strip_source_suffix(title: str) -> str:
+    """'Headline - Source Name' 패턴에서 매체명 접미사를 뗀다(유사도 계산용,
+    표시용 제목은 그대로 둠). 같은 매체가 쓴 무관한 두 기사가 매체명 토큰
+    때문에 유사하게 잡히는 오탐을 줄인다."""
+    return _SRC_SUFFIX_RE.sub("", title or "")
+
+
+def _overlap_ratio(a: set, b: set) -> float:
+    """Jaccard와 동등한 대안 — 교집합/min(len). 짧은 헤드라인과 긴 헤드라인이
+    같은 사건이어도 Jaccard는 낮게 나오는 문제를 보정(미진출국 피드 근접중복용)."""
+    return len(a & b) / min(len(a), len(b)) if a and b else 0.0
 
 
 def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dict]:

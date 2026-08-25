@@ -70,6 +70,7 @@
   .b-economy{background:#2b5f9e}.b-finance{background:#2f7d4f}.b-digital{background:#6a3fb5}.b-esg{background:#3a8a6a}.b-risk{background:#b23b3b}.b-geo{background:#7a5230}
   .art .top .ad{font-size:11px;color:var(--sub);margin-left:auto}
   .art .t{font-size:14px;font-weight:700;line-height:1.35;margin:0 0 6px;color:var(--ink)}
+  .art .t .rc{font-size:11.5px;font-weight:600;color:var(--sub)}
   .art .q{color:#463f37;line-height:1.55}
   .rl{margin-top:8px;padding-top:7px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:3px}
   .rl .rh{font-size:11px;color:var(--sub);font-weight:700;margin-bottom:2px}
@@ -257,7 +258,7 @@
       if(!rows.length){feed.innerHTML=`<div class="empty">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;feed._rows=[];return;}
       feed.innerHTML=rows.map((a,i)=>`<div class="art" data-i="${i}">
         <div class="top"><span class="flag">${a.flag||''}</span><b>${esc(EN?(a.cc_label_en||a.cc):(a.cc_label||a.cc))}</b>${badges(a.c)}<span class="ad">${esc(md(a.d))}</span></div>
-        <div class="t">${esc(tt(a))}</div>
+        <div class="t">${esc(tt(a))}${a.related_count?` <span class="rc">· ${EN?`related ${a.related_count}`:`관련 ${a.related_count}건`}</span>`:''}</div>
         ${tq(a)?`<div class="q">${esc(tq(a))}</div>`:''}</div>`).join('');
       feed._rows=rows;
       return;
