@@ -254,7 +254,7 @@
   const csRows=cs.map(s=>{
     const issues=(EN?(s.issues_en&&s.issues_en.length?s.issues_en:s.issues):(s.issues&&s.issues.length?s.issues:s.issues_en))||[];
     return `<div class="hlrow cshlrow">
-      <span class="fg">${s.flag||''}</span> <b>${esc(NAMES[s.cc]||s.cc)}</b> ${s.mood_icon||''} <span class="trend">${esc(s.trend||'')}</span>
+      <span class="fg">${s.flag||''}</span> <b>${esc(NAMES[s.cc]||s.cc)}</b>
       · ${issues.map(esc).join(' · ')}
     </div>`;
   });
