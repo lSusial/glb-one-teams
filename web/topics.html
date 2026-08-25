@@ -25,6 +25,11 @@
   .nav a{font-size:12px;font-weight:700;color:var(--sub);text-decoration:none;padding:7px 0;border-radius:20px;border:1px solid var(--line);background:#fff;flex:1;text-align:center;white-space:nowrap}
   .nav a.on{background:var(--kb-dark);color:#fff;border-color:var(--kb-dark)}
 
+  /* 진출/미진출 토글 */
+  .fil{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+  .chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 13px;font-size:13px;cursor:pointer;font-weight:700;color:var(--sub)}
+  .chip.on{background:var(--kb-dark);color:#fff;border-color:var(--kb-dark)}
+
   /* 카테고리 탭 */
   .cats{display:flex;gap:6px;overflow-x:auto;padding:14px 0 2px;scrollbar-width:none}
   .cats::-webkit-scrollbar{display:none}
@@ -84,6 +89,11 @@
       <a href="weekly.html" data-en="Weekly Report">주간 리포트</a>
       <a class="on" href="topics.html" data-en="Monitoring">모니터링</a>
     </div>
+  </div>
+
+  <div class="fil" id="presenceSel" style="margin:14px 0 0">
+    <span class="chip on" data-p="presence">진출국</span>
+    <span class="chip" data-p="non">KB 미진출국</span>
   </div>
 
   <div class="cats" id="cats"></div>
@@ -150,33 +160,49 @@
 
   document.getElementById('gen').textContent = (EN ? 'Updated ' : '업데이트 ') + (D.generated_at || '').slice(0, 16).replace('T', ' ');
 
-  const cats = D.categories;
-  let activeCat = cats[0].code;
+  // 진출/미진출 토글 — 같은 code가 그룹별로 최대 2개 등장(presence로 구분)
+  let pMode = 'presence';
+  const groupCats = () => D.categories.filter(c => c.presence === (pMode === 'non' ? '미진출' : '진출'));
+  let cats = groupCats();
+  let activeCat = cats.length ? cats[0].code : null;
 
-  // 카테고리 탭 생성
   const catsEl = document.getElementById('cats');
-  catsEl.innerHTML = cats.map(c =>
-    `<button class="ct${c.code === activeCat ? ' on' : ''}" data-code="${c.code}">${tl(c)} <small style="opacity:.7">${c.count}</small></button>`
-  ).join('');
+  const ccName = a => a.presence === '미진출'
+    ? esc(EN ? (a.cc_label_en || a.cc) : (a.cc_label || a.cc))
+    : esc(NAMES[a.cc] || a.cc || '');
+
+  function buildCatsTab() {
+    cats = groupCats();
+    if (!cats.length) {
+      catsEl.innerHTML = '';
+      feed.innerHTML = `<div class="empty">${EN ? 'Not enough non-presence data yet.' : 'KB 미진출국 데이터가 아직 부족합니다.'}</div>`;
+      return;
+    }
+    if (!cats.find(c => c.code === activeCat)) activeCat = cats[0].code;
+    catsEl.innerHTML = cats.map(c =>
+      `<button class="ct${c.code === activeCat ? ' on' : ''}" data-code="${c.code}">${tl(c)} <small style="opacity:.7">${c.count}</small></button>`
+    ).join('');
+    renderFeed(activeCat);
+  }
 
   function renderFeed(code) {
     const cat = cats.find(c => c.code === code);
     if (!cat) return;
-    const ccsFlags = (cat.ccs || []).map(cc => {
-      const f = {GB:'🇬🇧',US:'🇺🇸',HK:'🇭🇰',CN:'🇨🇳',JP:'🇯🇵',SG:'🇸🇬',IN:'🇮🇳',VN:'🇻🇳',MM:'🇲🇲',ID:'🇮🇩',KH:'🇰🇭',GLOBAL:'🌐'}[cc] || '';
-      return f;
-    }).join('');
+    // 국기는 카테고리 소속 기사에서 직접 뽑음(진출·미진출 국가코드 공용)
+    const flagByCc = {};
+    cat.articles.forEach(a => { flagByCc[a.cc] = a.flag || ''; });
+    const ccsFlags = (cat.ccs || []).map(cc => flagByCc[cc] || '').join('');
     feed.innerHTML =
       `<div class="sec-hd">
         <span class="lbl">${esc(tl(cat))}</span>
         <span class="ccs">${ccsFlags}</span>
-        <span class="cnt">${cat.count}${EN ? ' articles' : '건'} · ${cat.ccs.length}${EN ? ' hubs' : '개 거점'}</span>
+        <span class="cnt">${cat.count}${EN ? ' articles' : '건'} · ${cat.ccs.length}${EN ? ' hubs' : '개국'}</span>
       </div>` +
       cat.articles.map(a =>
         `<div class="ca">
           <div class="meta">
             <span class="flag">${a.flag || ''}</span>
-            <b>${esc(NAMES[a.cc] || a.cc || '')}</b> · ${esc(a.src)} · ${esc(md(a.d))}
+            <b>${ccName(a)}</b> · ${esc(a.src)} · ${esc(md(a.d))}
             ${badges(a.c)}
             <span class="score">${a.score}</span>
           </div>
@@ -195,7 +221,17 @@
     renderFeed(activeCat);
   });
 
-  renderFeed(activeCat);
+  document.getElementById('presenceSel').onclick = e => {
+    const c = e.target.closest('.chip'); if (!c) return;
+    pMode = c.dataset.p;
+    document.querySelectorAll('#presenceSel .chip').forEach(x => x.classList.toggle('on', x.dataset.p === pMode));
+    buildCatsTab();
+  };
+  if (EN) document.querySelectorAll('#presenceSel .chip').forEach(c => {
+    c.textContent = c.dataset.p === 'presence' ? 'Presence' : 'KB Non-Presence';
+  });
+
+  buildCatsTab();
 })();
 </script>
 </body>

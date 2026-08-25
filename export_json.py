@@ -742,12 +742,51 @@ _TOPIC_CATS = [
 ]
 
 
+def _topic_bucket(rows: list, code: str, max_per: int, build) -> tuple[list, set]:
+    """rows(이미 ai_score DESC 정렬)에서 topics 코드가 code인 기사를 최대 max_per개 골라
+    (기사 dict 리스트, 국가코드 집합)으로 반환. build(row, codes)가 표시 필드를 만든다
+    (진출/미진출 카드 필드가 달라 호출부에서 주입)."""
+    arts, ccs = [], set()
+    for r in rows:
+        codes = [c.strip() for c in (r["topics"] or "").split(",") if c.strip()]
+        if code not in codes:
+            continue
+        arts.append(build(r, codes))
+        ccs.add(r["cc"])
+        if len(arts) >= max_per:
+            break
+    return arts, ccs
+
+
+def _pres_topic_article(r, codes: list) -> dict:
+    return dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""), presence="진출",
+                src=r["media_name"], d=(r["published_at"] or "")[:10],
+                t=r["title_ko"] or r["title"], q=r["summary_ko"] or "",
+                k=r["kb_implication"] or "", q_en=r["summary_en"] or "",
+                k_en=r["kb_implication_en"] or "",
+                c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"])
+
+
+def _np_topic_article(r, codes: list) -> dict:
+    meta = config.NON_PRESENCE_COUNTRIES.get(r["cc"], {})
+    return dict(cc=r["cc"], flag=meta.get("flag", ""),
+                cc_label=meta.get("name_ko", r["cc"]), cc_label_en=meta.get("name_en", r["cc"]),
+                presence="미진출",
+                src=r["media_name"], d=(r["published_at"] or "")[:10],
+                t=r["title_ko"] or r["title"], q=r["summary_ko"] or "",
+                k="", q_en=r["summary_en"] or "", k_en="",   # KB 시사점 없음(거점 없는 시장)
+                c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"])
+
+
 def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[dict]:
-    """taxonomy 카테고리별로 ACTIVE 기사를 묶어 반환."""
+    """taxonomy 카테고리별로 ACTIVE 기사를 묶어 반환 — 진출국(presence=진출)·
+    미진출국(presence=미진출) 카테고리를 함께 담은 하나의 리스트(같은 code가 그룹별로
+    최대 2개 등장, UI는 presence로 필터). 미진출은 ACTIVE 임계 게이트 없이 ai_score
+    랭킹만(비-거점 시장은 루브릭이 낮게 잡히므로 — _compute_non_presence와 동일 원칙)."""
     dc, params = _date_clause(days)
-    # KB 미진출국은 모니터링(topics) 집계에서도 제외 — 통합피드에서만 노출.
+
     exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
-    rows = conn.execute(
+    pres_rows = conn.execute(
         f"""SELECT a.ai_score, a.title, a.title_ko, a.summary, a.summary_ko, a.kb_implication,
                    a.summary_en, a.kb_implication_en, a.topics, a.link, a.published_at,
                    m.primary_country_code cc, m.media_name
@@ -757,30 +796,31 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
         (config.AI_SCORE_ACTIVE_THRESHOLD, *params, *exp),
     ).fetchall()
 
+    np_rows = []
+    if config.NON_PRESENCE_CODES:
+        ph = ",".join("?" * len(config.NON_PRESENCE_CODES))
+        np_rows = conn.execute(
+            f"""SELECT a.ai_score, a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics,
+                       a.link, a.published_at, m.primary_country_code cc, m.media_name
+                FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
+                WHERE a.ai_score IS NOT NULL AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'
+                  AND m.primary_country_code IN ({ph}){dc}
+                ORDER BY a.ai_score DESC""",
+            (*config.NON_PRESENCE_CODES, *params),
+        ).fetchall()
+
     categories = []
     for code, ui, label_ko, label_en in _TOPIC_CATS:
-        arts, ccs = [], set()
-        for r in rows:
-            codes = [c.strip() for c in (r["topics"] or "").split(",") if c.strip()]
-            if code not in codes:
-                continue
-            arts.append(dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""),
-                             src=r["media_name"],
-                             d=(r["published_at"] or "")[:10],
-                             t=r["title_ko"] or r["title"], q=r["summary_ko"] or "",
-                             k=r["kb_implication"] or "",
-                             q_en=r["summary_en"] or "",
-                             k_en=r["kb_implication_en"] or "",
-                             c=taxonomy.ui_string(codes),
-                             score=r["ai_score"], u=r["link"]))
-            ccs.add(r["cc"])
-            if len(arts) >= max_per:
-                break
+        arts, ccs = _topic_bucket(pres_rows, code, max_per, _pres_topic_article)
         if arts:
-            categories.append(dict(code=code, ui=ui,
-                                   label=label_ko, label_en=label_en,
-                                   count=len(arts), ccs=sorted(ccs),
+            categories.append(dict(code=code, ui=ui, label=label_ko, label_en=label_en,
+                                   presence="진출", count=len(arts), ccs=sorted(ccs),
                                    articles=arts))
+        arts_np, ccs_np = _topic_bucket(np_rows, code, max_per, _np_topic_article)
+        if arts_np:
+            categories.append(dict(code=code, ui=ui, label=label_ko, label_en=label_en,
+                                   presence="미진출", count=len(arts_np), ccs=sorted(ccs_np),
+                                   articles=arts_np))
     return categories
 
 
