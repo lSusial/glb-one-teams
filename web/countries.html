@@ -58,6 +58,10 @@
   .chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 13px;font-size:13px;cursor:pointer;font-weight:700;color:var(--sub)}
   .chip.on{background:var(--kb-dark);color:#fff;border-color:var(--kb-dark)}
   .chip .n{opacity:.55;font-weight:500;margin-left:4px}
+  /* 카테고리 필터 칩(경제·금융·...) — 진출/미진출 토글(위 .chip.on)과 헷갈리지 않게 톤 분리 */
+  .chip.cat{border-radius:8px}
+  .chip.cat.on{background:#fdf6e3;color:var(--kb-gold);border-color:var(--kb-gold)}
+  .chip.cat.on .n{color:var(--kb-gold)}
   .fil .sp{flex:1}.cnt{font-size:12px;color:var(--sub)}
 
   /* ── 기사 카드 ── */
@@ -191,7 +195,7 @@
   const catCount=k=>{const p=pool();return k?p.filter(a=>(a.c||'').includes(k)).length:p.length;};
 
   document.getElementById('cats').innerHTML=CATS.map(([k,l])=>
-    `<span class="chip${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
+    `<span class="chip cat${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
   document.getElementById('cats').onclick=e=>{const c=e.target.closest('.chip');if(!c)return;fCat=c.dataset.k;render();};
 
   document.getElementById('cov').innerHTML=(DATA.countries||[]).map(c=>
@@ -252,7 +256,7 @@
       feedTitle.textContent=EN?'KB Non-Presence Feed':'KB 미진출국 통합 피드';
       bx.style.display='none'; bn.style.display='none';
       catsEl.style.display='';
-      catsEl.innerHTML=CATS.map(([k,l])=>`<span class="chip${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
+      catsEl.innerHTML=CATS.map(([k,l])=>`<span class="chip cat${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
       let rows=nonArts.filter(a=>!fCat||(a.c||'').includes(fCat));
       document.getElementById('count').textContent=rows.length+(EN?' articles':' 건');
       if(!rows.length){feed.innerHTML=`<div class="empty">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;feed._rows=[];return;}
@@ -277,7 +281,7 @@
     }
 
     catsEl.style.display='';
-    catsEl.innerHTML=CATS.map(([k,l])=>`<span class="chip${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
+    catsEl.innerHTML=CATS.map(([k,l])=>`<span class="chip cat${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
 
     // 거시지표 빅넘버(환율·주가지수) — 국가에 데이터 있을 때만 노출
     const co=(DATA.countries||[]).find(c=>c.cc===fCC);
