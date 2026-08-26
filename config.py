@@ -57,6 +57,15 @@ FULLTEXT_TIMEOUT = 15        # 원문 fetch 타임아웃(초)
 FULLTEXT_MAXLEN  = 12000     # 저장 본문 최대 길이(자)
 RANK_BODY_MAXLEN = 4000      # rank 프롬프트에 넣는 본문 최대 길이(자)
 
+# ── 다출처 종합 요약(2026-08-26 회의 결정: 저작권 완화) ────────────────
+# keyword_filter.run_dedup()이 만든 duplicate_of 클러스터(제목유사도≥0.75,
+# 같은 국가·발행일 — 사실상 "같은 사건, 다른 매체")를 rank 입력으로 재사용.
+# 클러스터 크기(대표+중복)가 이 값 이상이면 여러 출처를 함께 프롬프트에 넣어
+# "종합" 요약(단일 기사 패러프레이즈 아님)을 생성 — 미만이면 기존 단일기사 방식.
+SYNTH_MIN_SOURCES    = 3      # 이 값 미만이면 다출처 종합 없이 기존 방식(단일 기사)
+SYNTH_MAX_SOURCES    = 5      # 프롬프트 비용 관리 — 클러스터가 더 커도 이 개수까지만
+SYNTH_SNIPPET_MAXLEN = 600    # 다출처 프롬프트에서 소스 1건당 본문/요약 최대 길이(자)
+
 # ai_score(0~100) 가 이 값 이상이면 UI에서 ACTIVE(노출), 미만은 SOURCE WATCH
 # 60→55: 임계 바로 아래(50~59)에 준수한 거시·금융 뉴스가 몰려 있어 노출 폭을 넓힘
 AI_SCORE_ACTIVE_THRESHOLD = 55

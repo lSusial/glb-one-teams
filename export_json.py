@@ -235,7 +235,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
         rows = conn.execute(
             f"""
             SELECT a.title, a.title_ko, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
-                   a.topics, a.link, a.published_at, a.ai_score, m.media_name
+                   a.topics, a.link, a.published_at, a.ai_score, a.source_links, m.media_name
             FROM articles_raw a
             JOIN media_sources m ON m.source_id = a.source_id
             WHERE m.primary_country_code = ?
@@ -250,20 +250,32 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
         for i, a in enumerate(rows):
             codes = [c for c in (a["topics"] or "").split(",") if c]
             my_topics = set(codes)
-            # related links: 같은 cc 내 topics 겹치는 다른 기사 (없으면 순번 다음 기사)
-            rl = [{"t": a["title"][:100], "u": a["link"]}]
-            for j, b in enumerate(rows):
-                if j == i:
-                    continue
-                b_topics = set((b["topics"] or "").split(","))
-                if (not my_topics) or (my_topics & b_topics):
-                    rl.append({"t": b["title"][:100], "u": b["link"]})
-                    break
-            if len(rl) < 2:
+            # related links: 다출처 종합에 실제로 쓰인 소스가 있으면 그걸 우선 사용(진짜
+            # 근거), 없으면 기존처럼 같은 cc 내 topics 겹치는 다른 기사로 추정.
+            synth_links = None
+            if a["source_links"]:
+                try:
+                    synth_links = json.loads(a["source_links"]) or None
+                except Exception:
+                    synth_links = None
+            if synth_links:
+                rl = [{"t": s["t"], "u": s["u"]} for s in synth_links if s.get("u") != a["link"]]
+                rl = ([{"t": a["title"][:100], "u": a["link"]}] + rl) if rl else \
+                     [{"t": a["title"][:100], "u": a["link"]}]
+            else:
+                rl = [{"t": a["title"][:100], "u": a["link"]}]
                 for j, b in enumerate(rows):
-                    if j != i:
+                    if j == i:
+                        continue
+                    b_topics = set((b["topics"] or "").split(","))
+                    if (not my_topics) or (my_topics & b_topics):
                         rl.append({"t": b["title"][:100], "u": b["link"]})
                         break
+                if len(rl) < 2:
+                    for j, b in enumerate(rows):
+                        if j != i:
+                            rl.append({"t": b["title"][:100], "u": b["link"]})
+                            break
             articles.append({
                 "c": taxonomy.ui_string(codes),
                 "src": a["media_name"],
