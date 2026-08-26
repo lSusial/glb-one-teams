@@ -728,68 +728,69 @@ def export_weekly(conn) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# TopicWatch — taxonomy 카테고리별 주간 뉴스
+# 모니터링(TopicWatch) — 이벤트 유형(축 E)별 뉴스. 주제축(topics, 축 C)과는 별개 —
+# 카드에 표시되는 배지(c 필드)는 계속 topics 기반, 탭 분류만 event_type 기반.
 # ---------------------------------------------------------------------------
 _TOPICS_TEMPLATE = config.ROOT / "web" / "topics.html"
 
-_TOPIC_CATS = [
-    ("MARKET",  "economy",  "경제",       "Economy"),
-    ("BANKING", "finance",  "금융산업",    "Banking"),
-    ("DIGITAL", "digital",  "디지털",      "Digital"),
-    ("RISK",    "risk",     "규제·리스크", "Regulation·Risk"),
-    ("GEO",     "geo",      "지정학",      "Geopolitics"),
-    ("ESG",     "esg",      "ESG",         "ESG"),
+_EVENT_CATS = [
+    ("REG",      "reg",      "규제",     "Regulation"),
+    ("DEAL",     "deal",     "거래·투자", "Deals·Investment"),
+    ("INCIDENT", "incident", "사건사고", "Incidents"),
 ]
 
 
-def _topic_bucket(rows: list, code: str, max_per: int, build) -> tuple[list, set]:
-    """rows(이미 ai_score DESC 정렬)에서 topics 코드가 code인 기사를 최대 max_per개 골라
-    (기사 dict 리스트, 국가코드 집합)으로 반환. build(row, codes)가 표시 필드를 만든다
-    (진출/미진출 카드 필드가 달라 호출부에서 주입)."""
+def _event_bucket(rows: list, code: str, max_per: int, build) -> tuple[list, set]:
+    """rows(이미 ai_score DESC 정렬)에서 event_type 코드가 code인 기사를 최대 max_per개
+    골라 (기사 dict 리스트, 국가코드 집합)으로 반환. build(row)가 표시 필드를 만든다
+    (진출/미진출 카드 필드가 달라 호출부에서 주입; c 필드는 topics 기반으로 build 내부에서 유도)."""
     arts, ccs = [], set()
     for r in rows:
-        codes = [c.strip() for c in (r["topics"] or "").split(",") if c.strip()]
-        if code not in codes:
+        ev_codes = [c.strip() for c in (r["event_type"] or "").split(",") if c.strip()]
+        if code not in ev_codes:
             continue
-        arts.append(build(r, codes))
+        arts.append(build(r))
         ccs.add(r["cc"])
         if len(arts) >= max_per:
             break
     return arts, ccs
 
 
-def _pres_topic_article(r, codes: list) -> dict:
+def _pres_topic_article(r) -> dict:
+    topic_codes = [c.strip() for c in (r["topics"] or "").split(",") if c.strip()]
     return dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""), presence="진출",
                 src=r["media_name"], d=(r["published_at"] or "")[:10],
                 t=r["title_ko"] or r["title"], q=r["summary_ko"] or "",
                 k=r["kb_implication"] or "", q_en=r["summary_en"] or "",
                 k_en=r["kb_implication_en"] or "",
-                c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"])
+                c=taxonomy.ui_string(topic_codes), score=r["ai_score"], u=r["link"])
 
 
-def _np_topic_article(r, codes: list) -> dict:
+def _np_topic_article(r) -> dict:
     meta = config.NON_PRESENCE_COUNTRIES.get(r["cc"], {})
+    topic_codes = [c.strip() for c in (r["topics"] or "").split(",") if c.strip()]
     return dict(cc=r["cc"], flag=meta.get("flag", ""),
                 cc_label=meta.get("name_ko", r["cc"]), cc_label_en=meta.get("name_en", r["cc"]),
                 presence="미진출",
                 src=r["media_name"], d=(r["published_at"] or "")[:10],
                 t=r["title_ko"] or r["title"], q=r["summary_ko"] or "",
                 k="", q_en=r["summary_en"] or "", k_en="",   # KB 시사점 없음(거점 없는 시장)
-                c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"])
+                c=taxonomy.ui_string(topic_codes), score=r["ai_score"], u=r["link"])
 
 
 def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[dict]:
-    """taxonomy 카테고리별로 ACTIVE 기사를 묶어 반환 — 진출국(presence=진출)·
+    """이벤트 유형(REG/DEAL/INCIDENT)별로 ACTIVE 기사를 묶어 반환 — 진출국(presence=진출)·
     미진출국(presence=미진출) 카테고리를 함께 담은 하나의 리스트(같은 code가 그룹별로
     최대 2개 등장, UI는 presence로 필터). 미진출은 ACTIVE 임계 게이트 없이 ai_score
-    랭킹만(비-거점 시장은 루브릭이 낮게 잡히므로 — _compute_non_presence와 동일 원칙)."""
+    랭킹만(비-거점 시장은 루브릭이 낮게 잡히므로 — _compute_non_presence와 동일 원칙).
+    이벤트 유형이 하나도 없는 기사(일반 시황 등)는 어느 탭에도 나타나지 않는다."""
     dc, params = _date_clause(days)
 
     exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
     pres_rows = conn.execute(
         f"""SELECT a.ai_score, a.title, a.title_ko, a.summary, a.summary_ko, a.kb_implication,
-                   a.summary_en, a.kb_implication_en, a.topics, a.link, a.published_at,
-                   m.primary_country_code cc, m.media_name
+                   a.summary_en, a.kb_implication_en, a.topics, a.event_type, a.link,
+                   a.published_at, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'{dc}{exc}
             ORDER BY a.ai_score DESC""",
@@ -801,7 +802,7 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
         ph = ",".join("?" * len(config.NON_PRESENCE_CODES))
         np_rows = conn.execute(
             f"""SELECT a.ai_score, a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics,
-                       a.link, a.published_at, m.primary_country_code cc, m.media_name
+                       a.event_type, a.link, a.published_at, m.primary_country_code cc, m.media_name
                 FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
                 WHERE a.ai_score IS NOT NULL AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'
                   AND m.primary_country_code IN ({ph}){dc}
@@ -810,13 +811,13 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
         ).fetchall()
 
     categories = []
-    for code, ui, label_ko, label_en in _TOPIC_CATS:
-        arts, ccs = _topic_bucket(pres_rows, code, max_per, _pres_topic_article)
+    for code, ui, label_ko, label_en in _EVENT_CATS:
+        arts, ccs = _event_bucket(pres_rows, code, max_per, _pres_topic_article)
         if arts:
             categories.append(dict(code=code, ui=ui, label=label_ko, label_en=label_en,
                                    presence="진출", count=len(arts), ccs=sorted(ccs),
                                    articles=arts))
-        arts_np, ccs_np = _topic_bucket(np_rows, code, max_per, _np_topic_article)
+        arts_np, ccs_np = _event_bucket(np_rows, code, max_per, _np_topic_article)
         if arts_np:
             categories.append(dict(code=code, ui=ui, label=label_ko, label_en=label_en,
                                    presence="미진출", count=len(arts_np), ccs=sorted(ccs_np),

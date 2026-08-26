@@ -8,11 +8,14 @@ prefilter 를 통과(keep)한 기사에 중요도·요약·주제·KB 시사점�
 출력:
   - ai_score        : KB 경영 중요도 (0~100). >= AI_SCORE_ACTIVE_THRESHOLD → UI ACTIVE
   - summary_ko      : 한국어 요약 (UI q)
-  - topics          : taxonomy 코드 CSV (UI 카테고리 c)
+  - topics          : taxonomy 코드 CSV (UI 카테고리 c, 축 C — 현지언론 필터)
+  - event_type      : taxonomy event_types 코드 CSV (모니터링 탭 전용, 축 E)
   - kb_implication  : KB 거점 관점 시사점 (UI k) — 신규 컬럼
   - ai_model        : 생성 프로바이더:모델 식별자
 
-* 분석 모델(role='smart') 사용. topics 는 taxonomy 코드로 검증, 비면 시드 매칭 폴백.
+* 분석 모델(role='smart') 사용. topics/event_type 모두 taxonomy 코드로 검증,
+  비면 시드 매칭 폴백. backfill_event_types() — event_type 컬럼 도입 이전
+  기사용 1회성 시드 백필(LLM 호출 없음).
 """
 from __future__ import annotations
 
@@ -41,6 +44,8 @@ def ensure_columns(conn) -> None:
         # 본문 추출본(fulltext.py) — 있으면 rank 가 스니펫 대신 본문으로 분석
         ("full_text",         "ALTER TABLE articles_raw ADD COLUMN full_text         TEXT"),
         ("title_ko",          "ALTER TABLE articles_raw ADD COLUMN title_ko          TEXT"),
+        # 이벤트 유형(축 E, 모니터링 전용) — REG/DEAL/INCIDENT CSV, taxonomy.yaml event_types
+        ("event_type",        "ALTER TABLE articles_raw ADD COLUMN event_type        TEXT"),
     ])
 
 
@@ -53,9 +58,13 @@ def _system_prompt() -> str:
         '"title_ko": "15자 이내 신문 헤드라인 스타일 한국어 제목", '
         '"summary_en": "2-3 sentence English summary", '
         '"topics": ["TOPIC_CODE", ...], '
+        '"event_type": ["EVENT_CODE", ...] (0-3, empty list if none apply), '
         '"kb_implication_en": "1-2 sentence KB-perspective implication/action, in English"}\n\n'
         "Choose topics ONLY from these codes (multiple allowed, max 3):\n"
         + taxonomy.prompt_reference()
+        + "\n\nChoose event_type ONLY from these codes (multiple allowed, max 3; empty if the "
+        "article is not about a specific regulatory/deal/incident event):\n"
+        + taxonomy.event_prompt_reference()
         + "\n\nai_score rubric — assign the highest tier that applies:\n"
         "75-100  DIRECT · IMMEDIATE: KB branch/subsidiary directly affected today.\n"
         "  Examples: host-country central bank rate decision, capital controls imposed,\n"
@@ -85,9 +94,13 @@ def _system_prompt_light() -> str:
         '{"ai_score": (importance, integer 0-100), '
         '"title_ko": "15자 이내 신문 헤드라인 스타일 한국어 제목", '
         '"summary_en": "2-3 sentence English summary", '
-        '"topics": ["TOPIC_CODE", ...]}\n\n'
+        '"topics": ["TOPIC_CODE", ...], '
+        '"event_type": ["EVENT_CODE", ...] (0-3, empty list if none apply)}\n\n'
         "Choose topics ONLY from these codes (multiple allowed, max 3):\n"
         + taxonomy.prompt_reference()
+        + "\n\nChoose event_type ONLY from these codes (multiple allowed, max 3; empty if the "
+        "article is not about a specific regulatory/deal/incident event):\n"
+        + taxonomy.event_prompt_reference()
         + "\n\nai_score rubric — score general macro/financial materiality for a market with "
         "no KB entity (assign the highest tier that applies):\n"
         "75-100  Major sovereign/macro event: central bank decision, currency crisis, "
@@ -178,13 +191,18 @@ def run_rank(conn, provider: LLMProvider | None = None,
         topics = taxonomy.validate(data.get("topics", []))
         if not topics:
             topics = taxonomy.seed_candidates(f"{r['title']} {r['summary'] or ''}")
+        event_types = taxonomy.event_validate(data.get("event_type", []))
+        if not event_types:
+            event_types = taxonomy.event_seed_candidates(f"{r['title']} {r['summary'] or ''}")
         kb_impl_en = str(data.get("kb_implication_en") or "")[:1000]
 
         cur.execute(
             """UPDATE articles_raw
-               SET ai_score = ?, title_ko = ?, summary_en = ?, topics = ?, kb_implication_en = ?, ai_model = ?
+               SET ai_score = ?, title_ko = ?, summary_en = ?, topics = ?, event_type = ?,
+                   kb_implication_en = ?, ai_model = ?
                WHERE article_id = ?""",
-            (score, title_ko, summary_en, ",".join(topics), kb_impl_en, provider.model_id, r["article_id"]),
+            (score, title_ko, summary_en, ",".join(topics), ",".join(event_types),
+             kb_impl_en, provider.model_id, r["article_id"]),
         )
         stats["ranked"] += 1
         if score >= config.AI_SCORE_ACTIVE_THRESHOLD:
@@ -196,3 +214,29 @@ def run_rank(conn, provider: LLMProvider | None = None,
         stats["ranked"], config.AI_SCORE_ACTIVE_THRESHOLD, stats["active"],
     )
     return stats
+
+
+def backfill_event_types(conn) -> dict:
+    """event_type 컬럼 도입 이전에 이미 채점된 기사(ai_score 有·event_type 無)를
+    시드 키워드 매칭만으로 채운다(LLM 호출 없음 — 1회성 마이그레이션용).
+    이후 새로 랭킹되는 기사는 run_rank()가 AI로 직접 채운다."""
+    ensure_columns(conn)
+    rows = conn.execute(
+        """SELECT article_id, title, summary FROM articles_raw
+           WHERE ai_score IS NOT NULL AND (event_type IS NULL OR event_type = '')"""
+    ).fetchall()
+
+    cur = conn.cursor()
+    filled = 0
+    for r in rows:
+        event_types = taxonomy.event_seed_candidates(f"{r['title']} {r['summary'] or ''}")
+        if not event_types:
+            continue
+        cur.execute(
+            "UPDATE articles_raw SET event_type = ? WHERE article_id = ?",
+            (",".join(event_types), r["article_id"]),
+        )
+        filled += 1
+    conn.commit()
+    log.info("event_type 백필(시드 매칭) — 대상=%d  채움=%d", len(rows), filled)
+    return {"total": len(rows), "filled": filled}

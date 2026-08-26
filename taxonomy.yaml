@@ -46,6 +46,32 @@ topics:
             currency restriction, credit rating, sovereign risk,
             geopolitical, expropriation, nationalization, foreign exchange control]
 
+# ── 이벤트 유형 코드(축 E, 모니터링 전용) ──────────────────────────
+# 주제축(topics, 위)과는 별개 축 — 현지언론 필터·기사 배지는 계속 topics를 쓴다.
+# 이 축은 모니터링(TopicWatch) 화면의 탭 분류에만 쓴다: 모니터링은 "이벤트 추적"이
+# 목적이라 주제가 아니라 사건 유형(규제/거래/사고)으로 묶는다.
+event_types:
+  # 시드는 "1차 후보/폴백"용 — 너무 흔한 단어(policy/deal/lawsuit 단독 등)는
+  # 오탐이 심해 제외. AI가 새로 채점하는 기사는 이 시드가 아니라 프롬프트로
+  # 정확히 분류하므로, 여기 목록은 백필(무료 키워드 매칭)의 정밀도용.
+  - code: REG
+    label: { ko: "규제", en: "Regulation" }
+    seeds: [regulation, regulatory, supervision, regulator, sanction, license,
+            licensing, fine, penalty, compliance, capital requirement,
+            regulatory approval, antitrust, crackdown, moratorium]
+  - code: DEAL
+    label: { ko: "거래·투자", en: "Deals·Investment" }
+    seeds: [acquisition, merger, "m&a", acquire, acquires, stake, divestiture,
+            funding round, ipo, joint venture, fundraising, capital raise,
+            buyout, takeover, strategic partnership]
+  - code: INCIDENT
+    label: { ko: "사건사고", en: "Incidents" }
+    seeds: [accident, fraud, embezzlement, scam, bankruptcy, insolvency,
+            default, hack, cyberattack, data breach, scandal, collapse,
+            outage, securities fraud, class action, money laundering charges]
+
+max_event_types_per_article: 3
+
 # ── 멀티라벨 규칙 ────────────────────────────────────────────────
 # 한 기사에 복수 코드 허용. UI는 c:'esg risk' 처럼 소문자 ui 키를 공백 연결해
 # includes() 부분일치로 필터링한다. (예: topics=[ESG,RISK] → c="esg risk")

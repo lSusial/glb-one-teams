@@ -28,6 +28,11 @@ def _topics() -> list[dict]:
     return load().get("topics", [])
 
 
+@functools.lru_cache(maxsize=1)
+def _event_types() -> list[dict]:
+    return load().get("event_types", [])
+
+
 def codes() -> list[str]:
     """유효 주제 코드 목록. 예: ['MARKET','BANKING','DIGITAL','ESG','RISK']."""
     return [t["code"] for t in _topics()]
@@ -93,6 +98,60 @@ def prompt_reference() -> str:
     """LLM 프롬프트에 넣을 주제 코드 설명 블록."""
     lines = []
     for t in _topics():
+        seeds = ", ".join(t.get("seeds", [])[:6])
+        lines.append(f"- {t['code']} ({t.get('label', {}).get('ko', '')}): {seeds}")
+    return "\n".join(lines)
+
+
+# ── 이벤트 유형(축 E, 모니터링 전용) ────────────────────────────────
+# topics(위)와 별개 축. 함수 이름에 event_ 접두어를 붙여 혼동을 막는다.
+
+def event_codes() -> list[str]:
+    return [t["code"] for t in _event_types()]
+
+
+def event_code_set() -> set[str]:
+    return set(event_codes())
+
+
+def event_label(code: str, lang: str = "ko") -> str:
+    for t in _event_types():
+        if t["code"] == code:
+            return t.get("label", {}).get(lang, code)
+    return code
+
+
+def max_event_types() -> int:
+    return int(load().get("max_event_types_per_article", 3))
+
+
+def event_validate(codes_in: list[str]) -> list[str]:
+    """유효 이벤트 코드만 남기고(대문자 정규화) 최대 개수로 제한."""
+    valid = event_code_set()
+    out: list[str] = []
+    for c in codes_in or []:
+        cu = str(c).strip().upper()
+        if cu in valid and cu not in out:
+            out.append(cu)
+    return out[: max_event_types()]
+
+
+def event_seed_candidates(text: str) -> list[str]:
+    """시드 키워드 매칭으로 이벤트 유형 후보 산출(1차 규칙, LLM 보조/폴백·백필용)."""
+    low = (text or "").lower()
+    hits: list[str] = []
+    for t in _event_types():
+        for kw in t.get("seeds", []):
+            if re.search(r"(?<![a-z0-9])" + re.escape(kw.lower()) + r"(?![a-z0-9])", low):
+                hits.append(t["code"])
+                break
+    return hits[: max_event_types()]
+
+
+def event_prompt_reference() -> str:
+    """LLM 프롬프트에 넣을 이벤트 유형 코드 설명 블록."""
+    lines = []
+    for t in _event_types():
         seeds = ", ".join(t.get("seeds", [])[:6])
         lines.append(f"- {t['code']} ({t.get('label', {}).get('ko', '')}): {seeds}")
     return "\n".join(lines)
