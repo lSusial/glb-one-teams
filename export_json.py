@@ -169,7 +169,7 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
     ph = ",".join("?" * len(config.NON_PRESENCE_CODES))
     fetch_limit = limit * 5   # 클러스터링으로 줄어들 것을 감안해 후보를 넉넉히 뽑음
     rows = conn.execute(
-        f"""SELECT a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics,
+        f"""SELECT a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics, a.korean_fi,
                    a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score IS NOT NULL AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'
@@ -206,6 +206,59 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
             t=r["title_ko"] or r["title"], q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
             c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
             related_count=c["n"] - 1,
+            kfi=[x for x in (r["korean_fi"] or "").split(",") if x],
+        ))
+    return out
+
+
+def _compute_korean_fi(conn, days: int | None = 14, limit: int = 30) -> list[dict]:
+    """한국계 금융기관(신한·하나·우리·IBK·KDB·NH농협·수출입) 언급 기사 모아보기
+    (2026-08-26 회의 결정) — keyword_filter.run_korean_fi_tag()가 키워드로 태깅한
+    korean_fi 컬럼을 그대로 조회, 별도 수집·AI 호출 없음.
+
+    현지(진출 11개국 + 미진출 14개국) 활동만 대상 — 국내(KR) 뉴스는 이 기관들의
+    국내 CSR·공시성 기사가 압도적으로 많아 "현지 동향"이라는 취지에 안 맞아 제외.
+    ACTIVE(55점) 게이트 없음 — 활동 자체가 희소해 게이트를 걸면 거의 항상 빈
+    화면이 된다(_compute_non_presence와 같은 원칙). ai_score 순 정렬만.
+
+    link이 매체의 태그/토픽 아카이브 페이지(/tag/, /tags/, /topic/, /topics/)인
+    기사는 제외 — 실제 기사가 아니라 "이 키워드가 언급된 기사 모음" 목록 페이지라
+    fulltext 추출이 그 페이지에 있던 완전히 무관한 다른 기사 내용을 긁어오는
+    사례를 테스트 중 실제로 발견함(예: vietnamnews.vn/tags/.../industrial-bank-
+    of-korea-ibk-vietnam.html → 본문이 엉뚱한 홍콩 기업 실적 기사로 채워짐,
+    title_ko도 그 무관한 내용으로 잘못 생성됨). korean_fi 키워드 매치 자체는
+    맞지만 "현지 동향" 기사로 보여줄 내용이 아니므로 링크 패턴으로 걸러낸다."""
+    dc, params = _date_clause(days)
+    all_cc = list(_FLAGS.keys()) + list(config.NON_PRESENCE_CODES)
+    ph = ",".join("?" * len(all_cc))
+    rows = conn.execute(
+        f"""SELECT a.title, a.title_ko, a.summary_ko, a.summary_en, a.korean_fi, a.topics,
+                   a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name
+            FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
+            WHERE a.korean_fi IS NOT NULL AND a.korean_fi != '' AND a.duplicate_of IS NULL
+              AND a.link NOT LIKE '%/tag/%' AND a.link NOT LIKE '%/tags/%'
+              AND a.link NOT LIKE '%/topic/%' AND a.link NOT LIKE '%/topics/%'
+              AND m.primary_country_code IN ({ph}){dc}
+            ORDER BY a.ai_score DESC LIMIT ?""",
+        (*all_cc, *params, limit),
+    ).fetchall()
+
+    out = []
+    for r in rows:
+        cc = r["cc"]
+        if cc in config.NON_PRESENCE_COUNTRIES:
+            meta = config.NON_PRESENCE_COUNTRIES[cc]
+            flag, label, label_en = meta.get("flag", ""), meta.get("name_ko", cc), meta.get("name_en", cc)
+        else:
+            flag = _FLAGS_ALL.get(cc, "")
+            label, label_en = _PRESENCE_NAMES_KO.get(cc, cc), _PRESENCE_NAMES_EN.get(cc, cc)
+        codes = [x for x in (r["topics"] or "").split(",") if x]
+        out.append(dict(
+            cc=cc, flag=flag, cc_label=label, cc_label_en=label_en,
+            kfi=[x for x in (r["korean_fi"] or "").split(",") if x],
+            src=r["media_name"], d=(r["published_at"] or "")[:10],
+            t=r["title_ko"] or r["title"], q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
+            c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
         ))
     return out
 
@@ -235,7 +288,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
         rows = conn.execute(
             f"""
             SELECT a.title, a.title_ko, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
-                   a.topics, a.link, a.published_at, a.ai_score, a.source_links, m.media_name
+                   a.topics, a.link, a.published_at, a.ai_score, a.source_links, a.korean_fi, m.media_name
             FROM articles_raw a
             JOIN media_sources m ON m.source_id = a.source_id
             WHERE m.primary_country_code = ?
@@ -286,20 +339,24 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                 "u": a["link"],
                 "rl": rl[:2],
                 "score": a["ai_score"],
+                "kfi": [c for c in (a["korean_fi"] or "").split(",") if c],
             })
         total += len(articles)
+        kfi_count = sum(1 for x in articles if x["kfi"])
         countries.append({
             "cc": cc,
             "flag": flag,
             "presence": "진출",                 # KB 진출국 — docs/design_미진출국.md
             "status": "ACTIVE" if articles else "SOURCE WATCH",
             "count": len(articles),
+            "kfi_count": kfi_count,              # 한국계 금융기관 태깅된 기사 수(거점 커버리지 배지용)
             "brief": briefs.get(cc),            # 전일+당일 AI 브리핑(한/영) — 없으면 null
             "articles": articles,
             "indicators": indicators.get(cc, []),  # 환율·주가지수 최신 스냅샷 — 없으면 빈 리스트
         })
 
     non_presence = _compute_non_presence(conn)
+    korean_fi = _compute_korean_fi(conn)
 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -308,6 +365,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
         "active_threshold": config.AI_SCORE_ACTIVE_THRESHOLD if active_only else None,
         "countries": countries,
         "non_presence": {"count": len(non_presence), "articles": non_presence},
+        "korean_fi": {"count": len(korean_fi), "articles": korean_fi},
     }
     _write_json("countries", payload)
     path = config.EXPORT_DIR / "countries.json"

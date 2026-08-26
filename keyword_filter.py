@@ -415,6 +415,30 @@ EXCLUSION_KEYWORDS: list[str] = [
 
 
 # ---------------------------------------------------------------------------
+# ⑦ 한국계 금융기관 태깅(축 F, 2026-08-26 회의 결정) — 관련성 필터와 별개.
+# passed 기사 중 아래 기관이 언급되면 korean_fi 컬럼에 코드 태깅(멀티라벨 CSV).
+# 짧은 단독 약어(kb/nh 등)는 오탐이 심해 제외 — 구별력 있는 표현·한글명만 사용.
+# ---------------------------------------------------------------------------
+KOREAN_FI: dict[str, dict] = {
+    "SHINHAN": {"label": "신한",     "keywords": ["shinhan", "신한은행", "신한금융", "신한카드"]},
+    "HANA":    {"label": "하나(KEB)", "keywords": ["hana bank", "hana financial", "keb hana",
+                                                    "하나은행", "하나금융"]},
+    "WOORI":   {"label": "우리",     "keywords": ["woori bank", "woori financial", "우리은행", "우리금융"]},
+    "IBK":     {"label": "IBK기업",  "keywords": ["ibk", "industrial bank of korea", "기업은행"]},
+    "KDB":     {"label": "KDB산업",  "keywords": ["kdb", "korea development bank", "산업은행"]},
+    "NH":      {"label": "NH농협",   "keywords": ["nonghyup", "nh bank", "nh investment",
+                                                    "농협은행", "농협금융"]},
+    "KEXIM":   {"label": "수출입",   "keywords": ["kexim", "korea eximbank",
+                                                    "export-import bank of korea", "수출입은행"]},
+    # KB는 이미 전체 서비스의 핵심 축(국가브리핑·KB 시사점)이라 기본 제외.
+    # KOREAN_FI_INCLUDE_KB=True로 바꾸면 포함(bare "kb"는 오탐 위험이 커 제외).
+    "KB":      {"label": "KB",       "keywords": ["kb kookmin", "kb financial group",
+                                                    "kookmin bank", "국민은행"]},
+}
+KOREAN_FI_INCLUDE_KB = False
+
+
+# ---------------------------------------------------------------------------
 # DB 마이그레이션
 # ---------------------------------------------------------------------------
 def ensure_filter_columns(conn: sqlite3.Connection) -> None:
@@ -434,6 +458,12 @@ def ensure_dedup_column(conn: sqlite3.Connection) -> None:
     db.ensure_columns(conn, "articles_raw", [
         ("duplicate_of",
          "ALTER TABLE articles_raw ADD COLUMN duplicate_of INTEGER REFERENCES articles_raw(article_id)"),
+    ])
+
+
+def ensure_korean_fi_column(conn: sqlite3.Connection) -> None:
+    db.ensure_columns(conn, "articles_raw", [
+        ("korean_fi", "ALTER TABLE articles_raw ADD COLUMN korean_fi TEXT"),
     ])
 
 
@@ -736,6 +766,53 @@ def run_dedup(conn: sqlite3.Connection, recheck: bool = False) -> dict:
         dup_count / total_checked * 100 if total_checked else 0,
     )
     return {"checked": total_checked, "duplicates": dup_count}
+
+
+# ---------------------------------------------------------------------------
+# 한국계 금융기관 태깅 (v3 신규, 2026-08-26) — 관련성 필터와 완전히 별개 축.
+# LLM 없음(순수 키워드 매칭), 새 수집원 없이 기존 passed 기사만 태깅.
+# ---------------------------------------------------------------------------
+def _korean_fi_codes(text: str) -> list[str]:
+    hits = []
+    for code, meta in KOREAN_FI.items():
+        if code == "KB" and not KOREAN_FI_INCLUDE_KB:
+            continue
+        if _first_match(text, meta["keywords"]):
+            hits.append(code)
+    return hits
+
+
+def run_korean_fi_tag(conn: sqlite3.Connection, recheck: bool = False) -> dict:
+    """제목+본문에서 한국계 금융기관(KOREAN_FI) 언급을 키워드로 태깅.
+
+    recheck=False(기본): korean_fi가 아직 NULL인 passed 기사만(증분).
+    매치 없으면 빈 문자열로 저장(다음 실행 때 재검사 안 하도록 NULL과 구분).
+
+    Returns:
+        {"checked": N, "tagged": M}  (M = 1개 이상 기관이 매치된 기사 수)
+    """
+    ensure_korean_fi_column(conn)
+    cond = "" if recheck else "AND korean_fi IS NULL"
+    rows = conn.execute(f"""
+        SELECT article_id, title, summary FROM articles_raw
+        WHERE filter_decision = 'passed' {cond}
+    """).fetchall()
+
+    cur = conn.cursor()
+    tagged = 0
+    for r in rows:
+        text = _normalize(_clean_text(f"{r['title']} {r['summary'] or ''}"))
+        codes = _korean_fi_codes(text)
+        cur.execute(
+            "UPDATE articles_raw SET korean_fi = ? WHERE article_id = ?",
+            (",".join(codes), r["article_id"]),
+        )
+        if codes:
+            tagged += 1
+    conn.commit()
+
+    log.info("한국계 금융기관 태깅 완료 — 검사=%d건  태깅=%d건", len(rows), tagged)
+    return {"checked": len(rows), "tagged": tagged}
 
 
 # ---------------------------------------------------------------------------

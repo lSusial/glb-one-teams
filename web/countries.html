@@ -144,6 +144,7 @@
   <div class="fil" id="presenceSel" style="margin:14px 0 0">
     <span class="chip on" data-p="presence">진출국</span>
     <span class="chip" data-p="non">KB 미진출국</span>
+    <span class="chip" data-p="kfi">🇰🇷 한국계 금융기관</span>
   </div>
 
   <section class="sec" id="secCov">
@@ -188,11 +189,20 @@
 
   const arts=[]; (DATA.countries||[]).forEach(c=>(c.articles||[]).forEach(a=>arts.push({...a,cc:c.cc,flag:c.flag})));
   const nonArts=(DATA.non_presence&&DATA.non_presence.articles)||[];
+  const kfiArts=(DATA.korean_fi&&DATA.korean_fi.articles)||[];
   document.getElementById('covRt').textContent='';
 
-  let fCat='', fCC='', pMode='presence';
-  const pool=()=>pMode==='non'?nonArts:(fCC?arts.filter(a=>a.cc===fCC):arts);
+  let fCat='', fCC='', fInst='', pMode='presence';
+  const pool=()=>pMode==='non'?nonArts:pMode==='kfi'?kfiArts:(fCC?arts.filter(a=>a.cc===fCC):arts);
   const catCount=k=>{const p=pool();return k?p.filter(a=>(a.c||'').includes(k)).length:p.length;};
+
+  // 한국계 금융기관 필터 칩 — CATS(주제축)와 별개 축
+  const KFI_INST=EN
+    ?[['','All'],['SHINHAN','Shinhan'],['HANA','Hana(KEB)'],['WOORI','Woori'],
+      ['IBK','IBK'],['KDB','KDB'],['NH','NH'],['KEXIM','Eximbank']]
+    :[['','전체'],['SHINHAN','신한'],['HANA','하나(KEB)'],['WOORI','우리'],
+      ['IBK','IBK기업'],['KDB','KDB산업'],['NH','NH농협'],['KEXIM','수출입']];
+  const instCount=code=>{const p=kfiArts;return code?p.filter(a=>(a.kfi||[]).includes(code)).length:p.length;};
 
   document.getElementById('cats').innerHTML=CATS.map(([k,l])=>
     `<span class="chip cat${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
@@ -204,12 +214,12 @@
 
   document.getElementById('presenceSel').onclick=e=>{
     const c=e.target.closest('.chip'); if(!c)return;
-    pMode=c.dataset.p; fCat='';
+    pMode=c.dataset.p; fCat=''; fInst='';
     document.querySelectorAll('#presenceSel .chip').forEach(x=>x.classList.toggle('on',x.dataset.p===pMode));
     render();
   };
   if(EN) document.querySelectorAll('#presenceSel .chip').forEach(c=>{
-    c.textContent=c.dataset.p==='presence'?'Presence':'KB Non-Presence';
+    c.textContent=c.dataset.p==='presence'?'Presence':c.dataset.p==='non'?'KB Non-Presence':'🇰🇷 Korean FI';
   });
 
   const BL=EN?{economy:'Economy',finance:'Banking',digital:'Digital',esg:'ESG',risk:'Risk',geo:'Geopolitics'}:{economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크',geo:'지정학'};
@@ -249,6 +259,24 @@
     const secCov=document.getElementById('secCov'), feedTitle=document.getElementById('feedTitle');
     const catsEl=document.getElementById('cats'), bx=document.getElementById('brief'), feed=document.getElementById('feed');
     const bn=document.getElementById('bignum');
+
+    // 한국계 금융기관(신한·하나 등) 동향 모아보기 — 국가 구분 없음, 기관 필터
+    if(pMode==='kfi'){
+      secCov.style.display='none';
+      feedTitle.textContent=EN?'Korean FI Activity':'한국계 금융기관 동향';
+      bx.style.display='none'; bn.style.display='none';
+      catsEl.style.display='';
+      catsEl.innerHTML=KFI_INST.map(([k,l])=>`<span class="chip cat${k===fInst?' on':''}" data-k="${k}">${l}<span class="n">${instCount(k)}</span></span>`).join('');
+      let rows=kfiArts.filter(a=>!fInst||(a.kfi||[]).includes(fInst));
+      document.getElementById('count').textContent=rows.length+(EN?' articles':' 건');
+      if(!rows.length){feed.innerHTML=`<div class="empty">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;feed._rows=[];return;}
+      feed.innerHTML=rows.map((a,i)=>`<div class="art" data-i="${i}">
+        <div class="top"><span class="flag">${a.flag||''}</span><b>${esc(EN?(a.cc_label_en||a.cc):(a.cc_label||a.cc))}</b>${badges(a.c)}<span class="ad">${esc(md(a.d))}</span></div>
+        <div class="t">${esc(tt(a))}</div>
+        ${tq(a)?`<div class="q">${esc(tq(a))}</div>`:''}</div>`).join('');
+      feed._rows=rows;
+      return;
+    }
 
     // KB 미진출국 — 국가 구분 없는 통합 피드(네비 없음), 주제 필터만 유지
     if(pMode==='non'){
