@@ -45,9 +45,9 @@
   .hl .hlflags{margin-top:4px;font-size:13px;letter-spacing:2px}
 
   /* 국가별 상황 — 지도(진출국 신호색 점) */
-  .map-wrap{position:relative;width:100%;aspect-ratio:2/1;background:#eef2f6;border-radius:10px;overflow:hidden}
+  .map-wrap{position:relative;width:100%;aspect-ratio:2/1;background:#d9e7f2;border:1px solid var(--line);border-radius:10px;overflow:hidden}
   .map-wrap svg{position:absolute;inset:0;width:100%;height:100%}
-  .map-wrap svg line{stroke:#dde3ea;stroke-width:1}
+  .map-wrap svg line{stroke:#a7c2d6;stroke-width:1}
   .mdot{position:absolute;transform:translate(-50%,-50%);width:14px;height:14px;border-radius:50%;
     border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 1px 4px rgba(0,0,0,.25);cursor:pointer;padding:0}
   .mdot.go{background:var(--go)}.mdot.warn{background:var(--warn)}.mdot.stop{background:var(--stop)}
@@ -181,7 +181,7 @@
 
   function renderMapGrid(){
     const svg=document.getElementById('mapGrid');
-    const lines=['<rect x="0" y="0" width="1000" height="500" style="fill:#eef2f6"/>'];
+    const lines=['<rect x="0" y="0" width="1000" height="500" style="fill:#d9e7f2"/>'];
     for(let lon=-180;lon<=180;lon+=30) lines.push(`<line x1="${projX(lon)*10}" y1="0" x2="${projX(lon)*10}" y2="500"/>`);
     for(let lat=-60;lat<=90;lat+=30) lines.push(`<line x1="0" y1="${projY(lat)*5}" x2="1000" y2="${projY(lat)*5}"/>`);
     svg.innerHTML=lines.join('');
