@@ -6,6 +6,9 @@
 <title>KB 글로벌 데일리 브리핑 — Global Pulse</title>
 <!-- 데이터: export_pulse 가 아래 스크립트에 주입(오프라인). 없으면 pulse.json fetch. -->
 <script id="pulse-data" type="application/json">null</script>
+<!-- 국가별 상황 지도용 — 경량 지도 라이브러리(CDN). 로드 실패 시 격자 폴백. -->
+<script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
 <style>
   :root{
     --kb-yellow:#FFBC00; --kb-dark:#545045; --kb-gold:#85754E; --kb-silver:#8A8D8F;
@@ -48,6 +51,7 @@
   .map-wrap{position:relative;width:100%;aspect-ratio:2/1;background:#d9e7f2;border:1px solid var(--line);border-radius:10px;overflow:hidden}
   .map-wrap svg{position:absolute;inset:0;width:100%;height:100%}
   .map-wrap svg line{stroke:#a7c2d6;stroke-width:1}
+  .map-wrap svg path.land{fill:#eef1ea;stroke:#c3ceb9;stroke-width:.6}
   .mdot{position:absolute;transform:translate(-50%,-50%);width:14px;height:14px;border-radius:50%;
     border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.08),0 1px 4px rgba(0,0,0,.25);cursor:pointer;padding:0}
   .mdot.go{background:var(--go)}.mdot.warn{background:var(--warn)}.mdot.stop{background:var(--stop)}
@@ -174,17 +178,40 @@
   };
   const signals=D.country_signals||[];
 
-  // 진출 11개국 KB 거점 도시 위경도 — 등장방형 투영(x%=(lon+180)/360*100, y%=(90-lat)/180*100)
+  // 진출 11개국 KB 거점 도시 위경도(lat,lon)
   const HUB_COORDS={GB:[51.5,-0.1],US:[40.7,-74.0],JP:[35.7,139.7],HK:[22.3,114.2],SG:[1.35,103.8],
                      CN:[39.9,116.4],VN:[21.0,105.8],IN:[28.6,77.2],MM:[16.8,96.2],ID:[-6.2,106.8],KH:[11.5,104.9]};
-  const projX=lon=>(lon+180)/360*100, projY=lat=>(90-lat)/180*100;
 
-  function renderMapGrid(){
+  // 세계지도(대륙 윤곽) — D3-geo + world-atlas(CDN, 저해상도 110m) 렌더.
+  // 로드 실패(오프라인·CDN 차단) 시 위경도 격자만 그리는 폴백 투영으로 대체.
+  async function renderMapWorld(){
     const svg=document.getElementById('mapGrid');
-    const lines=['<rect x="0" y="0" width="1000" height="500" style="fill:#d9e7f2"/>'];
-    for(let lon=-180;lon<=180;lon+=30) lines.push(`<line x1="${projX(lon)*10}" y1="0" x2="${projX(lon)*10}" y2="500"/>`);
-    for(let lat=-60;lat<=90;lat+=30) lines.push(`<line x1="0" y1="${projY(lat)*5}" x2="1000" y2="${projY(lat)*5}"/>`);
-    svg.innerHTML=lines.join('');
+    svg.innerHTML='<rect x="0" y="0" width="1000" height="500" style="fill:#d9e7f2"/>';
+    const fallbackProjection=([lon,lat])=>[(lon+180)/360*1000,(90-lat)/180*500];
+    if(typeof d3==='undefined' || typeof topojson==='undefined'){
+      console.warn('[brief] d3/topojson 로드 실패 — 격자 폴백');
+      drawGraticuleFallback(svg);
+      return fallbackProjection;
+    }
+    try{
+      const world=await d3.json('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json');
+      const land=topojson.feature(world,world.objects.countries);
+      const projection=d3.geoEquirectangular().fitSize([1000,500],land);
+      const path=d3.geoPath(projection);
+      d3.select(svg).append('g').selectAll('path').data(land.features).join('path')
+        .attr('class','land').attr('d',path);
+      return ([lon,lat])=>projection([lon,lat]);
+    }catch(e){
+      console.warn('[brief] world-atlas fetch 실패 — 격자 폴백:', e);
+      drawGraticuleFallback(svg);
+      return fallbackProjection;
+    }
+  }
+  function drawGraticuleFallback(svg){
+    const lines=[];
+    for(let lon=-180;lon<=180;lon+=30){ const x=(lon+180)/360*1000; lines.push(`<line x1="${x}" y1="0" x2="${x}" y2="500"/>`); }
+    for(let lat=-60;lat<=90;lat+=30){ const y=(90-lat)/180*500; lines.push(`<line x1="0" y1="${y}" x2="1000" y2="${y}"/>`); }
+    svg.insertAdjacentHTML('beforeend', lines.join(''));
   }
 
   function mapPopoverHTML(s){
@@ -200,7 +227,7 @@
       <div class="kw">${esc(EN?(s.keyword_en||s.keyword):(s.keyword||s.keyword_en))}</div>`;
   }
 
-  function renderMapDots(){
+  function renderMapDots(projection){
     const wrap=document.getElementById('mapWrap'), pop=document.getElementById('mpop');
     wrap.querySelectorAll('.mdot').forEach(el=>el.remove());
     let activeDot=null;
@@ -212,9 +239,10 @@
     function hidePop(){ pop.classList.remove('on'); if(activeDot) activeDot.classList.remove('active'); activeDot=null; }
     signals.forEach(s=>{
       const coord=HUB_COORDS[s.cc]; if(!coord) return;
+      const [px,py]=projection([coord[1],coord[0]]);   // HUB_COORDS는 [lat,lon] → projection엔 [lon,lat]
       const dot=document.createElement('button');
       dot.className='mdot '+(s.state||'go');
-      dot.style.left=projX(coord[1])+'%'; dot.style.top=projY(coord[0])+'%';
+      dot.style.left=(px/1000*100)+'%'; dot.style.top=(py/500*100)+'%';
       dot.title=EN?(s.name_en||s.name):(s.name||s.name_en);
       dot.addEventListener('mouseenter',()=>showPop(dot,s));
       dot.addEventListener('mouseleave',()=>{ if(activeDot!==dot) hidePop(); });
@@ -230,7 +258,7 @@
   }
   if(signals.length){
     document.getElementById('secMap').style.display='';
-    renderMapGrid(); renderMapDots();
+    renderMapWorld().then(projection=>renderMapDots(projection));
   }
 
   // ── 오늘의 글로벌 핵심 = 핵심 카드(클릭→모달) + 국가별 이슈 한 줄 ────
