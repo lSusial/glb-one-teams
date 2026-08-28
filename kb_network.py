@@ -22,6 +22,9 @@ KB_NETWORK: dict[str, dict] = {
     "MM": {"city": "양곤",      "type": "사무소", "entity": "KB 양곤사무소"},
     "ID": {"city": "자카르타",  "type": "자회사", "entity": "PT Bank KB Indonesia Tbk (KBI은행)"},
     "KH": {"city": "프놈펜",    "type": "자회사", "entity": "KB 프라삭은행 (KB Prasac Bank)"},
+    # TH·LA: 2026-08-28 진출국 편입(제품 기준) — 실제 KB 지점·법인 없음, 관심시장으로 관찰만.
+    "TH": {"city": "방콕",      "type": "관심시장", "entity": "KB 태국 관심시장(지점 없음)"},
+    "LA": {"city": "비엔티안",  "type": "관심시장", "entity": "KB 라오스 관심시장(지점 없음)"},
 }
 
 # 자회사(별도 IR·경영공시 대상) 국가 코드

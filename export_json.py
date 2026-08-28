@@ -23,18 +23,20 @@ log = logging.getLogger("export_json")
 
 _TEMPLATE = config.ROOT / "web" / "countries.html"   # 현지언론 화면 템플릿
 
-# 거점 국기 이모지. GLOBAL은 국가 화면(11개 거점)에서는 제외하고, 횡단 화면(Pulse 등)에서만 사용.
+# 거점 국기 이모지. GLOBAL은 국가 화면(13개 거점)에서는 제외하고, 횡단 화면(Pulse 등)에서만 사용.
+# TH·LA: 2026-08-28 진출국 편입(제품 기준, 실제 KB 지점 없는 "관심시장" — kb_network.py 참조).
 _FLAGS_ALL = {"GB": "🇬🇧", "US": "🇺🇸", "JP": "🇯🇵", "HK": "🇭🇰", "SG": "🇸🇬", "CN": "🇨🇳",
-              "VN": "🇻🇳", "IN": "🇮🇳", "MM": "🇲🇲", "ID": "🇮🇩", "KH": "🇰🇭", "GLOBAL": "🌐"}
+              "VN": "🇻🇳", "IN": "🇮🇳", "MM": "🇲🇲", "ID": "🇮🇩", "KH": "🇰🇭",
+              "TH": "🇹🇭", "LA": "🇱🇦", "GLOBAL": "🌐"}
 _FLAGS = {cc: f for cc, f in _FLAGS_ALL.items() if cc != "GLOBAL"}
 
-# 진출국 11개 한/영 국가명 — country_signals(국가별 시장 신호 보드)에서 사용.
+# 진출국 13개 한/영 국가명 — country_signals(국가별 시장 신호 보드)에서 사용.
 _PRESENCE_NAMES_KO = {"GB": "영국", "US": "미국", "HK": "홍콩", "CN": "중국", "JP": "일본",
                        "SG": "싱가포르", "IN": "인도", "VN": "베트남", "MM": "미얀마",
-                       "ID": "인도네시아", "KH": "캄보디아"}
+                       "ID": "인도네시아", "KH": "캄보디아", "TH": "태국", "LA": "라오스"}
 _PRESENCE_NAMES_EN = {"GB": "UK", "US": "US", "HK": "Hong Kong", "CN": "China", "JP": "Japan",
                        "SG": "Singapore", "IN": "India", "VN": "Vietnam", "MM": "Myanmar",
-                       "ID": "Indonesia", "KH": "Cambodia"}
+                       "ID": "Indonesia", "KH": "Cambodia", "TH": "Thailand", "LA": "Laos"}
 
 # MMK/KHR — 시장환율이 아닌 별도 체계임을 보드에 짧게 표시.
 _FX_NOTE = {"MMK": "공식", "KHR": "페그"}

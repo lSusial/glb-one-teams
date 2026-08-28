@@ -124,6 +124,11 @@ INDICATOR_MAP: dict[str, dict] = {
     "ID": {"fx": "IDR", "indices": [{"symbol": "^JKSE",     "label": "자카르타종합", "short": "JCI"}]},
     "MM": {"fx": "MMK", "indices": []},   # 지수 없음, 환율만(공식환율 — indicators.py 참조)
     "KH": {"fx": "KHR", "indices": []},   # 지수 없음, 환율만
+    # TH: 2026-08-28 진출국 편입. ^SET.BK 실측 성공(1600.70, 실제 종가 일치) —
+    # 다만 yfinance가 히스토리를 1일치만 반환해 등락은 fx와 동일하게 DB 스냅샷
+    # 누적으로 채워진다(당일은 None, 다음날부터 등락 표시).
+    "TH": {"fx": "THB", "indices": [{"symbol": "^SET.BK", "label": "SET지수", "short": "SET"}]},
+    "LA": {"fx": "LAK", "indices": []},   # 지수 없음(MM·KH와 동일 취급), 환율만
 }
 
 # 국가별 정책금리(기준금리) — 무료 실시간 API가 약해(중앙은행마다 발표 형식이
@@ -141,6 +146,8 @@ POLICY_RATES: dict[str, dict] = {
     "VN": {"value": 4.50, "label": "SBV 재할인금리",       "as_of": "2026-06-30"},
     "ID": {"value": 5.75, "label": "BI-Rate(7일 역레포)",  "as_of": "2026-08-19"},
     "MM": {"value": 9.00, "label": "CBM 정책금리",         "as_of": "2026-06-30"},
+    "TH": {"value": 1.00, "label": "BOT 정책금리",         "as_of": "2026-08-26"},
+    # LA: 신뢰할 만한 정책금리 시드값 확보 어려움 — 표에서 제외(export 자동 생략)
 }
 
 # 10년물 국채금리 — 무료·무키로 안정적으로 잡히는 티커를 실측한 결과 Yahoo
@@ -156,12 +163,12 @@ SIGNAL_GO_THRESHOLD   = 70   # 이상 = 안정
 SIGNAL_WARN_THRESHOLD = 55   # 이상(70 미만) = 주의, 그 미만 = 경계
 
 # ── KB 진출국 / 미진출국 (docs/design_미진출국.md) ─────────────────
-# 진출국 11개(위 INDICATOR_MAP·kb_network.KB_NETWORK와 동일 거점)는 국가별 화면
-# 그대로 유지. 아래 14개국은 "한국계 은행은 있지만 KB는 없는" 시장 — 국가 구분
+# 진출국 13개(위 INDICATOR_MAP·kb_network.KB_NETWORK와 동일 거점 — 2026-08-28
+# 태국·라오스 편입, 제품 기준. 실제 KB 지점 없는 "관심시장" 포함)는 국가별 화면
+# 그대로 유지. 아래 13개국은 "한국계 은행은 있지만 KB는 없는" 시장 — 국가 구분
 # 없이 통합 피드로만 노출한다(⚠️ 잠정 리스트, 이 한 곳에서만 수정하면 됨).
 NON_PRESENCE_COUNTRIES: dict[str, dict] = {
     "PH": {"name_ko": "필리핀",     "name_en": "Philippines", "flag": "🇵🇭"},
-    "TH": {"name_ko": "태국",       "name_en": "Thailand",    "flag": "🇹🇭"},
     "MY": {"name_ko": "말레이시아", "name_en": "Malaysia",    "flag": "🇲🇾"},
     "BD": {"name_ko": "방글라데시", "name_en": "Bangladesh",  "flag": "🇧🇩"},
     "PL": {"name_ko": "폴란드",     "name_en": "Poland",      "flag": "🇵🇱"},

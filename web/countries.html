@@ -65,6 +65,8 @@
   .chip.cat.on{background:#fdf6e3;color:var(--kb-gold);border-color:var(--kb-gold)}
   .chip.cat.on .n{color:var(--kb-gold)}
   .fil .sp{flex:1}.cnt{font-size:12px;color:var(--sub)}
+  .ministats{font-size:11.5px;color:var(--sub);margin:7px 2px 0}
+  .ministats span{margin-right:10px}
 
   /* ── 기사 카드 ── */
   .feed{display:flex;flex-direction:column;gap:9px;margin-top:12px}
@@ -140,9 +142,8 @@
   <div class="fil" id="presenceSel" style="margin:14px 0 0">
     <span class="chip on" data-p="presence">진출국</span>
     <span class="chip" data-p="non">KB 미진출국</span>
-    <span class="chip" data-p="kfi">🇰🇷 한국계 금융기관</span>
-    <span class="chip" data-p="personnel">👤 인사동향</span>
   </div>
+  <div id="miniStats" class="ministats"></div>
 
   <section class="sec" id="secCov">
     <div class="sec-h"><div class="num g">🗺️</div>
@@ -175,8 +176,8 @@
 
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const md=s=>String(s||'').slice(5);   // 날짜 연도 제거(YYYY-MM-DD → MM-DD)
-  const NAMES=EN?{GB:'UK',US:'US',HK:'Hong Kong',CN:'China',JP:'Japan',SG:'Singapore',IN:'India',VN:'Vietnam',MM:'Myanmar',ID:'Indonesia',KH:'Cambodia',GLOBAL:'Global'}
-               :{GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',GLOBAL:'글로벌'};
+  const NAMES=EN?{GB:'UK',US:'US',HK:'Hong Kong',CN:'China',JP:'Japan',SG:'Singapore',IN:'India',VN:'Vietnam',MM:'Myanmar',ID:'Indonesia',KH:'Cambodia',TH:'Thailand',LA:'Laos',GLOBAL:'Global'}
+               :{GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',TH:'태국',LA:'라오스',GLOBAL:'글로벌'};
   const CATS=EN?[['','All'],['economy','Economy'],['finance','Banking'],['digital','Digital'],['esg','ESG'],['risk','Risk'],['geo','Geopolitics']]
               :[['','전체'],['economy','경제'],['finance','금융'],['digital','디지털'],['esg','ESG'],['risk','리스크'],['geo','지정학']];
   const gen=(DATA.generated_at||'').slice(0,16).replace('T',' ');
@@ -188,17 +189,14 @@
   const personnelArts=(DATA.personnel&&DATA.personnel.articles)||[];
   document.getElementById('covRt').textContent='';
 
-  let fCat='', fCC='', fInst='', pMode='presence';
-  const pool=()=>pMode==='non'?nonArts:pMode==='kfi'?kfiArts:pMode==='personnel'?personnelArts:(fCC?arts.filter(a=>a.cc===fCC):arts);
+  let fCat='', fCC='', pMode='presence';
+  const pool=()=>pMode==='non'?nonArts:(fCC?arts.filter(a=>a.cc===fCC):arts);
   const catCount=k=>{const p=pool();return k?p.filter(a=>(a.c||'').includes(k)).length:p.length;};
 
-  // 한국계 금융기관 필터 칩 — CATS(주제축)와 별개 축
-  const KFI_INST=EN
-    ?[['','All'],['SHINHAN','Shinhan'],['HANA','Hana(KEB)'],['WOORI','Woori'],
-      ['IBK','IBK'],['KDB','KDB'],['NH','NH'],['KEXIM','Eximbank']]
-    :[['','전체'],['SHINHAN','신한'],['HANA','하나(KEB)'],['WOORI','우리'],
-      ['IBK','IBK기업'],['KDB','KDB산업'],['NH','NH농협'],['KEXIM','수출입']];
-  const instCount=code=>{const p=kfiArts;return code?p.filter(a=>(a.kfi||[]).includes(code)).length:p.length;};
+  // 한국계 금융기관·인사동향 — 신호가 희소해 별도 탭 대신 건수만 표시(2026-08-28)
+  document.getElementById('miniStats').innerHTML =
+    `<span>🇰🇷 ${EN?'Korean FI':'한국계 금융기관'}(${kfiArts.length})</span>` +
+    `<span>👤 ${EN?'Leadership Moves':'인사동향'}(${personnelArts.length})</span>`;
 
   document.getElementById('cats').innerHTML=CATS.map(([k,l])=>
     `<span class="chip cat${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
@@ -210,12 +208,12 @@
 
   document.getElementById('presenceSel').onclick=e=>{
     const c=e.target.closest('.chip'); if(!c)return;
-    pMode=c.dataset.p; fCat=''; fInst='';
+    pMode=c.dataset.p; fCat='';
     document.querySelectorAll('#presenceSel .chip').forEach(x=>x.classList.toggle('on',x.dataset.p===pMode));
     render();
   };
   if(EN) document.querySelectorAll('#presenceSel .chip').forEach(c=>{
-    c.textContent=c.dataset.p==='presence'?'Presence':c.dataset.p==='non'?'KB Non-Presence':c.dataset.p==='kfi'?'🇰🇷 Korean FI':'👤 Leadership Moves';
+    c.textContent=c.dataset.p==='presence'?'Presence':'KB Non-Presence';
   });
 
   const BL=EN?{economy:'Economy',finance:'Banking',digital:'Digital',esg:'ESG',risk:'Risk',geo:'Geopolitics'}:{economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크',geo:'지정학'};
@@ -281,42 +279,6 @@
     const secCov=document.getElementById('secCov'), feedTitle=document.getElementById('feedTitle');
     const catsEl=document.getElementById('cats'), bx=document.getElementById('brief'), feed=document.getElementById('feed');
     const bn=document.getElementById('bignum');
-
-    // 한국계 금융기관(신한·하나 등) 동향 모아보기 — 국가 구분 없음, 기관 필터
-    if(pMode==='kfi'){
-      secCov.style.display='none';
-      feedTitle.textContent=EN?'Korean FI Activity':'한국계 금융기관 동향';
-      bx.style.display='none'; bn.style.display='none';
-      catsEl.style.display='';
-      catsEl.innerHTML=KFI_INST.map(([k,l])=>`<span class="chip cat${k===fInst?' on':''}" data-k="${k}">${l}<span class="n">${instCount(k)}</span></span>`).join('');
-      let rows=kfiArts.filter(a=>!fInst||(a.kfi||[]).includes(fInst));
-      document.getElementById('count').textContent=rows.length+(EN?' articles':' 건');
-      if(!rows.length){feed.innerHTML=`<div class="empty">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;feed._rows=[];return;}
-      feed.innerHTML=rows.map((a,i)=>`<div class="art" data-i="${i}">
-        <div class="top"><span class="flag">${a.flag||''}</span><b>${esc(EN?(a.cc_label_en||a.cc):(a.cc_label||a.cc))}</b>${badges(a.c)}<span class="ad">${esc(md(a.d))}</span></div>
-        <div class="t">${esc(tt(a))}</div>
-        ${tq(a)?`<div class="q">${esc(tq(a))}</div>`:''}</div>`).join('');
-      feed._rows=rows;
-      return;
-    }
-
-    // 인사동향(리더십 교체) — 진출·미진출 전 거점 통합, 주제 필터만 유지(기관 필터 없음)
-    if(pMode==='personnel'){
-      secCov.style.display='none';
-      feedTitle.textContent=EN?'Leadership Moves':'인사동향';
-      bx.style.display='none'; bn.style.display='none';
-      catsEl.style.display='';
-      catsEl.innerHTML=CATS.map(([k,l])=>`<span class="chip cat${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
-      let rows=personnelArts.filter(a=>!fCat||(a.c||'').includes(fCat));
-      document.getElementById('count').textContent=rows.length+(EN?' articles':' 건');
-      if(!rows.length){feed.innerHTML=`<div class="empty">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;feed._rows=[];return;}
-      feed.innerHTML=rows.map((a,i)=>`<div class="art" data-i="${i}">
-        <div class="top"><span class="flag">${a.flag||''}</span><b>${esc(EN?(a.cc_label_en||a.cc):(a.cc_label||a.cc))}</b>${badges(a.c)}<span class="ad">${esc(md(a.d))}</span></div>
-        <div class="t">${esc(tt(a))}</div>
-        ${tq(a)?`<div class="q">${esc(tq(a))}</div>`:''}</div>`).join('');
-      feed._rows=rows;
-      return;
-    }
 
     // KB 미진출국 — 국가 구분 없는 통합 피드(네비 없음), 주제 필터만 유지
     if(pMode==='non'){
