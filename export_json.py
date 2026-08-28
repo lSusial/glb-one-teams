@@ -211,7 +211,7 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
     return out
 
 
-def _compute_korean_fi(conn, days: int | None = 14, limit: int = 30) -> list[dict]:
+def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dict]:
     """한국계 금융기관(신한·하나·우리·IBK·KDB·NH농협·수출입) 언급 기사 모아보기
     (2026-08-26 회의 결정) — keyword_filter.run_korean_fi_tag()가 키워드로 태깅한
     korean_fi 컬럼을 그대로 조회, 별도 수집·AI 호출 없음.
@@ -220,6 +220,13 @@ def _compute_korean_fi(conn, days: int | None = 14, limit: int = 30) -> list[dic
     국내 CSR·공시성 기사가 압도적으로 많아 "현지 동향"이라는 취지에 안 맞아 제외.
     ACTIVE(55점) 게이트 없음 — 활동 자체가 희소해 게이트를 걸면 거의 항상 빈
     화면이 된다(_compute_non_presence와 같은 원칙). ai_score 순 정렬만.
+
+    days=30(2026-08-28 상향, 원래 14) — 실 데이터 기준 전체 수집 이력 통틀어
+    매치가 10건뿐일 만큼 신호가 희소해서, 14일 창은 거의 항상 빈 화면이 됨을
+    확인. 30일로 늘려도 여전히 드물게 노출되는 게 정상(수집원 자체가 한국계
+    은행 해외 활동을 겨냥한 전용 쿼리가 아니라 국가 단위 광범위 검색이라 —
+    적중률을 근본적으로 올리려면 기관·국가별 전용 sources.yaml 쿼리 추가 필요,
+    이번 스코프 밖).
 
     link이 매체의 태그/토픽 아카이브 페이지(/tag/, /tags/, /topic/, /topics/)인
     기사는 제외 — 실제 기사가 아니라 "이 키워드가 언급된 기사 모음" 목록 페이지라
