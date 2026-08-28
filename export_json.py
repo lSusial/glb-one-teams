@@ -270,6 +270,50 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
     return out
 
 
+def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dict]:
+    """금융기관·중앙은행·감독당국 인사동향(리더십 교체) 모아보기 (2026-08-28).
+    keyword_filter.run_personnel_tag()가 키워드로 태깅한 personnel_move 컬럼을
+    그대로 조회, 별도 수집·AI 호출 없음.
+
+    korean_fi(한국계 7개 기관 한정)와 달리 특정 기관에 국한하지 않고 KB
+    네트워크(진출 11개국) + 미진출 14개국 전체의 금융권 리더십 동향을 폭넓게
+    노출 — 사용자 요청(2026-08-28)으로 korean_fi 섹션과 별개의 새 섹션으로 신설.
+    국내(KR)·GLOBAL 뉴스는 제외(다른 두 모아보기 함수와 동일 원칙).
+    ACTIVE 게이트 없음 — 신호 자체가 희소해 게이트를 걸면 항상 빈 화면이 됨."""
+    dc, params = _date_clause(days)
+    all_cc = list(_FLAGS.keys()) + list(config.NON_PRESENCE_CODES)
+    ph = ",".join("?" * len(all_cc))
+    rows = conn.execute(
+        f"""SELECT a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics,
+                   a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name
+            FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
+            WHERE a.personnel_move = 1 AND a.ai_score IS NOT NULL AND a.duplicate_of IS NULL
+              AND a.link NOT LIKE '%/tag/%' AND a.link NOT LIKE '%/tags/%'
+              AND a.link NOT LIKE '%/topic/%' AND a.link NOT LIKE '%/topics/%'
+              AND m.primary_country_code IN ({ph}){dc}
+            ORDER BY a.ai_score DESC LIMIT ?""",
+        (*all_cc, *params, limit),
+    ).fetchall()
+
+    out = []
+    for r in rows:
+        cc = r["cc"]
+        if cc in config.NON_PRESENCE_COUNTRIES:
+            meta = config.NON_PRESENCE_COUNTRIES[cc]
+            flag, label, label_en = meta.get("flag", ""), meta.get("name_ko", cc), meta.get("name_en", cc)
+        else:
+            flag = _FLAGS_ALL.get(cc, "")
+            label, label_en = _PRESENCE_NAMES_KO.get(cc, cc), _PRESENCE_NAMES_EN.get(cc, cc)
+        codes = [x for x in (r["topics"] or "").split(",") if x]
+        out.append(dict(
+            cc=cc, flag=flag, cc_label=label, cc_label_en=label_en,
+            src=r["media_name"], d=(r["published_at"] or "")[:10],
+            t=r["title_ko"] or r["title"], q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
+            c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
+        ))
+    return out
+
+
 def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     _ensure_ai_columns(conn)
     dc, dparams = _date_clause(days)   # 현지언론 = 전일+당일 (max-1일 이후)
@@ -364,6 +408,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
 
     non_presence = _compute_non_presence(conn)
     korean_fi = _compute_korean_fi(conn)
+    personnel = _compute_personnel(conn)
 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -373,6 +418,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
         "countries": countries,
         "non_presence": {"count": len(non_presence), "articles": non_presence},
         "korean_fi": {"count": len(korean_fi), "articles": korean_fi},
+        "personnel": {"count": len(personnel), "articles": personnel},
     }
     _write_json("countries", payload)
     path = config.EXPORT_DIR / "countries.json"

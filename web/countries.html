@@ -136,6 +136,7 @@
     <span class="chip on" data-p="presence">진출국</span>
     <span class="chip" data-p="non">KB 미진출국</span>
     <span class="chip" data-p="kfi">🇰🇷 한국계 금융기관</span>
+    <span class="chip" data-p="personnel">👤 인사동향</span>
   </div>
 
   <section class="sec" id="secCov">
@@ -179,10 +180,11 @@
   const arts=[]; (DATA.countries||[]).forEach(c=>(c.articles||[]).forEach(a=>arts.push({...a,cc:c.cc,flag:c.flag})));
   const nonArts=(DATA.non_presence&&DATA.non_presence.articles)||[];
   const kfiArts=(DATA.korean_fi&&DATA.korean_fi.articles)||[];
+  const personnelArts=(DATA.personnel&&DATA.personnel.articles)||[];
   document.getElementById('covRt').textContent='';
 
   let fCat='', fCC='', fInst='', pMode='presence';
-  const pool=()=>pMode==='non'?nonArts:pMode==='kfi'?kfiArts:(fCC?arts.filter(a=>a.cc===fCC):arts);
+  const pool=()=>pMode==='non'?nonArts:pMode==='kfi'?kfiArts:pMode==='personnel'?personnelArts:(fCC?arts.filter(a=>a.cc===fCC):arts);
   const catCount=k=>{const p=pool();return k?p.filter(a=>(a.c||'').includes(k)).length:p.length;};
 
   // 한국계 금융기관 필터 칩 — CATS(주제축)와 별개 축
@@ -208,7 +210,7 @@
     render();
   };
   if(EN) document.querySelectorAll('#presenceSel .chip').forEach(c=>{
-    c.textContent=c.dataset.p==='presence'?'Presence':c.dataset.p==='non'?'KB Non-Presence':'🇰🇷 Korean FI';
+    c.textContent=c.dataset.p==='presence'?'Presence':c.dataset.p==='non'?'KB Non-Presence':c.dataset.p==='kfi'?'🇰🇷 Korean FI':'👤 Leadership Moves';
   });
 
   const BL=EN?{economy:'Economy',finance:'Banking',digital:'Digital',esg:'ESG',risk:'Risk',geo:'Geopolitics'}:{economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크',geo:'지정학'};
@@ -257,6 +259,24 @@
       catsEl.style.display='';
       catsEl.innerHTML=KFI_INST.map(([k,l])=>`<span class="chip cat${k===fInst?' on':''}" data-k="${k}">${l}<span class="n">${instCount(k)}</span></span>`).join('');
       let rows=kfiArts.filter(a=>!fInst||(a.kfi||[]).includes(fInst));
+      document.getElementById('count').textContent=rows.length+(EN?' articles':' 건');
+      if(!rows.length){feed.innerHTML=`<div class="empty">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;feed._rows=[];return;}
+      feed.innerHTML=rows.map((a,i)=>`<div class="art" data-i="${i}">
+        <div class="top"><span class="flag">${a.flag||''}</span><b>${esc(EN?(a.cc_label_en||a.cc):(a.cc_label||a.cc))}</b>${badges(a.c)}<span class="ad">${esc(md(a.d))}</span></div>
+        <div class="t">${esc(tt(a))}</div>
+        ${tq(a)?`<div class="q">${esc(tq(a))}</div>`:''}</div>`).join('');
+      feed._rows=rows;
+      return;
+    }
+
+    // 인사동향(리더십 교체) — 진출·미진출 전 거점 통합, 주제 필터만 유지(기관 필터 없음)
+    if(pMode==='personnel'){
+      secCov.style.display='none';
+      feedTitle.textContent=EN?'Leadership Moves':'인사동향';
+      bx.style.display='none'; bn.style.display='none';
+      catsEl.style.display='';
+      catsEl.innerHTML=CATS.map(([k,l])=>`<span class="chip cat${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
+      let rows=personnelArts.filter(a=>!fCat||(a.c||'').includes(fCat));
       document.getElementById('count').textContent=rows.length+(EN?' articles':' 건');
       if(!rows.length){feed.innerHTML=`<div class="empty">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;feed._rows=[];return;}
       feed.innerHTML=rows.map((a,i)=>`<div class="art" data-i="${i}">

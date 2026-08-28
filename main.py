@@ -132,8 +132,18 @@ def cmd_korean_fi(args):
     print(f"[korean-fi] 검사={c:,}  태깅={t:,}({t/c*100:.1f}%)")
 
 
+def cmd_personnel(args):
+    conn = db.open_conn()
+    stats = keyword_filter.run_personnel_tag(conn, recheck=getattr(args, "recheck", False))
+    c, t = stats["checked"], stats["tagged"]
+    if c == 0:
+        print("[personnel] 처리할 기사 없음")
+        return
+    print(f"[personnel] 검사={c:,}  태깅={t:,}({t/c*100:.1f}%)")
+
+
 def cmd_run(_args):
-    """fetch → filter → dedup → 한국계 금융기관 태깅 순서 실행 (수집 전용, AI 없음)."""
+    """fetch → filter → dedup → 한국계 금융기관·인사동향 태깅 순서 실행 (수집 전용, AI 없음)."""
     print("=" * 50)
     print("[run] 수집 파이프라인 시작")
     print("=" * 50)
@@ -141,7 +151,7 @@ def cmd_run(_args):
     conn = collector.init_db(config.DB_PATH, config.SCHEMA) if not config.DB_PATH.exists() else db.open_conn()
     collector.sync_sources(conn, config.SOURCES)
 
-    print("\n▶ [1/4] 피드 수집...")
+    print("\n▶ [1/5] 피드 수집...")
     run_id = collector.run_fetch_all(conn)
     run = conn.execute("SELECT * FROM fetch_runs WHERE run_id = ?", (run_id,)).fetchone()
     print(f"   feeds={run['feeds_total']} (ok={run['feeds_ok']} fail={run['feeds_failed']})  "
@@ -149,14 +159,14 @@ def cmd_run(_args):
 
     conn = db.open_conn()
 
-    print("\n▶ [2/4] 키워드 필터...")
+    print("\n▶ [2/5] 키워드 필터...")
     stats = keyword_filter.run_keyword_filter(conn)
     if stats["total"] > 0:
         print(f"   처리={stats['total']:,}  통과={stats['passed']:,}  거부={stats['rejected']:,}")
     else:
         print("   처리할 기사 없음")
 
-    print("\n▶ [3/4] 중복 제거...")
+    print("\n▶ [3/5] 중복 제거...")
     keyword_filter.ensure_dedup_column(conn)
     stats = keyword_filter.run_dedup(conn)
     if stats["checked"] > 0:
@@ -164,8 +174,15 @@ def cmd_run(_args):
     else:
         print("   처리할 기사 없음")
 
-    print("\n▶ [4/4] 한국계 금융기관 태깅...")
+    print("\n▶ [4/5] 한국계 금융기관 태깅...")
     stats = keyword_filter.run_korean_fi_tag(conn)
+    if stats["checked"] > 0:
+        print(f"   검사={stats['checked']:,}  태깅={stats['tagged']:,}")
+    else:
+        print("   처리할 기사 없음")
+
+    print("\n▶ [5/5] 인사동향 태깅...")
+    stats = keyword_filter.run_personnel_tag(conn)
     if stats["checked"] > 0:
         print(f"   검사={stats['checked']:,}  태깅={stats['tagged']:,}")
     else:
@@ -379,6 +396,9 @@ def main():
     kfi = sub.add_parser("korean-fi", help="한국계 금융기관(신한·하나 등) 언급 태깅")
     kfi.add_argument("--recheck", action="store_true", help="전체 재태깅")
 
+    pers = sub.add_parser("personnel", help="금융기관·중앙은행 인사동향(리더십 교체) 언급 태깅")
+    pers.add_argument("--recheck", action="store_true", help="전체 재태깅")
+
     lst = sub.add_parser("list", help="최근 수집 기사 출력")
     lst.add_argument("--limit", type=int, default=20)
 
@@ -427,7 +447,8 @@ def main():
     args = p.parse_args()
     {
         "init": cmd_init, "fetch": cmd_fetch, "filter": cmd_filter,
-        "dedup": cmd_dedup, "korean-fi": cmd_korean_fi, "run": cmd_run, "report": cmd_report, "list": cmd_list,
+        "dedup": cmd_dedup, "korean-fi": cmd_korean_fi, "personnel": cmd_personnel,
+        "run": cmd_run, "report": cmd_report, "list": cmd_list,
         "indicators": cmd_indicators,
         "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "rank": cmd_rank,
         "translate": cmd_translate, "brief": cmd_brief, "highlights": cmd_highlights,

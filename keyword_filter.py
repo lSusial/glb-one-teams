@@ -439,6 +439,87 @@ KOREAN_FI_INCLUDE_KB = False
 
 
 # ---------------------------------------------------------------------------
+# 인사동향(리더십 교체) 태깅 (v3, 2026-08-28 / 2차 정밀도 개선) — korean_fi와
+# 별개 축·별개 스코프. 한국계 7개 기관으로 국한하지 않고 KB 네트워크(진출
+# 11개국) + 미진출 14개국 전체의 금융기관·중앙은행·감독당국 리더십 동향을
+# 폭넓게 태깅한다(새 수집원 없음).
+#
+# 1차(역할 복합어만 사용, 21건)를 실제 원문 대조한 결과 절반 이상이 "재직 중인
+# CEO의 발언 인용"(예: "TD Bank CEO Says Trade Tensions...", "Bank CEOs see
+# tariff dispute as manageable") 같은 단순 언급이었고 실제 교체/임명/사임 사건은
+# 소수였음. 역할 단어(bank ceo 등)만으로는 "그 자리에 누가 있다"는 사실만
+# 나타낼 뿐 "교체"를 의미하지 않기 때문 — 역할 단어 + 교체/이동 신호어가 함께
+# 나올 때만(AND) 태깅하도록 변경. 재검증: 6건, 전부 실제 임명·사임·기소 등
+# 인사 이벤트로 확인.
+# ---------------------------------------------------------------------------
+PERSONNEL_ROLE_TERMS: list[str] = [
+    "central bank governor", "bank governor", "monetary authority governor",
+    "bank chairman", "bank ceo", "bank president", "banking ceo",
+    "financial regulator chief", "insurance authority ceo", "insurance regulator chief",
+]
+
+# 위 역할 단어와 함께(본문 어디든) 나와야만 태깅 — 단독으로는 재직 중 발언
+# 인용과 구분이 안 됨.
+PERSONNEL_TRANSITION_TERMS: list[str] = [
+    "named", "appointed", "appoints", "appointment", "nominated", "nominates",
+    "nomination", "nominee", "sworn in", "succeeds", "successor",
+    "steps down", "stepping down", "resigned", "resigns", "resignation",
+    "quits", "ousted", "removed as", "exit", "exits", "outgoing", "incoming",
+    "former", "ex-", "indicted", "replaces", "replacement", "candidate for",
+]
+
+# 결합 없이 그 자체로 이미 "교체" 의미를 담은 복합 표현 — 단독 매치 허용
+PERSONNEL_STRONG_PHRASES: list[str] = [
+    "new central bank governor", "next central bank governor",
+    "new bank ceo", "new bank chairman", "new bank president",
+    "총재 후보", "신임 총재", "은행장 선임", "행장 선임",
+]
+
+
+def _has_personnel_keyword(text: str) -> bool:
+    if _first_match(text, PERSONNEL_STRONG_PHRASES) is not None:
+        return True
+    return (_first_match(text, PERSONNEL_ROLE_TERMS) is not None
+            and _first_match(text, PERSONNEL_TRANSITION_TERMS) is not None)
+
+
+def ensure_personnel_column(conn: sqlite3.Connection) -> None:
+    db.ensure_columns(conn, "articles_raw", [
+        ("personnel_move", "ALTER TABLE articles_raw ADD COLUMN personnel_move INTEGER"),
+    ])
+
+
+def run_personnel_tag(conn: sqlite3.Connection, recheck: bool = False) -> dict:
+    """제목+본문에서 금융기관·중앙은행·감독당국 인사동향 언급을 키워드로
+    태깅(personnel_move: 1/0). LLM 없음, 새 수집원 없음 — 기존 passed 기사만 검사.
+
+    recheck=False(기본): personnel_move가 아직 NULL인 기사만(증분).
+    """
+    ensure_personnel_column(conn)
+    cond = "" if recheck else "AND personnel_move IS NULL"
+    rows = conn.execute(f"""
+        SELECT article_id, title, summary FROM articles_raw
+        WHERE filter_decision = 'passed' {cond}
+    """).fetchall()
+
+    cur = conn.cursor()
+    tagged = 0
+    for r in rows:
+        text = _normalize(_clean_text(f"{r['title']} {r['summary'] or ''}"))
+        flag = 1 if _has_personnel_keyword(text) else 0
+        cur.execute(
+            "UPDATE articles_raw SET personnel_move = ? WHERE article_id = ?",
+            (flag, r["article_id"]),
+        )
+        if flag:
+            tagged += 1
+    conn.commit()
+
+    log.info("인사동향 태깅 완료 — 검사=%d건  태깅=%d건", len(rows), tagged)
+    return {"checked": len(rows), "tagged": tagged}
+
+
+# ---------------------------------------------------------------------------
 # DB 마이그레이션
 # ---------------------------------------------------------------------------
 def ensure_filter_columns(conn: sqlite3.Connection) -> None:
