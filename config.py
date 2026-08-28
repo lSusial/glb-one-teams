@@ -126,6 +126,31 @@ INDICATOR_MAP: dict[str, dict] = {
     "KH": {"fx": "KHR", "indices": []},   # 지수 없음, 환율만
 }
 
+# 국가별 정책금리(기준금리) — 무료 실시간 API가 약해(중앙은행마다 발표 형식이
+# 달라 표준화된 API 없음) 소형 표로 직접 관리한다. 자주 안 바뀌므로 값이
+# 바뀔 때 이 표만 수정(as_of 갱신). 리서치 기준일 2026-08-28.
+# SG(MAS는 S$NEER 절상밴드로 운용 — 비교 가능한 단일 정책금리 없음)와
+# KH(달러화 경제, 공식 정책금리 없음)는 표에서 제외 — export에서 자동 생략.
+POLICY_RATES: dict[str, dict] = {
+    "GB": {"value": 3.75, "label": "BOE 기준금리",        "as_of": "2026-07-30"},
+    "US": {"value": 3.75, "label": "Fed 기준금리(상단)",   "as_of": "2026-06-17"},
+    "HK": {"value": 4.00, "label": "HKMA 기준금리",        "as_of": "2026-07-30"},
+    "CN": {"value": 1.40, "label": "PBOC 7일 역레포",      "as_of": "2026-08-07"},
+    "JP": {"value": 1.00, "label": "BOJ 정책금리",         "as_of": "2026-07-31"},
+    "IN": {"value": 5.25, "label": "RBI 레포금리",         "as_of": "2026-08-05"},
+    "VN": {"value": 4.50, "label": "SBV 재할인금리",       "as_of": "2026-06-30"},
+    "ID": {"value": 5.75, "label": "BI-Rate(7일 역레포)",  "as_of": "2026-08-19"},
+    "MM": {"value": 9.00, "label": "CBM 정책금리",         "as_of": "2026-06-30"},
+}
+
+# 10년물 국채금리 — 무료·무키로 안정적으로 잡히는 티커를 실측한 결과 Yahoo
+# Finance(yfinance)는 미국(^TNX)만 제공(타국 XX10Y=RR류 티커는 전부 404).
+# stooq.com도 최근 봇 차단(JS 챌린지)이 걸려 스크립트로 못 가져옴 — 커버리지
+# 넓히려면 유료/API키 필요 소스가 필요해 이번엔 미국만 수집하고 나머지는 생략.
+BOND10Y_MAP: dict[str, dict] = {
+    "US": {"symbol": "^TNX", "label": "미국 10년물 국채"},
+}
+
 # 국가별 시장 신호 보드 3단계(go/warn/stop) 임계 — mood_level(0~100, 높을수록 안정) 기준.
 SIGNAL_GO_THRESHOLD   = 70   # 이상 = 안정
 SIGNAL_WARN_THRESHOLD = 55   # 이상(70 미만) = 주의, 그 미만 = 경계

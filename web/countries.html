@@ -100,6 +100,11 @@
   .bnc .bnc2.up{color:#1e8a4c}
   .bnc .bnc2.down{color:#c23b3b}
   .bnc .bnc2.flat{color:var(--sub)}
+  .bnc .bnrow{display:flex;align-items:center;justify-content:space-between;gap:6px;margin-top:2px}
+  .bnc .bnrow .bnc2{margin-top:0}
+  .bnc .spark{flex:none;display:block}
+  .bnc.bnc-sub{background:#f6f4ef;border-style:dashed}
+  .bnc.bnc-sub .bnl{opacity:.75}
 
   /* ── 푸터 ── */
   footer{text-align:center;color:var(--kb-silver);font-size:11.5px;letter-spacing:.5px;padding:22px 0 34px}
@@ -228,9 +233,33 @@
   document.querySelectorAll('.nav a').forEach(a=>{ a.href=a.getAttribute('href').split('?')[0]+location.search; });
   if(EN) document.querySelectorAll('[data-en]').forEach(el=>{ el.textContent=el.getAttribute('data-en'); });
 
-  // 거시지표 빅넘버 카드 — kind: 'fx'(환율) | 'index'(주가지수)
+  // 거시지표 빅넘버 카드 — kind: 'fx'(환율) | 'index'(주가지수) | 'policy_rate'(정책금리) | 'bond10y'(10년물 국채, 보조 표기)
   const fmtNum=(v,d)=>v==null?'-':Number(v).toLocaleString('en-US',{minimumFractionDigits:d,maximumFractionDigits:d});
+  // fx·index 최근 7영업일 추세 — 새 지표 아님, 이미 쌓인 스냅샷을 미니 스파크라인으로만 시각화
+  function sparkSvg(vals){
+    if(!vals||vals.length<2) return '';
+    const w=48,h=15,pad=1.5;
+    const min=Math.min(...vals), max=Math.max(...vals), range=(max-min)||1;
+    const pts=vals.map((v,i)=>{
+      const x=pad+(w-2*pad)*i/(vals.length-1);
+      const y=pad+(h-2*pad)*(1-(v-min)/range);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+    const col=vals[vals.length-1]>=vals[0]?'#1e8a4c':'#c23b3b';
+    return `<svg class="spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  }
   function bnCard(ind){
+    if(ind.kind==='policy_rate'||ind.kind==='bond10y'){
+      const val=fmtNum(ind.value,2)+'%';
+      let chCls='flat', chTxt=EN?'No change':'변동 없음';
+      if(ind.change!=null&&ind.change!==0){
+        const up=ind.change>0; chCls=up?'up':'down';
+        chTxt=`${up?'▲':'▼'} ${fmtNum(Math.abs(ind.change),2)}%p`;
+      }
+      const noteEl=ind.note?`<span class="note" title="${esc(ind.note)}">ⓘ</span>`:'';
+      const subCls=ind.kind==='bond10y'?' bnc-sub':'';
+      return `<div class="bnc${subCls}"><div class="bnl">${esc(ind.label||ind.symbol)}${noteEl}</div><div class="bnv">${esc(val)}</div><div class="bnc2 ${chCls}">${esc(chTxt)}</div></div>`;
+    }
     const isFx=ind.kind==='fx';
     const dec=isFx?(Math.abs(ind.value)>=100?0:(Math.abs(ind.value)>=1?2:4)):2;
     const lbl=isFx?'1 USD':(ind.label||ind.symbol);
@@ -243,7 +272,9 @@
       chTxt=`${arrow} ${fmtNum(Math.abs(ind.change),dec)} (${flat?'':(up?'+':'-')}${fmtNum(Math.abs(ind.change_pct),2)}%)`;
     }
     const noteEl=ind.note?`<span class="note" title="${esc(ind.note)}">ⓘ</span>`:'';
-    return `<div class="bnc"><div class="bnl">${esc(lbl)}${noteEl}</div><div class="bnv">${esc(val)}</div><div class="bnc2 ${chCls}">${esc(chTxt)}</div></div>`;
+    const sparkEl=sparkSvg(ind.spark);
+    return `<div class="bnc"><div class="bnl">${esc(lbl)}${noteEl}</div><div class="bnv">${esc(val)}</div>`+
+           `<div class="bnrow"><div class="bnc2 ${chCls}">${esc(chTxt)}</div>${sparkEl}</div></div>`;
   }
 
   function render(){

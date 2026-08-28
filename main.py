@@ -203,7 +203,8 @@ def cmd_indicators(_args):
     import indicators
     conn = db.open_conn()
     s = indicators.fetch_indicators(conn)
-    print(f"[indicators] 환율={s['fx']}  지수={s['index']}(스킵={s['index_skipped']})")
+    print(f"[indicators] 환율={s['fx']}  지수={s['index']}(스킵={s['index_skipped']})"
+          f"  정책금리={s['policy_rate']}  국채금리={s['bond10y']}(스킵={s['bond10y_skipped']})")
 
 
 def cmd_list(args):

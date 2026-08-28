@@ -110,8 +110,27 @@ def _daily_briefs(conn) -> dict:
     return out
 
 
+_INDICATOR_KIND_ORDER = "CASE kind WHEN 'fx' THEN 1 WHEN 'index' THEN 2 WHEN 'policy_rate' THEN 3 WHEN 'bond10y' THEN 4 ELSE 5 END"
+
+
+def _indicator_spark(conn, cc: str, kind: str, symbol: str, n: int = 7) -> list | None:
+    """최근 n영업일 스냅샷 값(오래된→최신 순) — fx·index 미니 스파크라인용.
+    새 수집원 없음(이미 쌓인 일별 indicators 스냅샷 재사용). 2건 미만이면 None(카드에서 생략)."""
+    rows = conn.execute(
+        """SELECT value FROM indicators
+           WHERE country = ? AND kind = ? AND symbol = ? AND value IS NOT NULL
+           ORDER BY date DESC LIMIT ?""",
+        (cc, kind, symbol, n),
+    ).fetchall()
+    vals = [r["value"] for r in rows]
+    vals.reverse()
+    return vals if len(vals) >= 2 else None
+
+
 def _country_indicators(conn) -> dict:
-    """국가별 최신 거시지표 스냅샷(indicators.py) — {cc: [{kind,symbol,label,value,change,change_pct,note}, ...]}."""
+    """국가별 최신 거시지표 스냅샷(indicators.py) —
+    {cc: [{kind,symbol,label,value,change,change_pct,note,spark?}, ...]}.
+    표시 순서 = 환율·지수(기본 3종 기준) → 정책금리 → 국채금리(있는 국가만 보조 표기)."""
     try:
         cols = [c[1] for c in conn.execute("PRAGMA table_info(indicators)")]
     except Exception:
@@ -119,17 +138,22 @@ def _country_indicators(conn) -> dict:
     if "country" not in cols:
         return {}
     rows = conn.execute(
-        """SELECT country, kind, symbol, label, value, change, change_pct, note
+        f"""SELECT country, kind, symbol, label, value, change, change_pct, note
            FROM indicators WHERE date = (SELECT MAX(date) FROM indicators)
-           ORDER BY country, kind ASC"""   # 'fx' < 'index' 알파벳 순 → 환율 카드가 먼저 나오도록
+           ORDER BY country, {_INDICATOR_KIND_ORDER}"""
     ).fetchall()
     out: dict[str, list] = {}
     for r in rows:
-        out.setdefault(r["country"], []).append({
+        item = {
             "kind": r["kind"], "symbol": r["symbol"], "label": r["label"],
             "value": r["value"], "change": r["change"], "change_pct": r["change_pct"],
             "note": r["note"],
-        })
+        }
+        if r["kind"] in ("fx", "index"):
+            spark = _indicator_spark(conn, r["country"], r["kind"], r["symbol"])
+            if spark:
+                item["spark"] = spark
+        out.setdefault(r["country"], []).append(item)
     return out
 
 
@@ -620,7 +644,9 @@ def _mood_level(arts: list, cc_indicators: list) -> tuple[int, str]:
 
     badness = []
     for ind in cc_indicators:
-        if ind.get("change_pct") is None:
+        # policy_rate·bond10y는 무드 계산에 넣지 않음(fx·index 전제로 설계된 방향성
+        # 해석이 안 맞음 — 국채금리 하락이 항상 "나쁨"은 아님). 표시 전용.
+        if ind["kind"] not in ("fx", "index") or ind.get("change_pct") is None:
             continue
         pct = ind["change_pct"]
         # fx: 값 상승=현지통화 약세(나쁨) / index: 하락=나쁨 — 일간 변동폭이 보통
