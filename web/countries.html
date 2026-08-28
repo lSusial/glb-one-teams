@@ -65,8 +65,6 @@
   .chip.cat.on{background:#fdf6e3;color:var(--kb-gold);border-color:var(--kb-gold)}
   .chip.cat.on .n{color:var(--kb-gold)}
   .fil .sp{flex:1}.cnt{font-size:12px;color:var(--sub)}
-  .ministats{font-size:11.5px;color:var(--sub);margin:7px 2px 0}
-  .ministats span{margin-right:10px}
 
   /* ── 기사 카드 ── */
   .feed{display:flex;flex-direction:column;gap:9px;margin-top:12px}
@@ -142,8 +140,9 @@
   <div class="fil" id="presenceSel" style="margin:14px 0 0">
     <span class="chip on" data-p="presence">진출국</span>
     <span class="chip" data-p="non">KB 미진출국</span>
+    <span class="chip" data-p="kfi">🇰🇷 한국계 금융기관</span>
+    <span class="chip" data-p="personnel">👤 인사동향</span>
   </div>
-  <div id="miniStats" class="ministats"></div>
 
   <section class="sec" id="secCov">
     <div class="sec-h"><div class="num g">🗺️</div>
@@ -190,13 +189,8 @@
   document.getElementById('covRt').textContent='';
 
   let fCat='', fCC='', pMode='presence';
-  const pool=()=>pMode==='non'?nonArts:(fCC?arts.filter(a=>a.cc===fCC):arts);
+  const pool=()=>pMode==='non'?nonArts:pMode==='kfi'?kfiArts:pMode==='personnel'?personnelArts:(fCC?arts.filter(a=>a.cc===fCC):arts);
   const catCount=k=>{const p=pool();return k?p.filter(a=>(a.c||'').includes(k)).length:p.length;};
-
-  // 한국계 금융기관·인사동향 — 신호가 희소해 별도 탭 대신 건수만 표시(2026-08-28)
-  document.getElementById('miniStats').innerHTML =
-    `<span>🇰🇷 ${EN?'Korean FI':'한국계 금융기관'}(${kfiArts.length})</span>` +
-    `<span>👤 ${EN?'Leadership Moves':'인사동향'}(${personnelArts.length})</span>`;
 
   document.getElementById('cats').innerHTML=CATS.map(([k,l])=>
     `<span class="chip cat${k===fCat?' on':''}" data-k="${k}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
@@ -213,7 +207,7 @@
     render();
   };
   if(EN) document.querySelectorAll('#presenceSel .chip').forEach(c=>{
-    c.textContent=c.dataset.p==='presence'?'Presence':'KB Non-Presence';
+    c.textContent=c.dataset.p==='presence'?'Presence':c.dataset.p==='non'?'KB Non-Presence':c.dataset.p==='kfi'?'🇰🇷 Korean FI':'👤 Leadership Moves';
   });
 
   const BL=EN?{economy:'Economy',finance:'Banking',digital:'Digital',esg:'ESG',risk:'Risk',geo:'Geopolitics'}:{economy:'경제',finance:'금융',digital:'디지털',esg:'ESG',risk:'리스크',geo:'지정학'};
@@ -279,6 +273,38 @@
     const secCov=document.getElementById('secCov'), feedTitle=document.getElementById('feedTitle');
     const catsEl=document.getElementById('cats'), bx=document.getElementById('brief'), feed=document.getElementById('feed');
     const bn=document.getElementById('bignum');
+
+    // 한국계 금융기관 동향 — 신호가 희소해 기관·주제 세부 필터 없이 전체 목록만
+    if(pMode==='kfi'){
+      secCov.style.display='none';
+      feedTitle.textContent=EN?'Korean FI Activity':'한국계 금융기관 동향';
+      bx.style.display='none'; bn.style.display='none'; catsEl.style.display='none';
+      let rows=kfiArts;
+      document.getElementById('count').textContent=rows.length+(EN?' articles':' 건');
+      if(!rows.length){feed.innerHTML=`<div class="empty">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;feed._rows=[];return;}
+      feed.innerHTML=rows.map((a,i)=>`<div class="art" data-i="${i}">
+        <div class="top"><span class="flag">${a.flag||''}</span><b>${esc(EN?(a.cc_label_en||a.cc):(a.cc_label||a.cc))}</b>${badges(a.c)}<span class="ad">${esc(md(a.d))}</span></div>
+        <div class="t">${esc(tt(a))}</div>
+        ${tq(a)?`<div class="q">${esc(tq(a))}</div>`:''}</div>`).join('');
+      feed._rows=rows;
+      return;
+    }
+
+    // 인사동향(리더십 교체) — 신호가 희소해 주제 세부 필터 없이 전체 목록만
+    if(pMode==='personnel'){
+      secCov.style.display='none';
+      feedTitle.textContent=EN?'Leadership Moves':'인사동향';
+      bx.style.display='none'; bn.style.display='none'; catsEl.style.display='none';
+      let rows=personnelArts;
+      document.getElementById('count').textContent=rows.length+(EN?' articles':' 건');
+      if(!rows.length){feed.innerHTML=`<div class="empty">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;feed._rows=[];return;}
+      feed.innerHTML=rows.map((a,i)=>`<div class="art" data-i="${i}">
+        <div class="top"><span class="flag">${a.flag||''}</span><b>${esc(EN?(a.cc_label_en||a.cc):(a.cc_label||a.cc))}</b>${badges(a.c)}<span class="ad">${esc(md(a.d))}</span></div>
+        <div class="t">${esc(tt(a))}</div>
+        ${tq(a)?`<div class="q">${esc(tq(a))}</div>`:''}</div>`).join('');
+      feed._rows=rows;
+      return;
+    }
 
     // KB 미진출국 — 국가 구분 없는 통합 피드(네비 없음), 주제 필터만 유지
     if(pMode==='non'){
