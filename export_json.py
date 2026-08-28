@@ -363,6 +363,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
         rows = conn.execute(
             f"""
             SELECT a.title, a.title_ko, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
+                   a.expanded_summary, a.expanded_summary_en,
                    a.topics, a.link, a.published_at, a.ai_score, a.source_links, a.korean_fi, m.media_name
             FROM articles_raw a
             JOIN media_sources m ON m.source_id = a.source_id
@@ -411,6 +412,8 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                 "t": a["title_ko"] or a["title"],
                 "q": a["summary_ko"] or "",
                 "q_en": a["summary_en"] or "",
+                "expanded_summary": a["expanded_summary"] or "",
+                "expanded_summary_en": a["expanded_summary_en"] or "",
                 "u": a["link"],
                 "rl": rl[:2],
                 "score": a["ai_score"],
@@ -571,6 +574,7 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
     exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
     rows = conn.execute(
         f"""SELECT a.ai_score, a.title, a.title_ko, a.summary_ko, a.summary_en,
+                   a.expanded_summary, a.expanded_summary_en,
                    a.topics, a.link, a.published_at, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}{exc}
@@ -602,6 +606,8 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
                         d=(r["published_at"] or "")[:10],
                         t=t_ko or r["title"], q=r["summary_ko"] or "",
                         q_en=r["summary_en"] or "",
+                        expanded_summary=r["expanded_summary"] or "",
+                        expanded_summary_en=r["expanded_summary_en"] or "",
                         c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"], rl=rl[:2]))
         seen_tokens.append(tk)
         per_cc[cc] = per_cc.get(cc, 0) + 1
@@ -912,6 +918,8 @@ def _pres_topic_article(r) -> dict:
                 t=r["title_ko"] or r["title"], q=r["summary_ko"] or "",
                 k=r["kb_implication"] or "", q_en=r["summary_en"] or "",
                 k_en=r["kb_implication_en"] or "",
+                expanded_summary=r["expanded_summary"] or "",
+                expanded_summary_en=r["expanded_summary_en"] or "",
                 c=taxonomy.ui_string(topic_codes), score=r["ai_score"], u=r["link"])
 
 
@@ -938,7 +946,8 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
     exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
     pres_rows = conn.execute(
         f"""SELECT a.ai_score, a.title, a.title_ko, a.summary, a.summary_ko, a.kb_implication,
-                   a.summary_en, a.kb_implication_en, a.topics, a.event_type, a.link,
+                   a.summary_en, a.kb_implication_en, a.expanded_summary, a.expanded_summary_en,
+                   a.topics, a.event_type, a.link,
                    a.published_at, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'{dc}{exc}

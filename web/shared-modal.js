@@ -8,7 +8,7 @@
 //   t                         제목
 //   k / k_en                  KB 시사점(kb_implication/kb_implication_en도 허용)
 //   q / q_en                  요약(기본)
-//   expanded_summary / _en    있으면 q보다 우선 사용(10~20줄 다출처 종합용 — 아직 데이터 없음, 폴백 구조만)
+//   expanded_summary / _en    있으면 q보다 우선 사용(10~20줄 다출처 종합, llm_expand.py — 노출 기사만 생성)
 //   rl / source_links         관련 기사 배열 [{t,u,src}] — 없으면 u 1건으로 폴백
 //   u, src, d                 원문 링크·출처·날짜
 //   c                         주제 배지(공백구분 ui키: economy/finance/digital/esg/risk/geo/reg/deal/incident)
@@ -42,7 +42,7 @@
         .sh-modal h2{font-size:17px;margin:8px 0 8px;line-height:1.4}
         .sh-modal .sh-imp{background:#fff8e6;border-left:3px solid #FFBC00;padding:8px 12px;border-radius:0 8px 8px 0;font-size:12.5px;margin:10px 0 14px;line-height:1.5}
         .sh-modal .sh-lb{font-size:11px;font-weight:800;color:#7a746c;margin:14px 0 6px}
-        .sh-modal .sh-sum{font-size:13px;line-height:1.7;color:#2a2c32}
+        .sh-modal .sh-sum{font-size:13px;line-height:1.7;color:#2a2c32;white-space:pre-line}
         .sh-modal .sh-lk{display:block;border:1px solid #e8e4dd;border-radius:8px;padding:9px 11px;margin-top:7px;text-decoration:none;color:inherit}
         .sh-modal .sh-lk .sh-lks{font-size:10.5px;color:#7a746c}
         .sh-modal .sh-lk .sh-lkt{font-size:12.5px;font-weight:600;margin-top:1px;color:#2b2926}

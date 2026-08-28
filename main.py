@@ -258,6 +258,14 @@ def cmd_rank(args):
     print(f"[rank] 처리={s['ranked']}  ACTIVE={s['active']}")
 
 
+def cmd_expand(args):
+    import llm_expand
+    conn = db.open_conn()
+    ub = _batch_flag(args)
+    s = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub), "expand")
+    print(f"[expand] 대상={s['total']}  작성={s['written']}  다출처={s['synthesized']}")
+
+
 def cmd_translate(args):
     import llm_translate
     conn = db.open_conn()
@@ -286,31 +294,35 @@ def cmd_highlights(_args):
 
 
 def cmd_ai(args):
-    """prefilter → rank → translate → brief → highlights 순서 실행."""
+    """prefilter → rank → expand → translate → brief → highlights 순서 실행."""
     import briefing
     import llm_prefilter
     import llm_ranker
+    import llm_expand
     import llm_translate
     import fulltext
     conn = db.open_conn()
     days = getattr(args, "days", None)
     ub = _batch_flag(args)
-    print("▶ [1/6] LLM 프리필터...")
+    print("▶ [1/7] LLM 프리필터...")
     s1 = _ai_guard(lambda: llm_prefilter.run_prefilter(conn, days=days, use_batch=ub), "ai")
     print(f"   keep={s1['keep']} drop={s1['drop']}")
-    print("▶ [2/6] 본문 추출(keep 원문)...")
+    print("▶ [2/7] 본문 추출(keep 원문)...")
     sf = _ai_guard(lambda: fulltext.run_fulltext(conn, days=days), "ai")
     print(f"   본문={sf['extracted']} URL해소={sf['resolved']} 실패={sf['failed']}")
-    print("▶ [3/6] AI 분석[영어]...")
+    print("▶ [3/7] AI 분석[영어]...")
     s2 = _ai_guard(lambda: llm_ranker.run_rank(conn, days=days, use_batch=ub), "ai")
     print(f"   ranked={s2['ranked']} ACTIVE={s2['active']}")
-    print("▶ [4/6] 한국어 번역(표시분)...")
+    print("▶ [4/7] 모달 긴 요약(노출 기사만)...")
+    se = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub), "ai")
+    print(f"   대상={se['total']} 작성={se['written']} 다출처={se['synthesized']}")
+    print("▶ [5/7] 한국어 번역(표시분)...")
     st = _ai_guard(lambda: llm_translate.run_translate(conn, days=days, use_batch=ub), "ai")
     print(f"   KO채움={st['ko']} EN채움={st['en']}")
-    print("▶ [5/6] 국가 일일 브리핑(현지언론 상단, 전일+당일)...")
+    print("▶ [6/7] 국가 일일 브리핑(현지언론 상단, 전일+당일)...")
     s3 = _ai_guard(lambda: briefing.run_briefing(conn, briefing_type="daily", days=days, use_batch=ub), "ai")
     print(f"   written={s3['written']}")
-    print("▶ [6/6] 오늘의 글로벌 핵심...")
+    print("▶ [7/7] 오늘의 글로벌 핵심...")
     s4 = _ai_guard(lambda: briefing.generate_daily_highlights(conn), "ai")
     print(f"   written={s4['written']}")
 
@@ -413,6 +425,8 @@ def main():
     rnk = sub.add_parser("rank",      help="AI 분석[영어] (score/summary_en/topics/kb_implication_en)")
     rnk.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
     rnk.add_argument("--sync", action="store_true", help=_SYNC_HELP)
+    exp = sub.add_parser("expand", help="모달용 긴 요약(expanded_summary, 노출 기사만·다출처 종합)")
+    exp.add_argument("--sync", action="store_true", help=_SYNC_HELP)
     trn = sub.add_parser("translate", help="영어 기준본 → 한국어 번역 (표시분, 저비용)")
     trn.add_argument("--days", type=int, help="최근 N일만")
     trn.add_argument("--sync", action="store_true", help=_SYNC_HELP)
@@ -452,6 +466,7 @@ def main():
         "run": cmd_run, "report": cmd_report, "list": cmd_list,
         "indicators": cmd_indicators,
         "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "rank": cmd_rank,
+        "expand": cmd_expand,
         "translate": cmd_translate, "brief": cmd_brief, "highlights": cmd_highlights,
         "ai": cmd_ai, "export": cmd_export, "admin": cmd_admin,
         "broadcast": cmd_broadcast, "eval": cmd_eval,
