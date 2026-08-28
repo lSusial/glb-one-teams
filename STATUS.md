@@ -83,7 +83,8 @@ fetch → keyword_filter → dedup → prefilter(LLM) → fulltext → rank(LLM)
 - **13개 거점**: GB·US·HK·CN·JP·SG·IN·VN·MM·ID·KH·TH·LA (2026-08-28 태국·라오스 편입 — 실제 KB 지점 없는 "관심시장", `kb_network.py` 참조)
 - **미진출국 13개**: PH·MY·BD·PL·DE·FR·KZ·UZ·AE·BR·MX·AU·CA (태국이 진출국으로 이동하며 14→13)
 - **소스**: 태국·라오스 추가로 소스 수 증가 (정확한 총계는 `sources.yaml` 참조)
-- **알려진 수집 실패**: RTHK(XML 오류), Reuters/Bloomberg/WSJ(페이월 401/403), Google News(Oracle Cloud에서 503 → 맥북 수집)
+- **알려진 수집 실패**: Reuters/Bloomberg/WSJ(페이월 401/403), Google News(Oracle Cloud에서 503 → 맥북 수집)
+- RTHK는 2026-08-28 소스 정리 때 제거(XML 파싱 계속 실패, 피드 자체 문제 — 홍콩은 SCMP·HK Free Press로 커버)
 
 ---
 

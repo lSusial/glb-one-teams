@@ -258,5 +258,8 @@ python main.py run
 ### 기타
 - [ ] AI 프로바이더 실험 (Anthropic 외)
 - [ ] 정기 수집 자동화 (맥북 cron 또는 스케줄러)
-- [ ] RTHK 피드 XML 오류 수정 (SAXParseException)
 - [ ] 라오스 정책금리 시드값 확보(신뢰 가능한 무료 소스 미발견)
+
+> RTHK 피드는 2026-08-28 소스 정리 때 제거(XML 파싱 계속 실패, 피드 자체 문제).
+> `web/regulations.html`(TopicWatch에 흡수돼 죽어있던 페이지)·`web/index_v2.html`
+> (커밋된 적 없는 미완성 프로토타입)도 같이 정리.

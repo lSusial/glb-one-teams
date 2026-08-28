@@ -58,7 +58,6 @@ python main.py list    # 최근 기사 확인
 - 현재: 88 sources, 106 feeds
 
 ## 현재 알려진 이슈
-- RTHK 피드: XML SAXParseException 오류로 수집 실패 (피드 자체 문제)
 - Google News 피드: 서버에서 직접 수집 시 503 → 맥북 수집 후 rsync로 해결
 - Google News 링크 해소: 구식 redirect-follow는 최신 consent/JS 리다이렉트에 실패 → `fulltext.py`가 `googlenewsdecoder`로 해소 후 본문 추출 (맥북 실행)
 

@@ -348,8 +348,10 @@ sources:
         url: https://news.google.com/rss/search?q=site:politico.com+economy+when:1d&hl=en-US&gl=US&ceid=US:en
 
   # ============================================================
-  # 홍콩 (4): SCMP, RTHK, HK Free Press + HKMA(비활성)
+  # 홍콩 (3): SCMP, HK Free Press + HKMA(비활성)
   #   KB 홍콩지점 거점 모니터링용
+  #   RTHK는 2026-08-28 제거 — 피드 XML이 계속 SAXParseException으로 파싱 실패(피드 자체
+  #   문제, 우리 쪽 파서 이슈 아님). 홍콩은 SCMP·HK Free Press로 이미 커버됨.
   # ============================================================
   - media_name: SCMP
     country: HK
@@ -363,16 +365,6 @@ sources:
         url: https://www.scmp.com/rss/4/feed
       - section: business
         url: https://www.scmp.com/rss/92/feed
-
-  - media_name: RTHK
-    country: HK
-    language: en
-    tier: 1
-    categories: [HK]
-    feeds:
-      # 홍콩 공영방송 — 직접 RSS 확인됨
-      - section: top
-        url: https://rthk.hk/rthk/news/rss/e_expressnews_latest.xml
 
   - media_name: HK Free Press
     country: HK
