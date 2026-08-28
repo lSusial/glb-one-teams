@@ -1,6 +1,6 @@
 # 현황 / 확정안 대비 정합 — glb-one-teams
 
-> 최초 작성 2026-05-29(prototype) | glb-one-teams 재작성 2026-07-14 | **전면 갱신 2026-08-14** | For Internal Use Only
+> 최초 작성 2026-05-29(prototype) | glb-one-teams 재작성 2026-07-14 | 전면 갱신 2026-08-14 | **부분 갱신 2026-08-28**(거점 13개·인사동향·지표확장·모달 긴요약 반영) | For Internal Use Only
 >
 > 본 문서는 **확정안 ↔ go-forward 레포(`glb-one-teams`) 현황 브리지**입니다. 제품 비전·로드맵은 [`PLAN.md`](PLAN.md), 화면 설계는 [`화면분석_개발가이드.md`](화면분석_개발가이드.md), 수집·AI·카테고리 설계는 [`데이터_AI_카테고리_설계.md`](데이터_AI_카테고리_설계.md), 작업 이력은 [`docs/work_log.md`](docs/work_log.md)를 참조하세요.
 
@@ -32,7 +32,10 @@ fetch → keyword_filter → dedup → prefilter(LLM) → fulltext → rank(LLM)
 | 본문 추출 | `fulltext.py` | ✅ 운영 중 | trafilatura, Google뉴스 URL 해소 |
 | AI 분석 | `llm_ranker.py` | ✅ 운영 중 | ai_score·summary·topics·kb_implication |
 | 번역 | `llm_translate.py` | ✅ 운영 중 | ACTIVE분 한국어, EN canonical 폴백 |
-| 국가 브리핑 | `briefing.py` | ✅ 운영 중 | daily, 11~12개국 생성 |
+| 국가 브리핑 | `briefing.py` | ✅ 운영 중 | daily, 13~15개국 생성(태국·라오스 포함) |
+| 모달 긴 요약 | `llm_expand.py` | ✅ 운영 중 (신규 2026-08-28) | 노출(ACTIVE) 기사만 10~20줄 다출처 종합, 증분 |
+| 인사동향 태깅 | `keyword_filter.py` | ✅ 운영 중 (신규 2026-08-28) | 역할어×교체신호어 AND매치, LLM 없음 |
+| 거시지표 | `indicators.py` | ✅ 운영 중 (확장 2026-08-28) | 환율·지수(+스파크라인)·정책금리·미국 10년물 국채 |
 | 프로바이더 | `llm_provider.py` | ✅ | Batches API(50%↓), `--sync` 동기 옵션 |
 | export | `export_json.py` | ✅ 운영 중 | countries/pulse/weekly/topics + 아카이브 |
 | UI (4탭) | `web/*.html` | ✅ 실데이터 연동 | Cloudflare Pages 배포 완료 |
@@ -56,7 +59,8 @@ fetch → keyword_filter → dedup → prefilter(LLM) → fulltext → rank(LLM)
 | 평가 프레임워크 | ✅ | eval_set_v2(149건), prefilter/ranker eval |
 | 메신저 배포 | 🔴 미구현 | Telegram/Zalo |
 | 정기 자동화 | 🔴 미구현 | cron/Oracle Cloud |
-| 자회사 IR·OFFICIAL·거시지표 | ⛔ 보류 | 비-뉴스 소스 필요 |
+| 거시지표(환율·지수·정책금리·국채) | ✅ 구현 완료(2026-08-28) | `indicators.py` — 정책금리는 소형 config 표(무료 API 없음), 국채는 미국만(무료 커버리지 한계) |
+| 자회사 IR·OFFICIAL | ⛔ 보류 | 비-뉴스 소스 필요 |
 
 ---
 
@@ -64,19 +68,21 @@ fetch → keyword_filter → dedup → prefilter(LLM) → fulltext → rank(LLM)
 
 | 탭 | 파일 | 데이터 창 | 내용 |
 |---|---|---|---|
-| ① Global Pulse | `brief.html` | 전일+당일 | 카테고리 온도계(5) + 오늘의 핵심뉴스(중요도순) |
-| ② 현지언론 | `countries.html` | 전일+당일 | 거점 선택 → 일일 브리핑 + 기사 피드(카테고리 필터) |
-| ③ 주간 리포트 | `weekly.html` | 주간 | 국가별 주간 상위 기사 |
-| ④ 이슈 트래커 | `topics.html` | 주간(7일) | **카테고리 탭**(경제/금융산업/디지털/규제·리스크/지정학/ESG) |
+| ① 글로벌 원팀 뉴스 | `brief.html` | 전일+당일 | 카테고리 온도계(5) + 오늘의 핵심뉴스(중요도순) + 오늘의 글로벌 핵심(합성 10건) |
+| ② 국가별 뉴스 | `countries.html` | 전일+당일 | 진출 13·미진출 13 토글 + 거시지표 카드 + 일일 브리핑 + 기사 피드. 한국계 금융기관·인사동향 탭(세부 필터 없음, 목록+건수) |
+| ③ 모니터링 | `topics.html` | 주간(7일) | **이벤트 유형 탭**(규제·거래투자·사건사고) — 진출/미진출 토글 |
+| ④ 주간 리포트 | `weekly.html` | 주간 | 국가별 주간 상위 기사 — **보류(기능 미완성)** |
 
-**카테고리 6종**: MARKET(경제) · BANKING(금융산업) · DIGITAL(디지털) · RISK(규제·리스크) · GEO(지정학) · ESG
+**주제 카테고리 6종(축 C, UI 필터)**: 경제 · 금융 · 디지털 · ESG · 리스크 · 지정학
+**이벤트 유형 3종(축 E, 모니터링 전용)**: 규제 · 거래·투자 · 사건사고
 
 ---
 
 ## 5. 거점·소스 현황
 
-- **11개 거점**: GB·US·HK·CN·JP·SG·IN·VN·MM·ID·KH
-- **소스**: 88 소스 / 106 피드 (Google News RSS 중심)
+- **13개 거점**: GB·US·HK·CN·JP·SG·IN·VN·MM·ID·KH·TH·LA (2026-08-28 태국·라오스 편입 — 실제 KB 지점 없는 "관심시장", `kb_network.py` 참조)
+- **미진출국 13개**: PH·MY·BD·PL·DE·FR·KZ·UZ·AE·BR·MX·AU·CA (태국이 진출국으로 이동하며 14→13)
+- **소스**: 태국·라오스 추가로 소스 수 증가 (정확한 총계는 `sources.yaml` 참조)
 - **알려진 수집 실패**: RTHK(XML 오류), Reuters/Bloomberg/WSJ(페이월 401/403), Google News(Oracle Cloud에서 503 → 맥북 수집)
 
 ---
@@ -121,9 +127,10 @@ python main.py eval --mode ranker
 **다음 과제 (우선순위)**:
 1. **정기 자동화** — Oracle Cloud cron (수집→AI→export→CF Pages)
 2. **Telegram 채널** — 영어판(현지 간부용)
-3. **소스 보강** — ESG·OFFICIAL 피드 활성화
+3. **소스 보강** — ESG·OFFICIAL 피드 활성화, 태국·라오스 큐레이션 매체 추가 확보
 4. **Oracle Cloud 서버 점검** — SSH 타임아웃 원인 파악
+5. **라오스 정책금리** — 신뢰 가능한 무료 시드값 미확보, 재검토 필요
 
 ---
 
-*최종 업데이트: 2026-08-14*
+*최종 업데이트: 2026-08-14 (부분 갱신 2026-08-28 — 세션 상세는 `docs/work_log.md`)*

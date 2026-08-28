@@ -158,6 +158,55 @@
 
 ---
 
+### 세션 9 (2026-08-28) — 인사동향·지표확장·모달 긴요약·태국라오스 편입
+> 세션 8(2026-07-23) 이후 4탭 리브랜딩(글로벌 원팀 뉴스/국가별 뉴스/모니터링/주간 리포트)·
+> taxonomy.yaml·이슈 트래커 카테고리 탭 등 여러 세션이 있었으나 이 로그에는 미기록 —
+> 최신 확정 상태는 `docs/_INDEX_현황.md`·`STATUS.md` 참조.
+
+#### 인사동향(리더십 교체) 신설
+- `keyword_filter.py`: 중앙은행·은행·감독당국 "역할어"(bank ceo 등) 단독 매치는 재직 중
+  발언 인용까지 다 잡아 오탐 심함(1차 21건 중 다수 단순 언급) → 역할어 + 교체/이동
+  신호어(appointed/resigned/ex-/outgoing 등) **AND 매치**로 전환(재검증 6건, 전부 실제
+  인사 이벤트). `personnel_move` 컬럼, `run_personnel_tag()`.
+- `export_json.py` `_compute_personnel()`: 진출 13 + 미진출 13 전체 대상, ACTIVE 게이트
+  없음(신호 희소). `countries.html` 4번째 탭 — 은행명/주제 세부 필터 칩은 제거하고
+  전체 목록 + 건수만(신호가 너무 희소해 필터링이 무의미).
+
+#### 국가별 금융지표 확장
+- `config.POLICY_RATES`: 중앙은행마다 API 형식이 달라 표준 무료 API가 없어 소형 표로
+  직접 관리(as_of 명시, 수동 갱신). SG(MAS는 S$NEER 밴드 운용)·KH(달러화 경제)는
+  단일 정책금리가 없어 표에서 제외 — export가 자동 생략.
+- `config.BOND10Y_MAP`: yfinance·stooq 실측 결과 무료·무키로 안정적인 건 미국(`^TNX`)뿐
+  (stooq는 최근 JS 봇 차단 걸림). 미국만 수집, 나머지 생략.
+- 스파크라인: 새 수집원 없이 기존 일별 `indicators` 스냅샷 재사용, 최근 7영업일 미니 SVG.
+- **버그 수정**: index 등락 배지가 yfinance 자체 5일 히스토리의 전일종가를 쓰고
+  스파크라인은 DB 스냅샷을 써서 하루 중 재수집 시 배지↑ 스파크↓ 같은 모순 발생 —
+  index도 fx와 동일하게 DB 전일 스냅샷을 prev_value로 쓰도록 통일.
+
+#### 모달 긴 요약(expanded_summary)
+- `llm_expand.py` 신규: 카드용 짧은 요약(q)과 별개로 모달 전용 10~20줄(4~6문단) 요약.
+  **노출(ACTIVE) 기사에만** 생성(전량 생성 금지, 비용 관리), 증분(`expanded_summary IS NULL`),
+  Haiku + Batches. `llm_ranker._cluster_sources()`의 duplicate_of 클러스터를 재사용해
+  다출처 종합(단일 기사 패러프레이즈 방지, 저작권 완화).
+- `shared-modal.js`는 이미 이 필드의 폴백 구조를 갖고 있었음(선행 세션에서 준비만 해둠) —
+  이번에 실제 데이터를 채움. `.sh-sum`에 `white-space:pre-line` 추가해 문단 줄바꿈 렌더.
+
+#### 태국·라오스 진출국 편입 (진출 11→13, 미진출 14→13)
+- 실측 후 착수: THB·LAK 환율(open.er-api 확인) / SET지수(`^SET.BK`, 1600.70 실측 = 실제
+  종가 일치, 다만 yfinance 히스토리가 1일치만 반환돼 등락은 DB 스냅샷 누적으로 채워짐) /
+  BOT 정책금리 1.00%(2026-08-26). 라오스는 정책금리 시드값 미확보로 생략.
+- `sources.yaml`(태국 재분류+Bangkok Post·Nikkei Asia 보강, 라오스 신규 GNews),
+  `config.py`(INDICATOR_MAP/POLICY_RATES/NON_PRESENCE_COUNTRIES), `kb_network.py`
+  (실제 지점 없음 → "관심시장"), `export_json.py`(`_FLAGS_ALL`/`_PRESENCE_NAMES`),
+  3개 웹페이지 NAMES 딕셔너리 전부 반영.
+
+#### 운영 메모
+- 오늘 실행: `main.py run`(수집, 태국·라오스 신규 피드 포함) → `main.py ai`(7단계,
+  expand 신규 편입) → `main.py indicators` → `main.py export` → `deploy_web.sh`.
+- 디자이너 공유용으로 `data/export/for_designer/`에 4개 화면 + `shared-modal.js` 사본 보관.
+
+---
+
 ## 현재 관리 국가 (KB 거점 기준)
 
 | 코드 | 국가 | 도시 | 형태 | 주요 매체 수 |
@@ -173,6 +222,10 @@
 | MM | 미얀마 | 양곤 | 사무소 | 9개 |
 | ID | 인도네시아 | - | 자회사(KBI은행) | 7개 |
 | KH | 캄보디아 | - | 자회사(프라삭은행) | 8개 |
+| TH | 태국 | 방콕 | 관심시장(지점 없음) | 3개 |
+| LA | 라오스 | 비엔티안 | 관심시장(지점 없음) | 1개 |
+
+> TH·LA는 2026-08-28 제품 기준으로 진출국 편입(실제 KB 지점·법인 없음) — 상세는 위 세션 9.
 
 ---
 
@@ -193,19 +246,17 @@ python main.py run
 
 ## 다음 과제
 
-### 설계 (문서화 완료, 구현 대기) — 상세: `데이터_AI_카테고리_설계.md`
-- [ ] `taxonomy.yaml` 신설 — 주제코드 5종(MARKET/BANKING/DIGITAL/ESG/RISK) ↔ UI 필터 1:1 **(1순위)**
-- [ ] `articles_raw.kb_implication` 컬럼 추가 (UI KB 시사점) **(2순위)**
-- [ ] `llm_prefilter.py` / `llm_ranker.py` 이식 + 프로바이더 추상화 계층
-- [ ] AI 분류·요약 평가셋 구축 (프로바이더 비교 기준)
+> 아래 2026-07 목록 중 taxonomy.yaml·kb_implication 컬럼·llm_prefilter/ranker 이식·
+> 새 UI 데이터 연동은 이후 세션들에서 완료됨(이 로그엔 미기록 — `STATUS.md` 참조).
+> 최신 우선순위는 `STATUS.md` 8장·`docs/_INDEX_현황.md` "다음 할 일" 기준.
 
 ### 수집원 보강
 - [ ] `OFFICIAL`/tier0 당국 피드 활성화 (규제 화면)
 - [ ] ID·KH 자회사 IR·공시 수집원 추가 (자회사 화면)
-- [ ] 거시지표(금리·환율) 피드 — 빅넘버용
+- [ ] 태국·라오스 큐레이션 매체 추가 확보(현재 최소 소스만)
 
 ### 기타
-- [ ] 새 UI 데이터 연동 (현지언론 화면부터 엔드투엔드) — 상세: `화면분석_개발가이드.md`
 - [ ] AI 프로바이더 실험 (Anthropic 외)
 - [ ] 정기 수집 자동화 (맥북 cron 또는 스케줄러)
 - [ ] RTHK 피드 XML 오류 수정 (SAXParseException)
+- [ ] 라오스 정책금리 시드값 확보(신뢰 가능한 무료 소스 미발견)
