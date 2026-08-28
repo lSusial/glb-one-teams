@@ -6,6 +6,8 @@
 <title>KB 글로벌 데일리 브리핑 — 현지언론 Intelligence</title>
 <!-- 데이터: export_json 이 아래 스크립트에 주입(오프라인). 없으면 countries.json fetch. -->
 <script id="countries-data" type="application/json">null</script>
+<!-- 기사 상세 모달(공용 컴포넌트) — brief.html/topics.html과 동일 파일 공유 -->
+<script src="shared-modal.js"></script>
 <style>
   :root{
     --kb-yellow:#FFBC00; --kb-dark:#545045; --kb-gold:#85754E; --kb-silver:#8A8D8F;
@@ -102,16 +104,6 @@
   /* ── 푸터 ── */
   footer{text-align:center;color:var(--kb-silver);font-size:11.5px;letter-spacing:.5px;padding:22px 0 34px}
   footer .tag{color:var(--kb-gold);font-weight:800;letter-spacing:1px}
-
-  /* ── 모달 ── */
-  .ov{position:fixed;inset:0;background:rgba(0,0,0,.45);display:none;align-items:center;justify-content:center;padding:20px;z-index:20}
-  .ov.on{display:flex}
-  .modal{background:#fff;border-radius:12px;max-width:640px;width:100%;max-height:85vh;overflow:auto;padding:22px}
-  .modal .x{float:right;cursor:pointer;color:var(--sub);font-size:22px;line-height:1}
-  .modal .mt{font-size:12px;color:var(--sub);margin-bottom:6px}
-  .modal h2{font-size:18px;margin:0 0 12px;line-height:1.35}
-  .modal .s{margin:12px 0}.modal .s h3{font-size:12px;color:var(--kb-gold);margin:0 0 4px;font-weight:800}
-  .modal .lk{display:inline-block;margin-top:10px;color:var(--c-fin);font-weight:600}
   a{color:var(--c-fin);text-decoration:none}a:hover{text-decoration:underline}
 
   @media(max-width:520px){
@@ -125,7 +117,6 @@
     .art{padding:10px 11px}
     .nc{padding:10px 11px}
     .sec-h{margin-bottom:10px}
-    .modal{padding:16px}
   }
 </style>
 </head>
@@ -138,7 +129,7 @@
       <span class="rt"><span class="en">KR<span class="off"> / EN</span></span><select id="dsel" class="dsel"></select></span>
     </div>
     <h1 data-en="Country News">국가별 뉴스</h1>
-    <div class="nav"><a href="brief.html" data-en="Today's Global">글로벌 원팀 뉴스</a><a class="on" href="countries.html" data-en="Country News">국가별 뉴스</a><a href="weekly.html" data-en="Weekly Report">주간 리포트</a><a href="topics.html" data-en="Monitoring">모니터링</a></div>
+    <div class="nav"><a href="brief.html" data-en="Today's Global">글로벌 원팀 뉴스</a><a class="on" href="countries.html" data-en="Country News">국가별 뉴스</a><a href="topics.html" data-en="Monitoring">모니터링</a><a href="weekly.html" data-en="Weekly Report (Pending)">주간 리포트 (보류)</a></div>
   </div>
 
   <div class="fil" id="presenceSel" style="margin:14px 0 0">
@@ -166,8 +157,6 @@
 
   <footer><div class="tag">CONNECTING PEOPLE, CREATING GLOBAL VALUE</div><div id="gen"></div></footer>
 </div>
-
-<div class="ov" id="ov"><div class="modal" id="modal"></div></div>
 
 <script>
 (async function(){
@@ -337,17 +326,13 @@
       ${(a.rl||[]).length?`<div class="rl">${(a.rl||[]).map(r=>`<a href="${esc(r.u)}" target="_blank" rel="noopener">${esc(r.t)} ↗</a>`).join('')}</div>`:''}</div>`).join('');
     feed._rows=rows;
   }
+  // 기사 상세 모달 — 공용 컴포넌트(shared-modal.js). countries.json article
+  // 필드(t/q/q_en/u/rl/src/d/c)가 이미 공용 모달이 기대하는 모양과 같아 그대로 전달.
   document.getElementById('feed').onclick=e=>{
     const el=e.target.closest('.art'); if(!el||e.target.tagName==='A')return;
     const a=document.getElementById('feed')._rows[+el.dataset.i];
-    document.getElementById('modal').innerHTML=`<span class="x" id="mx">×</span>
-      <div class="mt">${a.flag||''} ${a.cc_label?esc(EN?(a.cc_label_en||a.cc_label):a.cc_label)+' · ':''}${esc(md(a.d))} ${badges(a.c)}</div>
-      <h2>${esc(tt(a))}</h2>
-      ${tq(a)?`<div class="s"><h3>${EN?'Summary':'요약'}</h3><div>${esc(tq(a))}</div></div>`:''}
-      ${a.u?`<a class="lk" href="${esc(a.u)}" target="_blank" rel="noopener">${EN?'View source ↗':'원문 보기 ↗'}</a>`:''}`;
-    document.getElementById('ov').classList.add('on');
+    if(a) openArticleModal(a);
   };
-  document.getElementById('ov').onclick=e=>{if(e.target.id==='ov'||e.target.id==='mx')document.getElementById('ov').classList.remove('on');};
   render();
 
   try{

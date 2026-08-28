@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>KB 글로벌 데일리 브리핑 — 모니터링</title>
 <script id="topics-data" type="application/json">null</script>
+<!-- 기사 상세 모달(공용 컴포넌트) — brief.html/countries.html과 동일 파일 공유 -->
+<script src="shared-modal.js"></script>
 <style>
   :root{--kb-yellow:#FFBC00;--kb-dark:#545045;--kb-gold:#85754E;--kb-silver:#8A8D8F;
         --ink:#2b2926;--line:#e8e4dd;--card:#fff;--sub:#7a746c;--page:#dcd8d2;}
@@ -45,13 +47,12 @@
   .sec-hd .ccs{font-size:13px;letter-spacing:1px}
 
   /* 기사 카드 */
-  .ca{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:8px}
+  .ca{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:8px;cursor:pointer;transition:box-shadow .1s}
+  .ca:hover{box-shadow:0 2px 10px rgba(0,0,0,.06)}
   .ca .meta{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:4px;font-size:11.5px;color:var(--sub)}
   .ca .flag{font-size:14px}
   .ca .score{margin-left:auto;font-weight:800;color:var(--kb-gold);font-size:12px}
   .ca .tt{font-size:14px;font-weight:700;line-height:1.35;color:var(--ink)}
-  .ca .tt a{color:inherit;text-decoration:none}
-  .ca .tt a:hover{text-decoration:underline}
   .ca .q{color:#463f37;line-height:1.5;font-size:13px;margin-top:4px}
   .ca .k{margin-top:6px;background:#fffdf4;border-left:3px solid var(--kb-yellow);border-radius:5px;padding:5px 9px;font-size:12.5px;line-height:1.5}
   .ca .k b{color:var(--kb-gold)}
@@ -87,8 +88,8 @@
     <div class="nav">
       <a href="brief.html" data-en="Today's Global">글로벌 원팀 뉴스</a>
       <a href="countries.html" data-en="Country News">국가별 뉴스</a>
-      <a href="weekly.html" data-en="Weekly Report">주간 리포트</a>
       <a class="on" href="topics.html" data-en="Monitoring">모니터링</a>
+      <a href="weekly.html" data-en="Weekly Report (Pending)">주간 리포트 (보류)</a>
     </div>
   </div>
 
@@ -199,20 +200,29 @@
         <span class="ccs">${ccsFlags}</span>
         <span class="cnt">${cat.count}${EN ? ' articles' : '건'} · ${cat.ccs.length}${EN ? ' hubs' : '개국'}</span>
       </div>` +
-      cat.articles.map(a =>
-        `<div class="ca">
+      cat.articles.map((a, i) =>
+        `<div class="ca" data-i="${i}">
           <div class="meta">
             <span class="flag">${a.flag || ''}</span>
             <b>${ccName(a)}</b> · ${esc(a.src)} · ${esc(md(a.d))}
             ${badges(a.c)}
             <span class="score">${a.score}</span>
           </div>
-          <div class="tt">${a.u ? `<a href="${esc(a.u)}" target="_blank" rel="noopener">${esc(a.t)}</a>` : esc(a.t)}</div>
+          <div class="tt">${esc(a.t)}</div>
           ${tq(a) ? `<div class="q">${esc(tq(a))}</div>` : ''}
           ${tk(a) ? `<div class="k"><b>${EN ? 'KB implication' : 'KB 시사점'}</b> ${esc(tk(a))}</div>` : ''}
         </div>`
       ).join('');
+    feed._rows = cat.articles;
   }
+
+  // 기사 상세 모달 — 공용 컴포넌트(shared-modal.js). topics.json article 필드
+  // (t/q/q_en/k/k_en/u/src/d/c)가 이미 공용 모달이 기대하는 모양과 같아 그대로 전달.
+  feed.addEventListener('click', e => {
+    const el = e.target.closest('.ca'); if (!el) return;
+    const a = (feed._rows || [])[+el.dataset.i];
+    if (a) openArticleModal(a);
+  });
 
   catsEl.addEventListener('click', e => {
     const btn = e.target.closest('.ct');

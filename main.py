@@ -35,6 +35,7 @@ from __future__ import annotations
 import argparse
 import logging
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -309,6 +310,14 @@ def cmd_export(args):
     print(f"[export] weekly 국가={w['countries']}  → {w['path']}")
     t = export_json.export_topics(conn)
     print(f"[export] topics categories={t['categories']}  → {t['path']}")
+
+    # 기사 상세 모달(공용 컴포넌트) — 템플릿 주입 대상이 아닌 순수 정적 JS라
+    # _inject_html이 안 건드림. brief/countries/topics.html이 참조하므로
+    # export 때마다 그대로 복사해 배포 산출물과 항상 동기화(수동 복사 방치 방지).
+    shared_js = config.ROOT / "web" / "shared-modal.js"
+    if shared_js.exists():
+        shutil.copy2(shared_js, config.EXPORT_DIR / "shared-modal.js")
+        print(f"[export] shared-modal.js 복사 → {config.EXPORT_DIR / 'shared-modal.js'}")
 
 
 def cmd_admin(_args):

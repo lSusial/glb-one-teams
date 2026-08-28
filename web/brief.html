@@ -9,6 +9,8 @@
 <!-- 국가별 상황 지도용 — 경량 지도 라이브러리(CDN). 로드 실패 시 격자 폴백. -->
 <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/topojson-client@3/dist/topojson-client.min.js"></script>
+<!-- 기사 상세 모달(공용 컴포넌트) — countries.html/topics.html과 동일 파일 공유 -->
+<script src="shared-modal.js"></script>
 <style>
   :root{
     --kb-yellow:#FFBC00; --kb-dark:#545045; --kb-gold:#85754E; --kb-silver:#8A8D8F;
@@ -72,20 +74,6 @@
 
   a{color:#2b5f9e;text-decoration:none}a:hover{text-decoration:underline}
 
-  /* 오늘의 글로벌 핵심 상세 모달 */
-  .ov{position:fixed;inset:0;background:rgba(20,18,15,.55);display:none;align-items:center;justify-content:center;padding:20px;z-index:20}
-  .ov.on{display:flex}
-  .modal{background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:22px 24px;position:relative}
-  .modal .mx{position:absolute;top:14px;right:16px;cursor:pointer;color:#aaa;font-size:22px;line-height:1;border:none;background:none}
-  .modal .mcat{font-size:10.5px;font-weight:800;color:#fff;border-radius:5px;padding:2px 8px}
-  .modal h2{font-size:17px;margin:12px 0 8px;line-height:1.4}
-  .modal .mimp{background:#fff8e6;border-left:3px solid var(--kb-yellow);padding:8px 12px;border-radius:0 8px 8px 0;font-size:12.5px;margin:10px 0 14px}
-  .modal .mlb{font-size:11px;font-weight:800;color:var(--sub);margin:14px 0 6px}
-  .modal .msum{font-size:13px;line-height:1.7;color:#2a2c32}
-  .modal .mlk{display:block;border:1px solid var(--line);border-radius:8px;padding:9px 11px;margin-top:7px;text-decoration:none;color:inherit}
-  .modal .mlk .s{font-size:10.5px;color:var(--sub)}.modal .mlk .t{font-size:12.5px;font-weight:600;margin-top:1px;color:var(--ink)}
-  .empty-note{color:var(--sub);font-size:12px}
-
   footer{text-align:center;color:var(--kb-silver);font-size:11.5px;letter-spacing:.5px;padding:22px 0 34px}
   footer .tag{color:var(--kb-gold);font-weight:800;letter-spacing:1px}
 
@@ -98,7 +86,6 @@
     .nav a{font-size:11px;padding:5px 0}
     .sec{padding:12px 11px;border-radius:10px;margin-top:10px}
     .sec-h{margin-bottom:10px}
-    .modal{padding:16px}
   }
 </style>
 </head>
@@ -111,7 +98,7 @@
       <span class="rt"><span class="en">KR<span class="off"> / EN</span></span><select id="dsel" class="dsel"></select></span>
     </div>
     <h1 data-en="Today's Global">글로벌 원팀 뉴스</h1>
-    <div class="nav"><a class="on" href="brief.html" data-en="Today's Global">글로벌 원팀 뉴스</a><a href="countries.html" data-en="Country News">국가별 뉴스</a><a href="weekly.html" data-en="Weekly Report">주간 리포트</a><a href="topics.html" data-en="Monitoring">모니터링</a></div>
+    <div class="nav"><a class="on" href="brief.html" data-en="Today's Global">글로벌 원팀 뉴스</a><a href="countries.html" data-en="Country News">국가별 뉴스</a><a href="topics.html" data-en="Monitoring">모니터링</a><a href="weekly.html" data-en="Weekly Report (Pending)">주간 리포트 (보류)</a></div>
   </div>
 
   <section class="sec" id="secMap" style="display:none">
@@ -135,8 +122,6 @@
   <footer><div class="tag">CONNECTING PEOPLE, CREATING GLOBAL VALUE</div><div id="gen"></div></footer>
 </div>
 
-<div class="ov" id="ov"><div class="modal" id="modalBody"></div></div>
-
 <script>
 (async function(){
   const P=new URLSearchParams(location.search), QD=P.get('date'), EN=P.get('lang')==='en';
@@ -151,8 +136,6 @@
 
   const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const LANG=EN?'en':'ko';
-  const tq=a=>EN?(a.q_en||a.q):(a.q||a.q_en);
-  const tt=a=>a.t;
   const enEl=document.querySelector('.en');
   if(enEl){ enEl.style.cursor='pointer';
     enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
@@ -266,22 +249,21 @@
     const codes=h.country_codes||[];
     return (D.top_news||[]).filter(n=>codes.includes(n.cc)).slice(0,4);
   }
+  // 기사 상세 모달 — 공용 컴포넌트(shared-modal.js) 호출. 핵심 카드는 daily_highlights
+  // 원자료라 t/q/u 같은 일반 기사 필드가 없어, country_codes로 매칭한 top_news를
+  // rl(관련기사)·q(요약 폴백)로 변환해 넘긴다.
   window.openHlModal=function(i){
     const h=highlights[i]; if(!h) return;
     const rel=h._rel||relatedFor(h);
-    const links=rel.map(r=>`<a class="mlk" href="${esc(r.u)}" target="_blank" rel="noopener"><div class="s">${esc(r.src)}</div><div class="t">${esc(tt(r))}</div></a>`).join('');
-    const sum=rel.map(r=>tq(r)).filter(Boolean).join(' ');
-    document.getElementById('modalBody').innerHTML=`<button class="mx" onclick="closeHlModal()">×</button>
-      <span class="mcat" style="background:${HLCAT[h.category]||'#7a746c'}">${esc(HLCATLBL[h.category]||h.category||'')}</span>
-      <h2>${esc(hlHead(h))}</h2>
-      <div class="mimp">💡 ${EN?'KB Implication':'KB 시사점'} · ${esc(hlImp(h))}</div>
-      <div class="mlb">${EN?'Summary (3+ outlets synthesized)':'요약 (3개+ 언론사 종합)'}</div>
-      <div class="msum">${sum?esc(sum):`<span class="empty-note">${EN?'(No related articles collected yet.)':'(관련 기사가 아직 수집되지 않아 요약을 만들 수 없습니다.)'}</span>`}</div>
-      <div class="mlb">${EN?'Related Articles':'관련 기사 링크'}</div>${links||`<div class="empty-note">${EN?'No related articles.':'관련 기사가 없습니다.'}</div>`}`;
-    document.getElementById('ov').classList.add('on');
+    openArticleModal({
+      t: hlHead(h),
+      category: HLCATLBL[h.category]||h.category||'',
+      k: h.impact_ko, k_en: h.impact_en,
+      q: rel.map(r=>r.q).filter(Boolean).join(' '),
+      q_en: rel.map(r=>r.q_en||r.q).filter(Boolean).join(' '),
+      rl: rel.map(r=>({t:r.t, u:r.u, src:r.src})),
+    });
   };
-  window.closeHlModal=function(){ document.getElementById('ov').classList.remove('on'); };
-  document.getElementById('ov').addEventListener('click', e=>{ if(e.target.id==='ov') closeHlModal(); });
 
   const hlRows=highlights.map((h,i)=>`
     <div class="hlrow" onclick="openHlModal(${i})">
