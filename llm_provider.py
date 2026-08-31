@@ -66,6 +66,16 @@ class LLMProvider(abc.ABC):
 
 
 # ---------------------------------------------------------------------------
+# 프롬프트 캐싱 — 같은 system 프롬프트가 여러 요청에 반복될 때(예: rank의 taxonomy
+# 분류표+루브릭이 하루 수백 건에 매번 그대로 반복) Anthropic이 캐시 히트분을 최대
+# 90% 할인해준다. 배치 API에도 동일하게 적용됨. system이 짧아 모델별 캐싱 최소
+# 길이에 못 미치면 이 마커는 조용히 무시되고 평소처럼 과금된다 — 손해는 없다.
+# ---------------------------------------------------------------------------
+def _cached_system(system: str) -> list[dict]:
+    return [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
+
+
+# ---------------------------------------------------------------------------
 # Anthropic (실제 호출)
 # ---------------------------------------------------------------------------
 class AnthropicProvider(LLMProvider):
@@ -95,7 +105,7 @@ class AnthropicProvider(LLMProvider):
                     model=self.model,
                     max_tokens=max_tokens,
                     temperature=temperature,
-                    system=system,
+                    system=_cached_system(system),
                     messages=[{"role": "user", "content": user}],
                 )
                 return "".join(
@@ -129,7 +139,7 @@ class AnthropicProvider(LLMProvider):
                         "model": self.model,
                         "max_tokens": mt,
                         "temperature": temperature,
-                        "system": system,
+                        "system": _cached_system(system),
                         "messages": [{"role": "user", "content": user}],
                     },
                 }
@@ -154,6 +164,7 @@ class AnthropicProvider(LLMProvider):
                              getattr(counts, "errored", "?"), waited)
 
             errs = 0
+            in_tok = out_tok = cache_read = cache_write = 0
             for res in self._client.messages.batches.results(batch.id):
                 r = res.result
                 if getattr(r, "type", "") == "succeeded":
@@ -161,10 +172,20 @@ class AnthropicProvider(LLMProvider):
                     out[res.custom_id] = "".join(
                         blk.text for blk in msg.content if getattr(blk, "type", "") == "text"
                     )
+                    u = getattr(msg, "usage", None)
+                    if u is not None:
+                        in_tok += getattr(u, "input_tokens", 0) or 0
+                        out_tok += getattr(u, "output_tokens", 0) or 0
+                        cache_read += getattr(u, "cache_read_input_tokens", 0) or 0
+                        cache_write += getattr(u, "cache_creation_input_tokens", 0) or 0
                 else:
                     errs += 1
                     out[res.custom_id] = ""
             log.info("배치 수거 — id=%s  성공=%d  실패=%d", batch.id, len(chunk) - errs, errs)
+            log.info(
+                "배치 토큰 — 모델=%s  입력=%d(캐시읽기=%d 캐시쓰기=%d)  출력=%d",
+                self.model, in_tok, cache_read, cache_write, out_tok,
+            )
         return out
 
 
