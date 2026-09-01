@@ -674,6 +674,23 @@ def _mood_level(arts: list, cc_indicators: list) -> tuple[int, str]:
     return mood_level, trend
 
 
+def _short_keyword(text: str, maxlen: int) -> str:
+    """지도 말풍선용 짧은 키워드로 축약 — 전체 헤드라인 대신 앞부분만 노출.
+
+    말풍선(.pop-topic) 공간이 좁아 헤드라인 원문을 그대로 넣으면 줄글처럼 길게
+    보인다. 단어 경계에서 자르고 말줄임표를 붙여 짧은 태그처럼 보이게 한다.
+    """
+    if not text:
+        return text
+    text = text.strip()
+    if len(text) <= maxlen:
+        return text
+    cut = text[:maxlen]
+    if " " in cut:
+        cut = cut.rsplit(" ", 1)[0]
+    return cut.rstrip(" ,.-–—:;") + "…"
+
+
 def _signal_band(mood_level: int) -> str:
     """mood_level → 3단계 신호(go/warn/stop). 임계는 config에서 조정."""
     if mood_level >= config.SIGNAL_GO_THRESHOLD:
@@ -784,7 +801,9 @@ def _compute_country_signals(conn, days: int | None = 1) -> list[dict]:
                       "note": _FX_NOTE.get(ind["symbol"])}
 
         if arts:
-            keyword, keyword_en = arts[0]["title_ko"] or arts[0]["title"], arts[0]["title"]
+            raw_ko = arts[0]["title_ko"] or arts[0]["title"]
+            raw_en = arts[0]["title"]
+            keyword, keyword_en = _short_keyword(raw_ko, 20), _short_keyword(raw_en, 42)
         else:
             keyword, keyword_en = "오늘 특이사항 없음", "No notable news today"
 
