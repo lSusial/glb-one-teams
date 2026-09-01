@@ -240,6 +240,27 @@
       wrap.appendChild(mk);
     }
 
+    // 말풍선은 최대 MAP_POPOVER_MAX개만 — 지도가 좁아 너무 많으면 과밀해진다.
+    // 뉴스 없는(안정+특이사항 없음) 국가는 먼저 제외하고, 남은 국가 중 심각도
+    // (경계>주의>안정) 순으로 우선순위를 매겨 상위 N개만 말풍선을 띄운다.
+    const MAP_POPOVER_MAX = 4;
+    const LEVEL_PRIORITY = { risk:0, watch:1, positive:2 };
+    const withNews = signals
+      .map((s) => {
+        const level = STATE_LV[s.state] || 'watch';
+        const kw = EN ? (s.keyword_en || s.keyword) : (s.keyword || s.keyword_en);
+        const noNews = /특이사항 없음|no notable news/i.test(kw || '');
+        return { s, level, kw, noNews };
+      })
+      .filter((x) => !(x.level === 'positive' && x.noNews));
+    const popIds = new Set(
+      withNews
+        .slice()
+        .sort((a, b) => LEVEL_PRIORITY[a.level] - LEVEL_PRIORITY[b.level])
+        .slice(0, MAP_POPOVER_MAX)
+        .map((x) => x.s.cc)
+    );
+
     let tally = { risk:0, watch:0, positive:0 };
     signals.forEach((s) => {
       const ll = LATLON[s.cc]; if (!ll) return;
@@ -254,11 +275,8 @@
       mk.addEventListener('click', () => { location.href = 'countries.html?cc=' + s.cc + (location.search?('&'+new URLSearchParams(location.search).toString()):''); });
       wrap.appendChild(mk);
 
-      // 안정(go) + 특이사항 없음인 국가는 말풍선 생략(점만) — 목업의 card:false와 동일 원칙,
-      // 13개국 전부 말풍선을 띄우면 지도가 과밀해짐.
+      if (!popIds.has(s.cc)) return;
       const kw = EN ? (s.keyword_en || s.keyword) : (s.keyword || s.keyword_en);
-      const noNews = /특이사항 없음|no notable news/i.test(kw || '');
-      if (level === 'positive' && noNews) return;
 
       const pop = document.createElement('div');
       pop.className = 'pop'; pop.dataset.level = level; pop.dataset.id = s.cc;
