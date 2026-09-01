@@ -2,147 +2,132 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>KB 글로벌 데일리 브리핑 — 주간 브리핑</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>KB Global One Team — 주간 리포트</title>
+<meta name="description" content="KB 글로벌 원팀 뉴스 — 국가별 주간 브리핑"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap"/>
+<link rel="stylesheet" href="shared-tokens.css"/>
+<!-- 데이터: export_json 이 아래 스크립트에 주입(오프라인). 없으면 weekly.json fetch. -->
 <script id="weekly-data" type="application/json">null</script>
 <style>
-  :root{--kb-yellow:#FFBC00;--kb-dark:#545045;--kb-gold:#85754E;--kb-silver:#8A8D8F;
-        --ink:#2b2926;--line:#e8e4dd;--card:#fff;--sub:#7a746c;--page:#dcd8d2;}
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--page);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:14px}
-  .wrap{max-width:760px;margin:0 auto;padding:22px 16px 0}
-  .mast{position:relative;overflow:hidden;border-radius:14px;padding:20px 24px 22px;color:#fff;background:linear-gradient(135deg,#5c574f 0%,#4a453e 100%)}
-  .mast .kbwm{position:absolute;right:-6px;top:-26px;font-size:132px;font-weight:900;color:rgba(255,255,255,.05);letter-spacing:-6px;pointer-events:none}
-  .mast .row{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
-  .mast .kb{font-weight:800}.mast .kb b{color:var(--kb-yellow)}.mast .kb span{color:#d9d4cc;font-weight:600;margin-left:4px}
-  .mast .rt{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:12px;color:#cfc9c0}
-  .mast .en{border:1px solid rgba(255,188,0,.6);color:var(--kb-yellow);border-radius:20px;padding:2px 10px;font-weight:700}
-  .mast .en .off{color:#a49c8f}
-  .dsel{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.28);border-radius:8px;padding:2px 7px;font-size:12px;max-width:130px}
-  .mast h1{position:relative;z-index:1;font-size:26px;font-weight:800;margin:14px 0 8px;line-height:1.2}
-  .mast .sub{position:relative;z-index:1;font-size:12.5px;color:#cfc9c0}
-  .nav{display:flex;gap:4px;margin:14px 0 0;overflow-x:auto}
-  .nav a{font-size:12px;font-weight:700;color:var(--sub);text-decoration:none;padding:7px 0;border-radius:20px;border:1px solid var(--line);background:#fff;flex:1;text-align:center;white-space:nowrap}
-  .nav a.on{background:var(--kb-dark);color:#fff;border-color:var(--kb-dark)}
-  /* 국가 선택 칩 */
-  .cov{display:flex;flex-wrap:wrap;gap:7px;margin-top:14px}
-  .cc{display:flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font-size:12.5px;background:#fdfcfa;cursor:pointer}
-  .cc:hover{border-color:var(--kb-silver)}
-  .cc.sel{border-color:var(--kb-dark);box-shadow:inset 0 0 0 1px var(--kb-dark)}
-  /* 브리핑 카드 */
-  .wk{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin-top:12px;border-top:3px solid var(--kb-yellow)}
-  .wh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-bottom:10px;margin-bottom:10px;border-bottom:1px solid var(--line)}
-  .wh .flag{font-size:19px}.wh b{font-size:16px}
-  .wh .meta{font-size:11.5px;color:var(--sub);font-weight:600}
-  .wh .stat{margin-left:auto;font-size:12px;font-weight:800;color:#fff;background:var(--kb-gold);border-radius:20px;padding:3px 11px}
-  .wsum{font-size:13.5px;line-height:1.75;color:#3a352e}
-  .blk{margin-top:12px}
-  .blk .lbl{font-size:11.5px;font-weight:800;color:var(--kb-gold);letter-spacing:.3px;margin-bottom:5px}
-  .wiss{margin:0;padding-left:18px}
-  .wiss li{font-size:13px;line-height:1.6;margin-bottom:3px}
-  .wout{font-size:13px;line-height:1.65;background:#fffdf4;border-left:3px solid var(--kb-yellow);border-radius:5px;padding:7px 11px}
-  .wkw{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-  .kw{font-size:11.5px;color:var(--sub);background:#f4f1ea;border-radius:20px;padding:3px 10px}
-  .empty{color:var(--sub);text-align:center;padding:34px;font-size:13px;line-height:1.7}
-  footer{text-align:center;color:var(--kb-silver);font-size:11.5px;letter-spacing:.5px;padding:22px 0 34px}
-  footer .tag{color:var(--kb-gold);font-weight:800;letter-spacing:1px}
-  a{color:#2b5f9e;text-decoration:none}a:hover{text-decoration:underline}
-
-  @media(max-width:520px){
-    .wrap{padding:12px 8px 0}
-    .mast{padding:14px 14px 16px;border-radius:10px}
-    .mast h1{font-size:21px;margin:10px 0 5px}
-    .mast .kbwm{font-size:88px}
-    .mast .sub{font-size:12px}
-    .nav a{font-size:11px;padding:5px 0}
-    .sec{padding:12px 11px;border-radius:10px;margin-top:10px}
-    .art{padding:10px 11px}
-    .nc{padding:10px 11px}
-    .sec-h{margin-bottom:10px}
-    .modal{padding:16px}
-  }
+.pagettl{font-size:clamp(12.5px,1.9cqi,15px);color:var(--muted);margin:2px 2px 10px}
+.wk-range{font-size:clamp(10.5px,1.6cqi,12.5px);color:var(--faint);font-family:var(--f-en);margin-left:auto}
+.wk-stat{display:inline-block;font-family:var(--f-en);font-weight:700;font-size:clamp(11px,1.7cqi,13px);
+         color:#B67611;background:var(--gold-soft);border-radius:8px;padding:5px 11px;margin-top:10px}
+.wk-sum{font-size:clamp(12.5px,2cqi,15px);line-height:1.7;color:var(--ink-2);word-break:keep-all}
+.wk-iss{margin:0;padding-left:18px}
+.wk-iss li{font-size:clamp(12px,1.9cqi,14px);line-height:1.62;color:var(--ink-2);margin-bottom:6px;word-break:keep-all}
+.wk-out{font-size:clamp(12px,1.9cqi,14px);line-height:1.65;color:var(--ink-2);background:#FFFCF5;
+        border-left:3px solid var(--gold);border-radius:0 8px 8px 0;padding:9px 12px;word-break:keep-all}
+.wk-kw{display:flex;flex-wrap:wrap;gap:6px;margin-top:2px}
+.wk-kw span{font-size:clamp(10.5px,1.6cqi,12.5px);color:var(--muted);background:#EEF1F6;border-radius:999px;padding:3px 11px}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="mast">
-    <div class="kbwm">KB</div>
-    <div class="row">
-      <span class="kb"><b>KB</b><span>금융그룹</span></span>
-      <span class="rt"><span class="en">KR<span class="off"> / EN</span></span><select id="dsel" class="dsel"></select></span>
+<script src="shared-sprite.js"></script>
+<div class="shell">
+  <header class="hd">
+    <div class="hd-brand">
+      <div class="brandline">
+        <svg class="kbmark" width="30" height="22" style="color:var(--gold-2)" aria-hidden="true"><use href="#kb-mark"/></svg>
+        <span>KB FINANCIAL GROUP</span>
+      </div>
+      <h1 class="en">GLOBAL ONE TEAM</h1>
+      <div class="hd-sub"><b data-en="Weekly Report">주간 리포트</b><i class="dot-live"></i></div>
     </div>
-    <h1 data-en="Weekly Report">주간 리포트</h1>
-    <div class="nav"><a href="brief.html" data-en="Today's Global">글로벌 원팀 뉴스</a><a href="countries.html" data-en="Country News">국가별 뉴스</a><a href="topics.html" data-en="Monitoring">모니터링</a><a class="on" href="weekly.html" data-en="Weekly Report (Pending)">주간 리포트 (보류)</a></div>
-  </div>
+    <div class="hd-tools">
+      <div class="langtoggle" role="group" aria-label="언어 선택">
+        <button type="button" data-lang="ko" aria-pressed="true">KR</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </div>
+    </div>
+  </header>
+  <p class="pagettl" data-en="Pick a flag to see that country's weekly briefing">국기를 선택해 국가별 주간 브리핑을 확인하세요</p>
+  <div class="picker" id="picker"></div>
+  <section class="card" id="detail" style="padding:14px 13px"></section>
 
-  <div class="cov" id="cov"></div>
-  <div id="feed"></div>
-  <footer><div class="tag">CONNECTING PEOPLE, CREATING GLOBAL VALUE</div><div id="gen"></div></footer>
+  <nav class="botnav" id="botnav">
+    <a href="brief.html" data-en="Home"><svg><use href="#ico-spark"/></svg><span data-en="Home">홈</span></a>
+    <a href="countries.html" data-en="Presence"><svg><use href="#ico-grid"/></svg><span data-en="Presence">진출국</span></a>
+    <a href="weekly.html" class="on" data-en="Weekly"><svg><use href="#ico-up"/></svg><span data-en="Weekly">주간 브리핑</span></a>
+    <a href="topics.html" data-en="Monitoring"><svg><use href="#ico-chev-d"/></svg><span data-en="Monitoring">모니터링</span></a>
+  </nav>
 </div>
 
 <script>
 (async function(){
-  const P=new URLSearchParams(location.search), QD=P.get('date'), EN=P.get('lang')==='en';
-  let D=null;
-  if(QD){ try{ D=await (await fetch('archive/'+QD+'/weekly.json')).json(); }catch(e){} }
-  try{ if(!D) D=JSON.parse(document.getElementById('weekly-data').textContent);}catch(e){}
-  if(!D){ try{ D=await (await fetch('weekly.json')).json(); }catch(e){} }
-  if(!D){ document.getElementById('feed').innerHTML=`<div class="empty">${EN?'weekly.json not found. Run <code>python main.py brief</code> → <code>export</code>.':'weekly.json 이 없습니다. <code>python main.py brief</code> → <code>export</code> 로 생성하세요.'}</div>`; return; }
+  const P = new URLSearchParams(location.search), QD = P.get('date'), EN = P.get('lang') === 'en';
+  let D = null;
+  if (QD) { try { D = await (await fetch('archive/' + QD + '/weekly.json')).json(); } catch(e){} }
+  try { if (!D) D = JSON.parse(document.getElementById('weekly-data').textContent); } catch(e){}
+  if (!D) { try { D = await (await fetch('weekly.json')).json(); } catch(e){} }
 
-  const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const NAMES=EN?{GB:'UK',US:'US',HK:'Hong Kong',CN:'China',JP:'Japan',SG:'Singapore',IN:'India',VN:'Vietnam',MM:'Myanmar',ID:'Indonesia',KH:'Cambodia',TH:'Thailand',LA:'Laos',GLOBAL:'Global'}
-               :{GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',TH:'태국',LA:'라오스',GLOBAL:'글로벌'};
-  const LANG=EN?'en':'ko';
-  const ts=b=>EN?(b.summary_en||b.summary):(b.summary||b.summary_en);
-  const ti=b=>{const a=EN?(b.issues_en&&b.issues_en.length?b.issues_en:b.issues):(b.issues&&b.issues.length?b.issues:b.issues_en);return a||[];};
-  const to=b=>EN?(b.outlook_en||b.outlook):(b.outlook||b.outlook_en);
-  const enEl=document.querySelector('.en');
-  if(enEl){ enEl.style.cursor='pointer';
-    enEl.innerHTML=LANG==='en'?'<span class="off">KR / </span>EN':'KR<span class="off"> / EN</span>';
-    enEl.onclick=()=>{ P.set('lang',LANG==='en'?'ko':'en'); location.search=P.toString(); }; }
-  document.querySelectorAll('.nav a').forEach(a=>{ a.href=a.getAttribute('href').split('?')[0]+location.search; });
-  if(EN) document.querySelectorAll('[data-en]').forEach(el=>{ el.textContent=el.getAttribute('data-en'); });
-  document.getElementById('gen').textContent=(EN?'Updated ':'업데이트 ')+(D.generated_at||'').slice(0,16).replace('T',' ');
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const svg = (id, w, h, cls) => `<svg ${cls?`class="${cls}" `:''}width="${w}" height="${h}" aria-hidden="true"><use href="#${id}"/></svg>`;
+  const mdSlash = (s) => String(s || '').slice(5).replace('-', '/');
+  const NAMES = EN
+    ? {GB:'UK',US:'US',HK:'Hong Kong',CN:'China',JP:'Japan',SG:'Singapore',IN:'India',VN:'Vietnam',MM:'Myanmar',ID:'Indonesia',KH:'Cambodia',TH:'Thailand',LA:'Laos',GLOBAL:'Global'}
+    : {GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',TH:'태국',LA:'라오스',GLOBAL:'글로벌'};
+  const ts = (c) => EN ? (c.summary_en || c.summary) : (c.summary || c.summary_en);
+  const to = (c) => EN ? (c.outlook_en || c.outlook) : (c.outlook || c.outlook_en);
+  const ti = (c) => { const a = EN ? (c.issues_en&&c.issues_en.length?c.issues_en:c.issues) : (c.issues&&c.issues.length?c.issues:c.issues_en); return a || []; };
 
-  const cos=(D.countries||[]).filter(c=>(c.summary||c.summary_en));
-  if(!cos.length){document.getElementById('feed').innerHTML=`<div class="empty">${EN?'No weekly reports yet.<br>Run <code>python main.py brief</code> then <code>export</code>.':'주간 브리핑이 아직 없습니다.<br>맥북에서 <code>python main.py brief</code>(주간) 실행 후 <code>export</code>.'}</div>`;return;}
-
-  let fCC='';
-  const cov=document.getElementById('cov'), feed=document.getElementById('feed');
-  cov.innerHTML=cos.map(c=>`<span class="cc" data-cc="${c.cc}"><span>${c.flag||''}</span>${NAMES[c.cc]||c.cc}</span>`).join('');
-  cov.onclick=e=>{const el=e.target.closest('.cc');if(!el)return;fCC=(fCC===el.dataset.cc?'':el.dataset.cc);render();};
-
-  const mdSlash=s=>String(s||'').slice(5).replace('-','/');
-  function card(c){
-    const iss=ti(c), kw=(c.keywords||[]);
-    const range=(c.week_start&&c.week_end)?`${mdSlash(c.week_start)} ~ ${mdSlash(c.week_end)}`:'';
-    return `<div class="wk">
-      <div class="wh"><span class="flag">${c.flag||''}</span> <b>${NAMES[c.cc]||c.cc}</b>
-        <span class="meta">${esc(range)}</span>
-        ${c.key_stat?`<span class="stat">${esc(c.key_stat)}</span>`:''}</div>
-      <div class="wsum">${esc(ts(c))}</div>
-      ${iss.length?`<div class="blk"><div class="lbl">${LANG==='en'?'KEY ISSUES':'핵심 이슈'}</div>
-        <ul class="wiss">${iss.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
-      ${to(c)?`<div class="blk"><div class="lbl">${LANG==='en'?'OUTLOOK':'전망'}</div>
-        <div class="wout">${esc(to(c))}</div></div>`:''}
-      ${kw.length?`<div class="wkw">${kw.map(k=>`<span class="kw">#${esc(k)}</span>`).join('')}</div>`:''}
-    </div>`;
+  const cos = D ? (D.countries || []).filter(c => c.summary || c.summary_en) : [];
+  if (!cos.length) {
+    $('#picker').style.display = 'none';
+    $('#detail').innerHTML = `<div class="empty-state">${EN
+      ? 'No weekly reports yet. Run <code>python main.py brief</code> then <code>export</code>.'
+      : '주간 브리핑이 아직 없습니다. 맥북에서 <code>python main.py brief</code>(주간) 실행 후 <code>python main.py export</code>.'}</div>`;
+  } else {
+    let fCC = cos[0].cc;
+    function render(cc){
+      const c = cos.find(x => x.cc === cc) || cos[0];
+      fCC = c.cc;
+      document.querySelectorAll('.pk').forEach(p => p.setAttribute('aria-selected', String(p.dataset.cc === fCC)));
+      const range = (c.week_start && c.week_end) ? `${mdSlash(c.week_start)} ~ ${mdSlash(c.week_end)}` : '';
+      const iss = ti(c), kw = c.keywords || [];
+      $('#detail').innerHTML = `
+        <div class="dhead">
+          <span class="fbar" style="border-left-color:var(--gold)">${svg('flr-'+c.cc.toLowerCase(),40,40,'rflag')}</span>
+          <div style="min-width:0;display:flex;align-items:baseline;gap:8px;flex:1">
+            <div class="dname">${esc(EN?(NAMES[c.cc]||c.cc):(NAMES[c.cc]||c.cc))} <span class="cc">${esc(c.cc)}</span></div>
+            <span class="wk-range">${esc(range)}</span>
+          </div>
+        </div>
+        ${c.key_stat?`<div class="wk-stat">${esc(c.key_stat)}</div>`:''}
+        <p class="wk-sum" style="margin-top:12px">${esc(ts(c))}</p>
+        ${iss.length?`<div class="dsec-t"><span class="bar"></span>${EN?'Key Issues':'핵심 이슈'}</div>
+          <ul class="wk-iss">${iss.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
+        ${to(c)?`<div class="dsec-t"><span class="bar"></span>${EN?'Outlook':'전망'}</div>
+          <div class="wk-out">${esc(to(c))}</div>`:''}
+        ${kw.length?`<div class="wk-kw" style="margin-top:14px">${kw.map(k=>`<span>#${esc(k)}</span>`).join('')}</div>`:''}
+      `;
+    }
+    $('#picker').innerHTML = cos.map((c,i) => `
+      <button class="pk" data-cc="${c.cc}" aria-selected="${i===0}">
+        ${svg('fl-'+c.cc.toLowerCase(),44,44)}<span>${esc(NAMES[c.cc]||c.cc)}</span>
+      </button>`).join('');
+    document.querySelectorAll('.pk').forEach(p => p.addEventListener('click', () => render(p.dataset.cc)));
+    render(cos[0].cc);
   }
-  function render(){
-    cov.querySelectorAll('.cc').forEach(el=>el.classList.toggle('sel',el.dataset.cc===fCC));
-    const list=fCC?cos.filter(c=>c.cc===fCC):cos;
-    feed.innerHTML=list.map(card).join('');
-  }
-  render();
 
-  try{
-    const dates=await (await fetch('archive/dates.json')).json();
-    const sel=document.getElementById('dsel');
-    if(sel&&dates.length){
-      sel.innerHTML=`<option value="">${EN?'Latest':'최신'}</option>`+dates.map(d=>`<option value="${d}"${d===QD?' selected':''}>${d}</option>`).join('');
-      sel.onchange=()=>{ location.search = sel.value?('?date='+sel.value):''; };
-    } else if(sel){ sel.style.display='none'; }
-  }catch(e){ const s=document.getElementById('dsel'); if(s) s.style.display='none'; }
+  // 언어 토글
+  document.querySelectorAll('.langtoggle button').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.lang === (EN ? 'en' : 'ko')));
+    b.addEventListener('click', () => { P.set('lang', b.dataset.lang); location.search = P.toString(); });
+  });
+  if (EN) document.querySelectorAll('[data-en]').forEach(el => { el.textContent = el.getAttribute('data-en'); });
+
+  document.querySelectorAll('.botnav a').forEach(a => {
+    const [path, ownQuery] = a.getAttribute('href').split('?');
+    const merged = new URLSearchParams(ownQuery || '');
+    for (const [k,v] of P) if (k !== 'tab') merged.set(k, v);
+    const qs = merged.toString();
+    a.href = path + (qs ? '?' + qs : '');
+  });
 })();
 </script>
 </body>
