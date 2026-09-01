@@ -674,20 +674,26 @@ def _mood_level(arts: list, cc_indicators: list) -> tuple[int, str]:
     return mood_level, trend
 
 
-def _short_keyword(text: str, maxlen: int) -> str:
-    """지도 말풍선용 짧은 키워드로 축약 — 전체 헤드라인 대신 앞부분만 노출.
+def _short_keyword(text: str, maxwords: int, maxlen: int) -> str:
+    """지도 말풍선용 짧은 키워드로 축약 — 전체 헤드라인 대신 앞부분 단어만 노출.
 
     말풍선(.pop-topic) 공간이 좁아 헤드라인 원문을 그대로 넣으면 줄글처럼 길게
-    보인다. 단어 경계에서 자르고 말줄임표를 붙여 짧은 태그처럼 보이게 한다.
+    보인다. 앞 몇 단어만 남기고(단어 경계 절단) 말줄임표를 붙여 짧은 태그처럼
+    보이게 한다. maxlen은 단어 하나가 비정상적으로 길 때의 안전장치.
     """
     if not text:
         return text
     text = text.strip()
-    if len(text) <= maxlen:
+    words = text.split(" ")
+    truncated = len(words) > maxwords
+    cut = " ".join(words[:maxwords])
+    if len(cut) > maxlen:
+        cut = cut[:maxlen]
+        if " " in cut:
+            cut = cut.rsplit(" ", 1)[0]
+        truncated = True
+    if not truncated:
         return text
-    cut = text[:maxlen]
-    if " " in cut:
-        cut = cut.rsplit(" ", 1)[0]
     return cut.rstrip(" ,.-–—:;") + "…"
 
 
@@ -803,7 +809,7 @@ def _compute_country_signals(conn, days: int | None = 1) -> list[dict]:
         if arts:
             raw_ko = arts[0]["title_ko"] or arts[0]["title"]
             raw_en = arts[0]["title"]
-            keyword, keyword_en = _short_keyword(raw_ko, 20), _short_keyword(raw_en, 42)
+            keyword, keyword_en = _short_keyword(raw_ko, 3, 16), _short_keyword(raw_en, 4, 26)
         else:
             keyword, keyword_en = "오늘 특이사항 없음", "No notable news today"
 
