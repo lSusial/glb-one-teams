@@ -44,7 +44,7 @@ ul{margin:0;padding:0;list-style:none}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 /* ── 셸 ─────────────────────────────────────────────── */
-.shell{max-width:var(--shell);margin:0 auto;padding:0 var(--pad) 20px;
+.shell{max-width:var(--shell);margin:0 auto;padding:0 var(--pad) calc(76px + env(safe-area-inset-bottom, 0px));
        container-type:inline-size;container-name:shell}
 .col{container-type:inline-size;min-width:0}
 
@@ -218,14 +218,14 @@ ul{margin:0;padding:0;list-style:none}
      font-size:clamp(11px,1.62cqi,14px);font-weight:500}
 
 .rows{margin-top:10px}
-.row{
+.rows .row{
   display:flex;align-items:center;gap:clamp(6px,1.2cqi,10px);
-  padding:clamp(10px,1.5cqi,13px) 2px clamp(10px,1.5cqi,13px) 0;
-  border-top:1px solid var(--line);border-left:4px solid var(--line-2);border-radius:0 8px 8px 0;
+  padding:clamp(10px,1.5cqi,13px) 2px;
+  border-top:1px solid var(--line);
   cursor:pointer;
 }
 .rows .row:first-child{border-top:0}
-.row-top{border-left-color:var(--gold);background:#FFFCF5}
+.rows .row-top{background:#FFFCF5}
 .row-rank{
   display:grid;place-items:center;flex:none;border-radius:50%;
   width:clamp(28px,4cqi,36px);height:clamp(28px,4cqi,36px);
@@ -358,12 +358,14 @@ ul{margin:0;padding:0;list-style:none}
 .tw-m{display:flex;align-items:center;gap:8px;margin-top:7px;font-family:var(--f-en);font-size:clamp(10.5px,1.5cqi,12.5px);color:var(--faint)}
 .tw-m .src{font-weight:600;color:var(--muted)}
 
-/* ── 공용 하단 내비게이션 ───────────────────────────── */
+/* ── 공용 하단 내비게이션 ─ 항상 화면 하단에 고정 ─────── */
 .botnav{
-  position:sticky;bottom:0;left:0;right:0;z-index:10;margin-top:14px;
+  position:fixed;bottom:0;left:50%;transform:translateX(-50%);z-index:10;
+  width:100%;max-width:var(--shell);
   display:flex;background:#fff;border-top:1px solid var(--line-2);
   box-shadow:0 -4px 16px rgba(20,32,72,.06);border-radius:var(--r-lg) var(--r-lg) 0 0;
   padding:6px clamp(4px,1cqi,8px);
+  padding-bottom:calc(6px + env(safe-area-inset-bottom, 0px));
 }
 .botnav a{
   flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;

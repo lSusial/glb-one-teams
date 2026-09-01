@@ -70,11 +70,6 @@
     <ul class="rows" id="issue-rows"></ul>
   </section>
 
-  <section class="card countries" aria-labelledby="t-cty">
-    <div class="sec-h"><h2 class="sec-t en" id="t-cty">COUNTRIES</h2></div>
-    <div class="cty-scroll" id="cty-scroll"></div>
-  </section>
-
   </div>
   </div>
 
@@ -323,12 +318,12 @@
     $('#issue-rows').innerHTML = highlights.map((h,i) => {
       const top = i === 0;
       const cc0 = (h.country_codes||[])[0];
-      const flagSym = cc0 ? 'flr-'+cc0.toLowerCase() : null;
+      const flagSym = cc0 ? 'fl-'+cc0.toLowerCase() : null;
       const tag = h.category ? (top
         ? `<span class="cat" style="color:#B67611;background:#FEEAB8">${esc(h.category)}</span>`
         : `<span class="cat mono">${esc(h.category)}</span>`) : '';
       return `<li class="row${top?' row-top':''}" onclick="openHlModal(${i})">
-        ${flagSym?svg(flagSym,28,28,'rflag'):''}
+        ${flagSym?svg(flagSym,28,28,'row-flag'):''}
         ${tag}
         <span class="row-t">${esc(hlHead(h))}</span>
         <span class="row-ar">${svg('ico-chev-r',16,16)}</span>
@@ -337,19 +332,10 @@
     if (!highlights.length) $('#issue-rows').closest('.card').style.display = 'none';
   }
 
-  // ── COUNTRIES 국기 스크롤 ──
-  function renderCountries(){
-    const signals = D.country_signals || [];
-    $('#cty-scroll').innerHTML = signals.map((s) =>
-      `<a class="cty" href="countries.html?cc=${s.cc}">${svg('fl-'+s.cc.toLowerCase(),42,42)}<span>${esc(NAMES[s.cc]||s.cc)}</span></a>`
-    ).join('');
-  }
-
   renderLand();
   renderPulse();
   renderBrief();
   renderIssues();
-  renderCountries();
 
   let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(renderPulse, 140); });
 
@@ -362,7 +348,7 @@
 
   // ?date/?lang 보존하며 하단 내비 이동
   const carry = new URLSearchParams(location.search); carry.delete('tab');
-  document.querySelectorAll('.botnav a, .cty-scroll a').forEach(a => {
+  document.querySelectorAll('.botnav a').forEach(a => {
     const [path, ownQuery] = a.getAttribute('href').split('?');
     const merged = new URLSearchParams(ownQuery || '');
     for (const [k,v] of carry) merged.set(k, v);
