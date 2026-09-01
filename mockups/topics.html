@@ -1,0 +1,635 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>KB 글로벌 원팀 · 모니터링</title>
+<meta name="description" content="KB 글로벌 원팀 뉴스 — 오늘 글로벌 금융시장의 주요 변화를 한눈에"/>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" as="style" crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"/>
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap"/>
+<style>
+/* ══════════════════════════════════════════════════════════════════════
+   KB GLOBAL ONE TEAM — Global Pulse
+   · 시안(KakaoTalk_20260901_083938788_01.png) 재현
+   · 사진/국기 등 모든 에셋은 인라인 SVG로 대체 (외부 이미지 0개)
+   · 지도 거점은 하단 GLOBAL_PULSE.points 배열로 전량 제어
+   ══════════════════════════════════════════════════════════════════════ */
+:root{
+  /* 브랜드 */
+  --navy:#15294D; --navy-2:#1E3565; --navy-deep:#091B3C;
+  --gold:#F1A33A; --gold-2:#FFB300; --gold-soft:#FEEAB8;
+
+  /* 시그널 */
+  --risk:#E20817;    --risk-bg:#FDECEE;
+  --watch:#F4A418;   --watch-bg:#FEF3E0;
+  --positive:#209D47;--positive-bg:#E7F6EC;
+
+  /* 중립 */
+  --ink:#152048; --ink-2:#33415C; --muted:#7A8699; --faint:#A8B2C1;
+  --line:#EEF1F6; --line-2:#E3E8F0;
+  --bg:#FBFCFE; --card:#FFFFFF; --map-dot:#D7DBE4;
+
+  --r-lg:22px; --r-md:16px; --r-sm:12px; --r-xs:9px;
+  --shadow:0 2px 16px rgba(20,32,72,.055), 0 1px 3px rgba(20,32,72,.04);
+  --shadow-pop:0 6px 22px rgba(20,32,72,.13), 0 1px 4px rgba(20,32,72,.07);
+
+  --pad:clamp(10px, 2.4cqi, 15px);
+  --shell:864px;
+
+  --f-ko:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,
+         'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  --f-en:'Poppins','Pretendard Variable',Pretendard,-apple-system,'Segoe UI',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:var(--f-ko); font-size:15px; line-height:1.6;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,p{margin:0}
+ul{margin:0;padding:0;list-style:none}
+.en{font-family:var(--f-en);letter-spacing:.005em}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ── 셸 ─────────────────────────────────────────────── */
+.shell{max-width:var(--shell);margin:0 auto;padding:0 var(--pad) 20px;
+       container-type:inline-size;container-name:shell}
+.col{container-type:inline-size;min-width:0}
+
+/* ── 상태바(프레젠테이션용) ─────────────────────────── */
+
+/* ── 헤더 ───────────────────────────────────────────── */
+.hd{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:6px 0 16px}
+.hd-brand{min-width:0}
+.brandline{display:flex;align-items:center;gap:8px}
+.brandline .kbmark{flex:none}
+.brandline span{
+  font-family:var(--f-en);font-weight:600;font-size:clamp(12px,2.2cqi,19px);
+  color:var(--navy);letter-spacing:.01em;white-space:nowrap;
+}
+.hd h1{
+  font-family:var(--f-en);font-weight:700;color:var(--navy);
+  font-size:clamp(22px,4.4cqi,38px);line-height:1.1;letter-spacing:-.012em;margin-top:5px;
+}
+.hd-sub{display:flex;align-items:center;gap:7px;margin-top:4px}
+.hd-sub b{font-weight:600;font-size:clamp(13px,2.32cqi,20px);color:var(--navy-2)}
+.dot-live{width:7px;height:7px;border-radius:50%;background:var(--gold-2);flex:none}
+
+.hd-tools{display:flex;flex-direction:column;align-items:flex-end;gap:10px;flex:none}
+.langtoggle{
+  display:flex;background:#fff;border:1px solid var(--line-2);border-radius:999px;
+  padding:3px;box-shadow:var(--shadow);
+}
+.langtoggle button{
+  font-family:var(--f-en);font-weight:600;font-size:clamp(11.5px,1.74cqi,15px);letter-spacing:.03em;
+  color:var(--faint);padding:clamp(5px,.8cqi,8px) clamp(12px,2cqi,17px);border-radius:999px;transition:.18s;
+}
+.langtoggle button[aria-pressed="true"]{background:var(--navy);color:#fff}
+
+/* ── 공통 카드 ──────────────────────────────────────── */
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+  box-shadow:var(--shadow);margin-bottom:10px;
+}
+.sec-h{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sec-t{font-family:var(--f-en);font-weight:600;font-size:clamp(17px,2.9cqi,25px);color:var(--navy);letter-spacing:-.005em}
+.sec-more{
+  display:inline-flex;align-items:center;gap:3px;font-size:clamp(12.5px,1.74cqi,15px);color:var(--muted);font-weight:500;
+}
+.count-pill{
+  display:inline-grid;place-items:center;padding:0 clamp(6px,1cqi,9px);border-radius:999px;
+  min-width:clamp(24px,3.4cqi,30px);height:clamp(24px,3.4cqi,30px);
+  background:var(--gold-soft);color:#B67611;
+  font-family:var(--f-en);font-weight:600;font-size:clamp(12px,1.74cqi,15px);
+}
+
+/* ── GLOBAL PULSE ───────────────────────────────────── */
+.pulse{padding:12px var(--pad) 10px}
+.pulse-sub{font-size:clamp(11px,1.6cqi,13.5px);color:var(--muted);margin-top:3px}
+.pulse .sec-t{font-size:clamp(14.5px,2.3cqi,19px)}
+
+.map-wrap{
+  position:relative;width:100%;aspect-ratio:78/46;margin:clamp(6px,1.2cqi,10px) 0 5px;
+  container-type:inline-size;
+}
+.map-dots{position:absolute;inset:0;width:100%;height:100%;display:block}
+.map-dots circle{fill:var(--map-dot)}
+
+.mk{position:absolute;transform:translate(-50%,-50%);z-index:2}
+.mk-dot{
+  position:relative;display:block;border-radius:50%;
+  width:clamp(11px,2.4cqw,20px);height:clamp(11px,2.4cqw,20px);
+  border:2px solid #fff;box-shadow:0 1px 4px rgba(20,32,72,.25);
+}
+.mk-dot::before,.mk-dot::after{
+  content:"";position:absolute;inset:-2px;border-radius:50%;
+  background:currentColor;opacity:.45;animation:ripple 2.8s cubic-bezier(.2,.6,.3,1) infinite;
+}
+.mk-dot::after{animation-delay:1.4s}
+@keyframes ripple{0%{transform:scale(1);opacity:.42}70%{opacity:0}100%{transform:scale(3.6);opacity:0}}
+.mk[data-level="risk"] .mk-dot{background:var(--risk);color:var(--risk)}
+.mk[data-level="watch"] .mk-dot{background:var(--watch);color:var(--watch)}
+.mk[data-level="positive"] .mk-dot{background:var(--positive);color:var(--positive)}
+
+.mk-hq{
+  display:grid;place-items:center;width:clamp(28px,5.7cqw,46px);height:clamp(28px,5.7cqw,46px);
+  border-radius:50%;background:linear-gradient(150deg,#FFB74D,#F08C1E);
+  color:#fff;border:2.5px solid #fff;position:relative;
+  box-shadow:0 3px 12px rgba(240,140,30,.5);
+}
+.mk-hq::before{
+  content:"";position:absolute;inset:-6px;border-radius:50%;background:var(--gold);
+  opacity:.3;animation:ripple 3.2s cubic-bezier(.2,.6,.3,1) infinite;z-index:-1;
+}
+.mk-hq svg{width:58%;height:58%}
+
+/* 거점 말풍선 */
+.pop{
+  position:absolute;z-index:3;background:#fff;border-radius:var(--r-md);
+  border:1px solid var(--line-2);box-shadow:var(--shadow-pop);
+  padding:clamp(8px,1.5cqw,13px) clamp(10px,1.9cqw,17px);
+  min-width:max-content;pointer-events:none;
+  opacity:0;transition:opacity .22s ease;
+}
+.pop.on{opacity:1}
+.pop-h{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.pop-code{font-family:var(--f-en);font-weight:600;font-size:clamp(13px,2.58cqw,20px);color:var(--navy);letter-spacing:-.01em}
+.pop-topic{font-size:clamp(11.5px,2.19cqw,17px);font-weight:600;color:var(--ink-2);margin-top:6px;white-space:nowrap}
+.pop-n{font-size:clamp(10.5px,1.94cqw,15px);color:var(--muted);margin-top:3px}
+.pop[data-level="risk"]{border-color:#FAD4D8}
+.pop[data-level="watch"]{border-color:#FAE3BE}
+.pop[data-level="positive"],.pop[data-level="hq"]{border-color:var(--line-2)}
+
+.badge{
+  display:inline-flex;align-items:center;border-radius:7px;
+  font-family:var(--f-en);font-weight:600;letter-spacing:.03em;
+  font-size:clamp(9.5px,1.5cqi,13px);padding:clamp(3px,.55cqi,5px) clamp(6px,1cqi,9px);line-height:1;
+}
+.badge[data-level="risk"]{background:var(--risk-bg);color:var(--risk)}
+.badge[data-level="watch"]{background:var(--watch-bg);color:#D98B0C}
+.badge[data-level="positive"]{background:var(--positive-bg);color:var(--positive)}
+
+/* 범례 */
+.legend{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  border:1px solid var(--line);border-radius:var(--r-md);padding:8px 12px;margin-top:6px;
+}
+.legend-l{display:flex;align-items:center;gap:clamp(8px,2.8vw,16px)}
+.lg{display:flex;align-items:center;gap:5px;font-family:var(--f-en);font-size:clamp(11px,1.85cqi,16px);font-weight:500;color:var(--ink-2);white-space:nowrap}
+.lg i{width:clamp(8px,1.2cqi,11px);height:clamp(8px,1.2cqi,11px);border-radius:50%;flex:none}
+.lg b{font-weight:600;color:var(--navy);margin-left:2px}
+.legend-r{font-family:var(--f-en);font-size:clamp(10.5px,1.74cqi,15px);color:var(--muted);font-weight:500;white-space:nowrap}
+
+
+/* ── TODAY'S GLOBAL BRIEF ───────────────────────────── */
+.brief{background:linear-gradient(170deg,#FFFDF8 0%,#FFFCF5 100%);border-color:#F6EDDD;padding:14px var(--pad)}
+.brief-h{display:flex;align-items:center;gap:9px}
+.brief-h .ico{
+  display:grid;place-items:center;width:clamp(24px,3.2cqi,30px);height:clamp(24px,3.2cqi,30px);border-radius:50%;
+  background:#FEF2DC;color:var(--gold-2);flex:none;
+}
+.brief-h .ico svg{width:15px;height:15px}
+.brief-txt{margin-top:9px;font-size:clamp(13px,2.03cqi,17.5px);line-height:1.66;color:var(--ink-2);word-break:keep-all}
+.chips{display:flex;gap:8px;margin-top:10px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.chips::-webkit-scrollbar{display:none}
+.chip{display:flex;align-items:center;gap:clamp(5px,1.3cqi,11px);
+       border-radius:var(--r-md);border:1px solid;padding:clamp(4px,.6cqi,6px) clamp(8px,1.5cqi,13px);
+       flex:none;width:clamp(140px,42vw,172px)}
+.chip .tx{min-width:0}
+.chip .row{display:flex;align-items:center;gap:4px}
+.chip .nm{font-size:clamp(11.5px,1.97cqi,17px);font-weight:600;color:var(--ink);white-space:nowrap;line-height:1.1}
+.chip .dsc{font-size:clamp(10px,1.62cqi,13.5px);color:var(--muted);margin-top:0;line-height:1.2;white-space:nowrap}
+.chip .ic{width:clamp(22px,4.4cqi,38px);height:clamp(22px,4.4cqi,38px);flex:none}
+.chip .ar{width:clamp(9px,1.35cqi,12px);height:clamp(10px,1.5cqi,14px);flex:none}
+.chip[data-k="rate"]  {background:#FEF4F4;border-color:#FBE3E5}
+.chip[data-k="fx"]    {background:#F7FAFE;border-color:#E2ECFA}
+.chip[data-k="energy"]{background:#FEF8F0;border-color:#FAE8D2}
+.chip[data-k="reg"]   {background:#F9F6FD;border-color:#EBE3F8}
+
+/* ── TOP ISSUES ─────────────────────────────────────── */
+.issues{padding:14px var(--pad) 6px}
+.hero{
+  border:1px solid var(--line);border-radius:var(--r-md);padding:clamp(11px,1.7cqi,15px);margin-top:11px;
+}
+.hero-rank{
+  display:grid;place-items:center;flex:none;
+  width:clamp(24px,3.4cqi,30px);height:clamp(24px,3.4cqi,30px);border-radius:8px;background:var(--navy);
+  color:#fff;font-family:var(--f-en);font-weight:600;font-size:clamp(12px,1.7cqi,15px);
+}
+.hero-body{display:flex;flex-direction:column;min-width:0;padding:4px 4px 2px 0}
+.hero-top{display:flex;align-items:center;gap:8px}
+.hero-cc{font-family:var(--f-en);font-size:clamp(12px,1.8cqi,15.5px);font-weight:500;color:var(--ink-2);letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero-top .badge{margin-left:auto;flex:none}
+.hero-t{font-size:clamp(16px,2.6cqi,23px);font-weight:700;line-height:1.34;color:var(--navy);margin-top:8px;letter-spacing:-.015em;word-break:keep-all}
+.hero-d{font-size:clamp(13px,1.9cqi,16.5px);line-height:1.62;color:var(--muted);margin-top:7px;word-break:keep-all}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+.tag{background:#EEF3FC;color:#3D5A94;border-radius:8px;padding:clamp(4px,.7cqi,7px) clamp(8px,1.3cqi,12px);
+     font-size:clamp(11px,1.62cqi,14px);font-weight:500}
+
+.rows{margin-top:10px}
+.row{
+  display:flex;align-items:center;gap:clamp(6px,1.2cqi,10px);
+  padding:clamp(10px,1.5cqi,13px) 2px clamp(10px,1.5cqi,13px) 0;
+  border-top:1px solid var(--line);border-left:4px solid var(--line2);border-radius:0 8px 8px 0;
+}
+.rows .row:first-child{border-top:0}
+.row-top{border-left-color:var(--gold);background:#FFFCF5}
+.row-rank{
+  display:grid;place-items:center;flex:none;border-radius:50%;
+  width:clamp(28px,4cqi,36px);height:clamp(28px,4cqi,36px);
+  background:var(--navy);color:#fff;font-family:var(--f-en);font-weight:600;font-size:clamp(12px,1.74cqi,15px);
+}
+.row-flag{width:clamp(24px,3.5cqi,32px);height:clamp(24px,3.5cqi,32px);flex:none}
+.row-cc{
+  font-family:var(--f-en);font-size:clamp(11px,1.62cqi,14px);font-weight:500;color:var(--ink-2);
+  letter-spacing:.03em;width:clamp(66px,10.5cqi,96px);flex:none;
+}
+.row .badge{flex:none;width:clamp(58px,9.2cqi,84px);justify-content:center}
+.row-t{font-size:clamp(12.5px,1.85cqi,15.5px);font-weight:600;color:var(--navy);min-width:0;flex:1;
+       overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.4}
+.row-ar{color:var(--faint);flex:none}
+.more-btn{display:grid;place-items:center;width:100%;padding:8px 0 12px;color:var(--faint)}
+.rflag{flex:none;display:block;border-radius:0 6px 6px 0}
+.fbar{display:inline-flex;align-items:center;line-height:0;border-left:4px solid}
+.cat{font-family:var(--f-en);font-weight:600;letter-spacing:.02em;flex:none;white-space:nowrap;
+     font-size:clamp(10px,1.5cqi,12.5px);padding:clamp(2px,.4cqi,3px) clamp(6px,1cqi,9px);border-radius:6px}
+.cat.mono{color:var(--muted);background:#EEF1F6}
+
+/* ── COUNTRIES ──────────────────────────────────────── */
+.countries{padding:14px var(--pad)}
+.cty-scroll{
+  display:flex;gap:clamp(10px,3vw,16px);margin-top:14px;
+  overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+  padding-bottom:2px;
+}
+.cty-scroll::-webkit-scrollbar{display:none}
+.cty{display:flex;flex-direction:column;align-items:center;gap:8px;flex:none;width:clamp(56px,8.6cqi,80px);cursor:pointer}
+.cty svg{width:clamp(40px,6.1cqi,54px);height:clamp(40px,6.1cqi,54px);filter:drop-shadow(0 2px 5px rgba(20,32,72,.14))}
+.cty span{font-size:clamp(11px,1.62cqi,14px);color:var(--ink-2);text-align:center;line-height:1.25;white-space:nowrap}
+.cty-more .box{
+  display:grid;place-items:center;border-radius:14px;
+  width:clamp(40px,6.1cqi,54px);height:clamp(40px,6.1cqi,54px);
+  background:#fff;border:1px solid var(--line-2);color:var(--navy-2);
+}
+
+
+/* ── 반응형: 넓은 화면에서 2단 ──────────────────────── */
+@media (min-width:1280px){
+  :root{--shell:1240px}
+  .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
+  .grid2>.col{min-width:0}
+  .hero{grid-template-columns:minmax(0,.5fr) minmax(0,1fr)}
+}
+/* 좁은 화면: 지도 말풍선을 컴팩트 모드로 (겹침 방지) */
+@media (max-width:600px){
+  .pop{padding:6px 8px;border-radius:11px}
+  .pop-code{font-size:12px}
+  .pop-topic{font-size:10.5px;margin-top:3px}
+  .pop-n{display:none}
+  .badge{font-size:9px;padding:2px 5px;border-radius:5px}
+  .mk-dot{width:11px;height:11px;border-width:1.5px}
+}
+@media (max-width:520px){
+  .row-cc{width:64px;font-size:11px}
+  .row .badge{width:58px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+
+/* ── 모니터링(TopicWatch) ── */
+.pagettl{font-size:clamp(12.5px,1.9cqi,15px);color:var(--muted);margin:2px 2px 10px}
+.twtabs{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px;margin-bottom:12px}
+.twtabs::-webkit-scrollbar{display:none}
+.twtab{flex:none;display:flex;align-items:center;gap:7px;padding:9px 14px;border-radius:999px;border:1px solid var(--line);
+       background:#fff;color:var(--muted);font-weight:700;font-size:clamp(12.5px,1.9cqi,14.5px);cursor:pointer;white-space:nowrap;transition:.15s}
+.twtab .n{font-family:var(--f-en);font-size:clamp(10.5px,1.5cqi,12px);font-weight:700;color:var(--faint)}
+.twtab[aria-selected="true"]{background:var(--navy);border-color:var(--navy);color:#fff}
+.twtab[aria-selected="true"] .n{color:var(--gold-2)}
+
+.twhead{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;padding:0 2px 4px}
+.twhead .tt{font-size:clamp(16px,2.6cqi,20px);font-weight:800;color:var(--navy)}
+.twhead .en{font-family:var(--f-en);font-size:clamp(11px,1.6cqi,13px);color:var(--faint);font-weight:600}
+.twhead .sub{margin-left:auto;font-size:clamp(11px,1.6cqi,13px);color:var(--muted);white-space:nowrap}
+.twhead .sub b{color:var(--navy);font-weight:700}
+
+.twfeed{list-style:none;margin:8px 0 0;padding:0}
+.twitem{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);box-shadow:var(--shadow);
+        padding:12px 13px;margin-bottom:9px}
+.tw-tags{display:flex;align-items:center;gap:6px}
+.tw-cc{display:inline-flex;align-items:center;gap:6px;padding:3px 9px 3px 6px;border-radius:999px;background:#F1F4F9;
+       font-size:clamp(10.5px,1.6cqi,12.5px);font-weight:600;color:var(--ink-2)}
+.tw-cc .fg{font-size:clamp(13px,2cqi,15px);line-height:1}
+.tw-pres{font-family:var(--f-en);font-size:clamp(9px,1.35cqi,11px);font-weight:600;letter-spacing:.02em;
+         padding:2px 7px;border-radius:6px}
+.tw-pres.in{color:#B67611;background:#FEEAB8}.tw-pres.out{color:var(--muted);background:#EEF1F6}
+.tw-t{font-size:clamp(14px,2.2cqi,16.5px);font-weight:700;color:var(--navy);line-height:1.4;margin-top:8px;word-break:keep-all}
+.tw-q{font-size:clamp(12px,1.9cqi,14px);color:var(--muted);line-height:1.55;margin-top:5px;word-break:keep-all;
+      overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.tw-m{display:flex;align-items:center;gap:8px;margin-top:8px;font-family:var(--f-en);font-size:clamp(10.5px,1.5cqi,12.5px);color:var(--faint)}
+.tw-m .src{font-weight:600;color:var(--muted)}
+.tw-m .ar{margin-left:auto;color:var(--faint)}
+</style>
+</head>
+<body>
+<svg class="sr" aria-hidden="true" focusable="false"><defs>
+  <path id="p-star" d="M0,-1 .224,-.309 .951,-.309 .363,.118 .588,.809 0,.382 -.588,.809 -.363,.118 -.951,-.309 -.224,-.309Z"/>
+
+  <!-- KB 심볼 -->
+  <symbol id="kb-mark" viewBox="0 0 46 34">
+    <g fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round">
+      <path d="M13 4v26M3.5 9.5l19 15M22.5 9.5l-19 15"/>
+    </g>
+    <path d="M28 4v22" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"/>
+    <path d="M28 14c5-6 14-4 14 4 0 7-8 11-14 6" fill="none" stroke="currentColor"
+          stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+
+  <!-- UI 아이콘 -->
+  <symbol id="ico-chev-r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"
+          stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="ico-chev-d" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"
+          stroke-linecap="round" stroke-linejoin="round"><path d="m5 9 7 7 7-7"/></symbol>
+  <symbol id="ico-grid" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/>
+    <rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>
+  </symbol>
+  <symbol id="ico-spark" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2c.5 4.5 1.8 6 6 7-4.2 1-5.5 2.5-6 7-.5-4.5-1.8-6-6-7 4.2-1 5.5-2.5 6-7Z"/>
+  </symbol>
+  <symbol id="ico-up" viewBox="0 0 12 14" fill="currentColor">
+    <path d="M6 0 11 6H7.6v8H4.4V6H1z"/>
+  </symbol>
+
+  <!-- BRIEF 지표 아이콘 -->
+  <symbol id="ico-rate" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="20" fill="#FBDDE0"/>
+    <path d="M11 27 19 19l4 4 7-8" fill="none" stroke="#E0303F" stroke-width="3"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M24 11h7v7" fill="none" stroke="#E0303F" stroke-width="3"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="ico-fx" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="20" fill="#DCE9FC"/>
+    <circle cx="20" cy="20" r="11.5" fill="none" stroke="#2563EB" stroke-width="2.6"
+            stroke-linecap="round" stroke-dasharray="42 10"/>
+    <path d="M20 12.5v15M23.6 16.4c-.7-1.3-2-2-3.6-2-2.1 0-3.5 1.1-3.5 2.8 0 3.9 7.3 2.2 7.3 6.1 0 1.8-1.6 2.9-3.8 2.9-1.8 0-3.2-.8-3.9-2.2"
+          fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="ico-energy" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="20" fill="#FDE6CB"/>
+    <path d="M20 8c1 5-4 6.5-4.5 11.5C15 24.5 17 27 17 27s-1-4 2-6c2.5-1.7 2-4 2-4s3.5 3 3.5 7.5S22 32 20 32s-8-2.5-8-9S19 12 20 8Z"
+          fill="#F08C1E"/>
+  </symbol>
+  <symbol id="ico-reg" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="20" fill="#E7DEFA"/>
+    <path d="M20 8 32 15H8z" fill="#7C4DEC"/>
+    <rect x="11" y="17" width="3.6" height="10" rx="1.3" fill="#7C4DEC"/>
+    <rect x="18.2" y="17" width="3.6" height="10" rx="1.3" fill="#7C4DEC"/>
+    <rect x="25.4" y="17" width="3.6" height="10" rx="1.3" fill="#7C4DEC"/>
+    <rect x="9" y="29" width="22" height="3.4" rx="1.6" fill="#7C4DEC"/>
+  </symbol>
+
+  <!-- 상태바 -->
+
+  <!-- ── 원형 국기 (전부 직접 작도) ── -->
+  <clipPath id="cir"><circle cx="20" cy="20" r="20"/></clipPath>
+  <clipPath id="rr"><path d="M0 0H31a9 9 0 0 1 9 9V31a9 9 0 0 1-9 9H0Z"/></clipPath>
+
+  <symbol id="fl-id" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="20" fill="#E20817"/><rect y="20" width="40" height="20" fill="#fff"/>
+  </g><circle cx="20" cy="20" r="19.4" fill="none" stroke="#000" stroke-opacity=".07"/></symbol>
+
+  <symbol id="fl-vn" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#DA251D"/>
+    <use href="#p-star" fill="#FFCD00" transform="translate(20 20) scale(9)"/>
+  </g></symbol>
+
+  <symbol id="fl-sg" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="20" fill="#ED2939"/><rect y="20" width="40" height="20" fill="#fff"/>
+    <circle cx="11" cy="10" r="6.6" fill="#fff"/><circle cx="14.2" cy="10" r="6.2" fill="#ED2939"/>
+    <use href="#p-star" fill="#fff" transform="translate(17.6 5.6) scale(1.85)"/>
+    <use href="#p-star" fill="#fff" transform="translate(21.6 8.5) scale(1.85)"/>
+    <use href="#p-star" fill="#fff" transform="translate(20.1 13.1) scale(1.85)"/>
+    <use href="#p-star" fill="#fff" transform="translate(15.1 13.1) scale(1.85)"/>
+    <use href="#p-star" fill="#fff" transform="translate(13.6 8.5) scale(1.85)"/>
+  </g></symbol>
+
+  <symbol id="fl-kh" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#032EA1"/><rect y="10" width="40" height="20" fill="#E00025"/>
+    <g fill="#fff">
+      <path d="M19 12.5 21 12.5 21.6 15.5 18.4 15.5Z"/>
+      <path d="M13.6 15 15.4 15 16 17.8 13 17.8Z"/><path d="M24.6 15 26.4 15 27 17.8 24 17.8Z"/>
+      <rect x="12" y="18.4" width="16" height="2.2"/><rect x="13.6" y="21.4" width="12.8" height="1.9"/>
+      <rect x="10.6" y="24.2" width="18.8" height="2.4"/>
+    </g>
+  </g></symbol>
+
+  <symbol id="fl-cn" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#DE2910"/>
+    <use href="#p-star" fill="#FFDE00" transform="translate(11.5 13) scale(5.4)"/>
+    <use href="#p-star" fill="#FFDE00" transform="translate(21.5 6.6) scale(1.9)"/>
+    <use href="#p-star" fill="#FFDE00" transform="translate(25.4 10.4) scale(1.9)"/>
+    <use href="#p-star" fill="#FFDE00" transform="translate(25.4 16) scale(1.9)"/>
+    <use href="#p-star" fill="#FFDE00" transform="translate(21.5 19.6) scale(1.9)"/>
+  </g></symbol>
+
+  <symbol id="fl-hk" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#DE2910"/>
+    <g fill="#fff">
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(0 20 11.4)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(72 20 20)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(144 20 20)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(216 20 20)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(288 20 20)"/>
+    </g>
+    <circle cx="20" cy="20" r="2.4" fill="#DE2910"/>
+  </g></symbol>
+
+  <symbol id="fl-in" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="13.34" fill="#FF9933"/>
+    <rect y="13.34" width="40" height="13.33" fill="#fff"/>
+    <rect y="26.67" width="40" height="13.33" fill="#138808"/>
+    <g stroke="#000080" fill="none">
+      <circle cx="20" cy="20" r="5.4" stroke-width="1.5"/>
+      <circle cx="20" cy="20" r="1.2" stroke-width="1.4"/>
+      <g stroke-width=".8">
+        <path d="M14.6 20h10.8M20 14.6v10.8M16.2 16.2l7.6 7.6M23.8 16.2l-7.6 7.6"/>
+        <path d="M15 17.3 25 22.7M15 22.7 25 17.3M17.3 15l5.4 10M22.7 15l-5.4 10"/>
+      </g>
+    </g>
+  </g></symbol>
+
+  <symbol id="fl-my" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#fff"/>
+    <g fill="#CC0001">
+      <rect y="0" width="40" height="2.86"/><rect y="5.71" width="40" height="2.86"/>
+      <rect y="11.43" width="40" height="2.86"/><rect y="17.14" width="40" height="2.86"/>
+      <rect y="22.86" width="40" height="2.86"/><rect y="28.57" width="40" height="2.86"/>
+      <rect y="34.29" width="40" height="2.86"/>
+    </g>
+    <rect width="22" height="20" fill="#010066"/>
+    <circle cx="10" cy="10" r="6.2" fill="#FFCC00"/><circle cx="12.6" cy="10" r="5.4" fill="#010066"/>
+    <use href="#p-star" fill="#FFCC00" transform="translate(17 10) scale(3.6)"/>
+  </g></symbol>
+
+  <symbol id="fl-us" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#fff"/>
+    <g fill="#B22234">
+      <rect y="0" width="40" height="3.08"/><rect y="6.15" width="40" height="3.08"/>
+      <rect y="12.3" width="40" height="3.08"/><rect y="18.46" width="40" height="3.08"/>
+      <rect y="24.6" width="40" height="3.08"/><rect y="30.77" width="40" height="3.08"/>
+      <rect y="36.92" width="40" height="3.08"/>
+    </g>
+    <rect width="18" height="21.5" fill="#3C3B6E"/>
+    <g fill="#fff">
+      <circle cx="3.4" cy="3.4" r="1.15"/><circle cx="9" cy="3.4" r="1.15"/><circle cx="14.6" cy="3.4" r="1.15"/>
+      <circle cx="6.2" cy="7.5" r="1.15"/><circle cx="11.8" cy="7.5" r="1.15"/>
+      <circle cx="3.4" cy="11.5" r="1.15"/><circle cx="9" cy="11.5" r="1.15"/><circle cx="14.6" cy="11.5" r="1.15"/>
+      <circle cx="6.2" cy="15.5" r="1.15"/><circle cx="11.8" cy="15.5" r="1.15"/>
+      <circle cx="3.4" cy="19.4" r="1.15"/><circle cx="9" cy="19.4" r="1.15"/><circle cx="14.6" cy="19.4" r="1.15"/>
+    </g>
+  </g></symbol>
+
+  <symbol id="fl-eu" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#003399"/>
+    <g fill="#FFCC00">
+      <use href="#p-star" transform="translate(20 7.5) scale(2)"/>
+      <use href="#p-star" transform="translate(26.25 9.17) scale(2)"/>
+      <use href="#p-star" transform="translate(30.83 13.75) scale(2)"/>
+      <use href="#p-star" transform="translate(32.5 20) scale(2)"/>
+      <use href="#p-star" transform="translate(30.83 26.25) scale(2)"/>
+      <use href="#p-star" transform="translate(26.25 30.83) scale(2)"/>
+      <use href="#p-star" transform="translate(20 32.5) scale(2)"/>
+      <use href="#p-star" transform="translate(13.75 30.83) scale(2)"/>
+      <use href="#p-star" transform="translate(9.17 26.25) scale(2)"/>
+      <use href="#p-star" transform="translate(7.5 20) scale(2)"/>
+      <use href="#p-star" transform="translate(9.17 13.75) scale(2)"/>
+      <use href="#p-star" transform="translate(13.75 9.17) scale(2)"/>
+    </g>
+  </g></symbol>
+
+  <!-- 히어로 이미지 대체 일러스트 (미 연준 청사) -->
+  <symbol id="fl-jp" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#fff"/>
+    <circle cx="20" cy="20" r="11" fill="#BC002D"/>
+  </g></symbol>
+  <symbol id="flr-jp" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="40" fill="#fff"/>
+    <circle cx="20" cy="20" r="11" fill="#BC002D"/>
+  </g></symbol>
+  <symbol id="flr-hk" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="40" fill="#DE2910"/>
+    <g fill="#fff">
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(0 20 11.4)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(72 20 20)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(144 20 20)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(216 20 20)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(288 20 20)"/>
+    </g>
+    <circle cx="20" cy="20" r="2.4" fill="#DE2910"/>
+  </g></symbol>
+  <symbol id="flr-in" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="13.34" fill="#FF9933"/>
+    <rect y="13.34" width="40" height="13.33" fill="#fff"/>
+    <rect y="26.67" width="40" height="13.33" fill="#138808"/>
+    <g stroke="#000080" fill="none">
+      <circle cx="20" cy="20" r="5.4" stroke-width="1.5"/>
+      <circle cx="20" cy="20" r="1.2" stroke-width="1.4"/>
+      <g stroke-width=".8">
+        <path d="M14.6 20h10.8M20 14.6v10.8M16.2 16.2l7.6 7.6M23.8 16.2l-7.6 7.6"/>
+        <path d="M15 17.3 25 22.7M15 22.7 25 17.3M17.3 15l5.4 10M22.7 15l-5.4 10"/>
+      </g>
+    </g>
+  </g></symbol>
+  <symbol id="flr-vn" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="40" fill="#DA251D"/>
+    <use href="#p-star" fill="#FFCD00" transform="translate(20 20) scale(9)"/>
+  </g></symbol>
+  <symbol id="flr-us" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="40" fill="#fff"/>
+    <g fill="#B22234">
+      <rect y="0" width="40" height="3.08"/><rect y="6.15" width="40" height="3.08"/>
+      <rect y="12.3" width="40" height="3.08"/><rect y="18.46" width="40" height="3.08"/>
+      <rect y="24.6" width="40" height="3.08"/><rect y="30.77" width="40" height="3.08"/>
+      <rect y="36.92" width="40" height="3.08"/>
+    </g>
+    <rect width="18" height="21.5" fill="#3C3B6E"/>
+    <g fill="#fff">
+      <circle cx="3.4" cy="3.4" r="1.15"/><circle cx="9" cy="3.4" r="1.15"/><circle cx="14.6" cy="3.4" r="1.15"/>
+      <circle cx="6.2" cy="7.5" r="1.15"/><circle cx="11.8" cy="7.5" r="1.15"/>
+      <circle cx="3.4" cy="11.5" r="1.15"/><circle cx="9" cy="11.5" r="1.15"/><circle cx="14.6" cy="11.5" r="1.15"/>
+      <circle cx="6.2" cy="15.5" r="1.15"/><circle cx="11.8" cy="15.5" r="1.15"/>
+      <circle cx="3.4" cy="19.4" r="1.15"/><circle cx="9" cy="19.4" r="1.15"/><circle cx="14.6" cy="19.4" r="1.15"/>
+    </g>
+  </g></symbol>
+  <symbol id="flr-id" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="20" fill="#E20817"/><rect y="20" width="40" height="20" fill="#fff"/>
+  </g></symbol>
+</defs></svg>
+
+<div class="shell">
+  <header class="hd">
+    <div class="hd-brand">
+      <div class="brandline">
+        <svg class="kbmark" width="30" height="22" style="color:var(--gold-2)" aria-hidden="true"><use href="#kb-mark"/></svg>
+        <span>KB FINANCIAL GROUP</span>
+      </div>
+      <h1 class="en">GLOBAL ONE TEAM</h1>
+      <div class="hd-sub"><b>모니터링 · TopicWatch</b><i class="dot-live"></i></div>
+    </div>
+    <div class="hd-tools">
+      <div class="langtoggle" role="group" aria-label="언어 선택">
+        <button type="button" data-lang="ko" aria-pressed="true">KR</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </div>
+    </div>
+  </header>
+  <p class="pagettl">주제별로 진출·미진출국 뉴스를 한데 모아 모니터링합니다</p>
+  <div class="twtabs" id="twtabs"></div>
+  <div class="twhead" id="twhead"></div>
+  <ul class="twfeed" id="twfeed"></ul>
+</div>
+
+
+<script>
+const TOPICS = [{"code": "REG", "ui": "reg", "label": "규제", "label_en": "Regulation", "arts": [{"cc": "ID", "name": "인도네시아", "flag": "🇮🇩", "presence": "진출", "src": "Kompas", "d": "2026-08-26", "t": "BI 총재 후보 데스트리, 인플레이션 대응 전략 제시", "q": "인도네시아 중앙은행 총재 후보자 데스트리 다마얀티가 적격심사에서 인플레이션 관리 전략을 발표했다. 이번 심사는 통화정책과 은행감독을 담당할 차기 BI 지도부 선출의 핵심 절차다.", "score": 72}, {"cc": "ID", "name": "인도네시아", "flag": "🇮🇩", "presence": "진출", "src": "Kompas", "d": "2026-08-26", "t": "BI 총재 후보 데스트리, 8% 성장률 목표 제시", "q": "인도네시아 중앙은행 총재 후보 데스트리 다마얀티가 적격심사 통과 시 8% 경제성장 목표를 제시했다. 금리 및 인플레이션 정책 방향 변화가 예상된다.", "score": 72}, {"cc": "SG", "name": "싱가포르", "flag": "🇸🇬", "presence": "진출", "src": "Business Times", "d": "2026-08-25", "t": "미국, 이란 제재 대상 싱가포르 기업 4곳 지정", "q": "미국 재무부 OFAC가 이란 석유 수익 및 무기 조달 촉진 혐의로 싱가포르 기업 4곳을 포함해 전 세계 60개 기업·개인을 제재했다. 해당 기업들은 선박 간 이란산 석유 이전 등으로 약 90만 달러 규모 거래를 진행한 것으로 적발됐다.", "score": 72}, {"cc": "HK", "name": "홍콩", "flag": "🇭🇰", "presence": "진출", "src": "SCMP", "d": "2026-08-27", "t": "트럼프, 이란 거래 중국은행 제재 시사", "q": "트럼프 행정부가 이란과의 거래 관련 중국 은행에 대한 제재를 경고하며 압박을 강화하고 있다. 재무부 장관은 이란 자금세탁 관여 기관을 달러 결제 시스템에서 제외하겠다고 경고했다.", "score": 72}, {"cc": "HK", "name": "홍콩", "flag": "🇭🇰", "presence": "진출", "src": "SCMP", "d": "2026-08-28", "t": "미국, 홍콩 무역회사 이란 자금세탁 제재", "q": "미국 재무부가 이란의 페드람 피루잔 환전소 접근을 돕는 프론트 회사로 의심되는 홍콩 소재 카멩 트레이딩을 제재했다. 올해 7월 설립된 이 회사는 미국의 확대된 이란 2차 제재 캠페인 '이코노믹 아웃캐스트' 작전의 일환이다.", "score": 72}, {"cc": "GLOBAL", "name": "글로벌", "flag": "🌐", "presence": "진출", "src": "Guardian", "d": "2026-08-24", "t": "미국, 이란 경제 거래국에 2차 제재 위협", "q": "미 재무부가 이란과의 경제 거래를 유지하는 국가·기업에 2차 제재를 단행하며, 중국(이란 석유 수입의 80%)을 포함한 모든 국가가 제재 대상이 될 수 있다고 경고했다. 달러 시스템 제외 등 강력한 조치로 이란의 글로벌 금융 고립을 추진 중이다.", "score": 68}, {"cc": "HK", "name": "홍콩", "flag": "🇭🇰", "presence": "진출", "src": "SCMP", "d": "2026-08-24", "t": "미국, 이란 연계 중국 기업 등 60개 제재", "q": "미국이 이란 자금세탁 관련 중국·홍콩 기업을 포함한 60개 기업·개인·선박에 제재를 부과했다. 중국은 이를 '경제 D-Day'로 규정하며 국제법 준수 입장을 표명했다.", "score": 68}, {"cc": "US", "name": "미국", "flag": "🇺🇸", "presence": "진출", "src": "CNBC", "d": "2026-08-25", "t": "중국, 달러 의존 속 제재 회피 인프라 구축", "q": "미국 재무부가 이란 제재를 확대하고 이란 석유 거래 중개 중국 은행을 달러 시스템에서 배제하겠다고 경고했다. 중국은 일방적 제재를 거부하면서 동시에 CIPS 등 대체 결제 시스템과 통화스왑을 확대해 향후 제재에 대비하고 있다.", "score": 62}, {"cc": "GLOBAL", "name": "글로벌", "flag": "🌐", "presence": "진출", "src": "Guardian", "d": "2026-08-25", "t": "미국, 이란 거래 제재 위협에 중국 반발", "q": "미국 재무부가 이란 거래 60개 기관에 제재를 발표했으나 중국 금융기관은 제외했다. 중국은 2차 제재 위협을 불법이라 거부하며 이란 석유 수출의 80%를 유지 중이다.", "score": 62}, {"cc": "HK", "name": "홍콩", "flag": "🇭🇰", "presence": "진출", "src": "SCMP", "d": "2026-08-26", "t": "미국, 이란 거래 중국기업 24곳 제재", "q": "미국 재무부가 '경제 격리 작전'의 일환으로 중국 본토와 홍콩 소재 기업 24곳에 제재를 단행했다. 이란과의 무역을 중개하는 기업들이 대상이며, 2차 제재 위험이 홍콩 거점의 거래 중개 업무에 영향을 미칠 수 있다.", "score": 62}, {"cc": "HK", "name": "홍콩", "flag": "🇭🇰", "presence": "진출", "src": "SCMP", "d": "2026-08-25", "t": "홍콩 부동산·금융시장, 중국 국경간 반부패법 영향권", "q": "중국이 추진 중인 국경간 반부패법은 해외 자산 추적·회수 권한을 강화할 예정. 홍콩의 고가 부동산과 복잡한 기업구조에 대한 본토 당국의 감시가 심화될 가능성.", "score": 62}, {"cc": "IN", "name": "인도", "flag": "🇮🇳", "presence": "진출", "src": "The Hindu", "d": "2026-08-25", "t": "미국, 이란 제재 강화로 인도 기업 4곳 제재", "q": "미국 재무부가 이란산 석유·석유화학제품 수입 혐의로 인도 기업 4곳을 제재했다. 제재 대상은 관세중개업체 포티즈파트너스 등이며, 약 1억 1,900만 달러 규모의 이란산 석유를 수입한 것으로 파악됐다.", "score": 62}, {"cc": "IN", "name": "인도", "flag": "🇮🇳", "presence": "진출", "src": "The Hindu", "d": "2026-08-25", "t": "인도, IT복원력지수 도입", "q": "SEBI가 주식거래소·결제기관 등 시장기반시설의 기술 견고성을 9개 가중지표로 평가하는 ITRI를 도입했다. 가용성·보안 각 20% 비중으로 사이버위협·운영장애·시장충격 대응력을 측정하며, 규정준수 감시에서 위험기반 모니터링으로 전환한다.", "score": 62}, {"cc": "IN", "name": "인도", "flag": "🇮🇳", "presence": "진출", "src": "The Hindu", "d": "2026-08-24", "t": "인도 SEBI, 시장기반시설 IT복원력지수 도입", "q": "인도 증권거래위원회(SEBI)가 8월 24일 증권거래소·예탁기관 등 시장기반시설기관의 IT복원력을 9개 지표로 평가하는 지수를 도입했다. 가용성·보안을 각 20% 가중치로 두며, 기관들은 반기별 산출과 IT성능 악화 조기경보시스템 운영을 의무화하고 2027년 2월까지 전면 시행해야 한다.", "score": 62}, {"cc": "VN", "name": "베트남", "flag": "🇻🇳", "presence": "진출", "src": "VietnamPlus", "d": "2026-08-25", "t": "베트남, 중소기업 대출 확대 지시", "q": "베트남 중앙은행이 상업은행들에 우대금리 패키지를 통한 중소기업 대출 확대를 지시했다. 높은 예금금리와 담보 부족 등 구조적 제약이 금리 인하 효과를 제한하고 있다.", "score": 62}, {"cc": "BD", "name": "방글라데시", "flag": "🇧🇩", "presence": "미진출", "src": "GNews Bangladesh", "d": "2026-08-24", "t": "방글라데시, 불법 모바일금융 2만개 계좌 폐쇄", "q": "방글라데시 중앙은행이 고금리 대출앱과 불법 암호화폐 거래를 적발해 2만여 개 계좌를 폐쇄했다. 무허가 대출업체들이 연 800% 이상의 고금리를 부과하고 소비자 정보를 탈취했으며, UAE 기반 암호화폐 플랫폼이 자본 유출을 중개했다.", "score": 62}, {"cc": "BR", "name": "브라질", "flag": "🇧🇷", "presence": "미진출", "src": "GNews Brazil", "d": "2026-08-25", "t": "룰라, 미국 관세 피해 수출업체 세제 지원 연장", "q": "", "score": 52}, {"cc": "PH", "name": "필리핀", "flag": "🇵🇭", "presence": "미진출", "src": "GNews Philippines", "d": "2026-08-26", "t": "필리핀 대법원, 은행의 중과실로 인한 손실 회수 불허", "q": "", "score": 35}, {"cc": "AE", "name": "UAE", "flag": "🇦🇪", "presence": "미진출", "src": "GNews UAE", "d": "2026-08-25", "t": "UAE 신용보고서, 마이크로론 포함", "q": "", "score": 35}, {"cc": "AE", "name": "UAE", "flag": "🇦🇪", "presence": "미진출", "src": "GNews UAE", "d": "2026-08-25", "t": "UAE 신용보고서에 소액대출 데이터 포함", "q": "", "score": 35}, {"cc": "AE", "name": "UAE", "flag": "🇦🇪", "presence": "미진출", "src": "GNews UAE", "d": "2026-08-25", "t": "UAE 핀테크 갤럭시, 오픈파이낸스 승인", "q": "", "score": 35}, {"cc": "BR", "name": "브라질", "flag": "🇧🇷", "presence": "미진출", "src": "GNews Brazil", "d": "2026-08-25", "t": "브라질, 디지털자산 규제 모범사례로 부상", "q": "", "score": 28}, {"cc": "BR", "name": "브라질", "flag": "🇧🇷", "presence": "미진출", "src": "GNews Brazil", "d": "2026-08-25", "t": "브라질, 틱톡 미성년자 데이터 보호 위반으로 바이트댄스에 2,560만 달러 과징금", "q": "", "score": 28}], "n_in": 15, "n_out": 8}, {"code": "DEAL", "ui": "deal", "label": "거래·투자", "label_en": "Deals·Investment", "arts": [{"cc": "FR", "name": "프랑스", "flag": "🇫🇷", "presence": "미진출", "src": "GNews France", "d": "2026-08-26", "t": "KB국민은행, 베트남 테크콤뱅크 15% 지분 인수 협상", "q": "KB국민은행이 베트남 최대 민간은행 테크콤뱅크의 15% 지분 인수를 별도로 협상 중이다. 테크콤뱅크는 동남아 최고 성장률의 디지털뱅킹 선도사로, 베트남 시장 진출의 전략적 거점이 될 수 있다.", "score": 72}, {"cc": "HK", "name": "홍콩", "flag": "🇭🇰", "presence": "진출", "src": "SCMP", "d": "2026-08-24", "t": "알리바바 홍콩 증자 3배 초과 구독", "q": "알리바바가 홍콩에서 710만 주 배치를 통해 100억 홍콩달러를 조달했다. 2019년 이후 첫 공모로 280억 달러의 투자 수요를 기록했으며 AI 사업 확대에 자금을 투입할 계획이다.", "score": 62}, {"cc": "IN", "name": "인도", "flag": "🇮🇳", "presence": "진출", "src": "Economic Times", "d": "2026-08-25", "t": "인도연합은행, 12년만에 달러채 발행", "q": "인도연합은행이 6억 달러 규모의 달러채를 발행했으며, 3년물과 5년물 각 3억 달러씩 5.23%, 5.41% 쿠폰으로 공급됐다. 인도 국영은행들이 RBI의 8월 31일 헤징 윈도우 마감을 앞두고 해외 자금조달을 서두르고 있으며, 6~8월 업계 전체 채권 발행액은 112.5억 달러에 달했다.", "score": 62}, {"cc": "US", "name": "미국", "flag": "🇺🇸", "presence": "진출", "src": "CNBC", "d": "2026-08-27", "t": "UAE 국방고위관, 트럼프 암호화폐은행에 49% 지분", "q": "타흐눈 빈 자예드 UAE 국가안보자문관이 주도한 투자자들이 트럼프 가족의 암호화폐은행 월드리버티파이낸셜의 모회사에 49% 지분을 보유했다. OCC가 이달 USD 스테이블코인 발행을 위한 연방공인 신탁은행 설립을 조건부 승인했다.", "score": 62}, {"cc": "VN", "name": "베트남", "flag": "🇻🇳", "presence": "진출", "src": "VietnamPlus", "d": "2026-08-27", "t": "한-베트남 핵심산업 협력 강화", "q": "한국과 베트남이 8월 26일 서울 합동위원회에서 광물·에너지·산업기술 협력을 확대하기로 합의했다. 한국 국영석유사가 베트남 첫 지하유류저장시설 기술지원을 제공하며, 2030년까지 양국 교역액을 1,500억 달러로 확대할 계획이다.", "score": 62}, {"cc": "IN", "name": "인도", "flag": "🇮🇳", "presence": "진출", "src": "Times of India (Global)", "d": "2026-08-30", "t": "SBI, NSE 공모에서 최대 1% 지분 희석", "q": "인도 최대 은행 SBI와 SBI캐피탈마켓스가 NSE 공모를 통해 결합 1% 지분을 희석한다. 국영 금융그룹의 거래소 투자에서의 부분 출구 의사를 나타낸다.", "score": 62}, {"cc": "PH", "name": "필리핀", "flag": "🇵🇭", "presence": "미진출", "src": "GNews Philippines", "d": "2026-08-27", "t": "스미토모미츠이, 필리핀 RCBC리싱 30% 인수 완료", "q": "일본 스미토모미츠이금융그룹이 필리핀 RCBC리싱의 30% 지분 인수를 완료했다. 동남아 리싱 사업 확대를 통해 필리핀 금융시장 입지를 강화하는 전략적 투자다.", "score": 62}, {"cc": "AE", "name": "UAE", "flag": "🇦🇪", "presence": "미진출", "src": "GNews UAE", "d": "2026-08-26", "t": "아부다비 이슬람은행, 4.77억 달러 규모 유상증자 추진", "q": "", "score": 52}, {"cc": "KZ", "name": "카자흐스탄", "flag": "🇰🇿", "presence": "미진출", "src": "GNews Kazakhstan", "d": "2026-08-25", "t": "IFC, 카자흐 은행과 중소기업 금융 협력", "q": "", "score": 35}, {"cc": "KZ", "name": "카자흐스탄", "flag": "🇰🇿", "presence": "미진출", "src": "GNews Kazakhstan", "d": "2026-08-27", "t": "카자흐 국영유전사, 위안화 채권 35억 위안 발행", "q": "", "score": 35}, {"cc": "UZ", "name": "우즈베키스탄", "flag": "🇺🇿", "presence": "미진출", "src": "GNews Uzbekistan", "d": "2026-08-31", "t": "인도-우즈베키스탄 UPI 국경간 결제 협력", "q": "", "score": 35}, {"cc": "BD", "name": "방글라데시", "flag": "🇧🇩", "presence": "미진출", "src": "GNews Bangladesh", "d": "2026-08-25", "t": "프리미어銀, 방글라데시중앙銀과 1조타카 재정자금 협약", "q": "", "score": 28}, {"cc": "KZ", "name": "카자흐스탄", "flag": "🇰🇿", "presence": "미진출", "src": "GNews Kazakhstan", "d": "2026-08-27", "t": "카자흐 국영사 위안화채 무디스 평가", "q": "", "score": 28}, {"cc": "AE", "name": "UAE", "flag": "🇦🇪", "presence": "미진출", "src": "GNews UAE", "d": "2026-08-27", "t": "UAE 왕족, 트럼프 계열사 은행 지분 49% 인수", "q": "", "score": 28}], "n_in": 5, "n_out": 9}, {"code": "INCIDENT", "ui": "incident", "label": "사건사고", "label_en": "Incidents", "arts": [{"cc": "MM", "name": "미얀마", "flag": "🇲🇲", "presence": "진출", "src": "Eleven Media", "d": "2026-08-26", "t": "KBZ銀 보안 시스템 침해 부인", "q": "미얀마 최대 민간은행 KBZ가 보안 시스템 침해 의혹을 공식 부인했다. 최근 사이버보안 취약성 우려에 대한 대응으로 보인다.", "score": 72}, {"cc": "IN", "name": "인도", "flag": "🇮🇳", "presence": "진출", "src": "The Hindu", "d": "2026-08-24", "t": "인도 은행노조 9월 11일 전국 파업 예고", "q": "인도 은행노조연합(UFBU)이 주 5일 근무제, 성과급 개선, 연금 개선을 요구하며 9월 11일부터 4일간 전국 파업을 예고했다. 2024년 3월 합의한 주 5일 근무제 이행이 2년 지연되고 성과급 배분 방식에 대한 정부와의 갈등이 파업 배경이다.", "score": 62}, {"cc": "US", "name": "미국", "flag": "🇺🇸", "presence": "진출", "src": "WSJ", "d": "2026-08-25", "t": "호르무즈 유조선 공격, 유가 변동성 심화", "q": "이란이 호르무즈 해협 유조선 공격을 감행하고 미국 경제 제재에 대한 보복을 예고했다. 글로벌 석유 해상운송로 차질로 유가 상승 압력이 가중될 전망이다.", "score": 62}, {"cc": "SG", "name": "싱가포르", "flag": "🇸🇬", "presence": "진출", "src": "Business Times", "d": "2026-08-25", "t": "UOB 주택담보대출 소송서 손배액 4배 증액", "q": "싱가포르 고등법원이 UOB의 립포마리나컬렉션 주택담보대출 분쟁에서 손해배상액을 7610만 싱가포르달러로 4배 증액했다. 판결은 UOB의 모기지 대출 관행 처리 방식에 대한 것이다.", "score": 62}, {"cc": "SG", "name": "싱가포르", "flag": "🇸🇬", "presence": "진출", "src": "Business Times", "d": "2026-08-25", "t": "시진핑, 이란 지원 제재 위협에 맞대응", "q": "미국이 이란 거래 관련 중국 기업과 금융기관에 제재를 가하자, 중국은 이란과의 경제 관계 유지를 선언했다. 양국은 9월 정상회담을 앞두고 긴장 완화 신호를 보내고 있다.", "score": 62}, {"cc": "HK", "name": "홍콩", "flag": "🇭🇰", "presence": "진출", "src": "SCMP", "d": "2026-08-26", "t": "PwC, 중국 에버그란드 감시 소송 재판 불가피", "q": "홍콩 고등법원이 PwC 인터내셔널의 소송 기각 신청을 기각했다. 에버그란드 청산인들이 감사 부실로 약 57.9억 위안(86억 달러)의 손해배상을 청구 중이며, 홍콩 최대 규모 기업 소송으로 확대될 전망이다.", "score": 62}, {"cc": "HK", "name": "홍콩", "flag": "🇭🇰", "presence": "진출", "src": "SCMP", "d": "2026-08-26", "t": "미국, 중국 해킹 플랫폼 적발·압수", "q": "미 법무부와 FBI가 NASA, 연방준비제도, 상원을 겨냥한 중국 국가 후원 해킹 집단의 플랫폼 2개를 압수했다. 난징신구웨이 네트워크 기술사가 운영한 QTFY 그룹은 중국 국가안전부와 인민해방군에 해킹 용역을 제공했다.", "score": 62}, {"cc": "SG", "name": "싱가포르", "flag": "🇸🇬", "presence": "진출", "src": "Straits Times", "d": "2026-08-27", "t": "싱가포르 물류사, 엔비디아 칩 밀수 혐의 미국 수사 협력", "q": "미국이 동남아 환적로를 통한 엔비디아 AI칩 중국 밀수 혐의를 수사 중이며, 이는 반도체 불법거래로 운송업체를 처음 적발하는 사건. 10월 쿠엔+나겔이 인수한 에이펙스 로지스틱스가 수사에 협력하고 있다.", "score": 62}, {"cc": "SG", "name": "싱가포르", "flag": "🇸🇬", "presence": "진출", "src": "Business Times", "d": "2026-08-27", "t": "미국, 엔비디아 칩 밀반출 혐의 싱가포르 물류사 수사", "q": "미국이 싱가포르 소재 에이펙스 로지스틱스를 대상으로 엔비디아 칩 밀반출 혐의를 수사 중이며, 이는 중국 대상 반도체 수출통제 우회 적발 강화의 일환이다. 싱가포르의 역내 물류 허브 지위로 인해 환적 적발 대상이 될 가능성이 높아지고 있다.", "score": 62}, {"cc": "MM", "name": "미얀마", "flag": "🇲🇲", "presence": "진출", "src": "Eleven Media", "d": "2026-08-26", "t": "KBZ銀 보안 시스템 침해 부인", "q": "미얀마 최대 민간은행 KBZ銀이 보안 시스템 침해 의혹을 공식 부인했다. 최근 사이버보안 취약성 우려에 대한 입장 표명으로 보인다.", "score": 62}, {"cc": "KH", "name": "캄보디아", "flag": "🇰🇭", "presence": "진출", "src": "Nikkei Asia (Cambodia)", "d": "2026-08-28", "t": "캄보디아, 온라인 사기 조직 전면 적발", "q": "캄보디아 정부가 국내 모든 온라인 사기 조직을 해체했다고 발표했다. 군·경찰이 동남아 전역의 사기·자금세탁·불법도박 조직을 적발·제거했으며, 국제 압박에 응한 조치다.", "score": 62}, {"cc": "KZ", "name": "카자흐스탄", "flag": "🇰🇿", "presence": "미진출", "src": "GNews Kazakhstan", "d": "2026-08-25", "t": "카자흐스탄 2026년 유전 생산 목표 하향", "q": "카자흐스탄이 카스피해 송유관 공사(CPC) 드론 공격으로 인한 약 350만 톤의 생산 손실을 이유로 2026년 석유 생산 목표를 98백만 톤에서 96백만 톤으로 하향 조정했다. 주요 유전 정비를 연기하기로 결정했다.", "score": 62}], "n_in": 11, "n_out": 1}];
+const $=(s)=>document.querySelector(s);
+const esc=(s)=>String(s==null?"":s).replace(/[&<>"]/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+const chev=()=>`<svg class="ar" width="15" height="15" aria-hidden="true"><use href="#ico-chev-r"/></svg>`;
+
+function render(code){
+  const t=TOPICS.find(x=>x.code===code)||TOPICS[0];
+  document.querySelectorAll(".twtab").forEach(b=>b.setAttribute("aria-selected",String(b.dataset.code===t.code)));
+  $("#twhead").innerHTML=`<span class="tt">${esc(t.label)}</span><span class="en">${esc(t.label_en||"")}</span>`+
+    `<span class="sub">진출 <b>${t.n_in}</b> · 미진출 <b>${t.n_out}</b></span>`;
+  $("#twfeed").innerHTML=t.arts.map(a=>{
+    const pres = a.presence==="진출"
+      ? `<span class="tw-pres in">진출</span>` : `<span class="tw-pres out">미진출</span>`;
+    return `<li class="twitem">
+      <div class="tw-tags"><span class="tw-cc"><span class="fg">${esc(a.flag)}</span>${esc(a.name)}</span>${pres}</div>
+      <div class="tw-t">${esc(a.t)}</div>
+      ${a.q?`<div class="tw-q">${esc(a.q)}</div>`:""}
+      <div class="tw-m"><span class="src">${esc(a.src||"")}</span>${a.d?`<span>${esc(a.d)}</span>`:""}${chev()}</div>
+    </li>`;
+  }).join("");
+}
+$("#twtabs").innerHTML=TOPICS.map((t,i)=>`
+  <button class="twtab" data-code="${t.code}" aria-selected="${i===0}">${esc(t.label)} <span class="n">${t.arts.length}</span></button>`).join("");
+document.querySelectorAll(".twtab").forEach(b=>b.addEventListener("click",()=>render(b.dataset.code)));
+render(TOPICS[0].code);
+
+document.querySelectorAll(".langtoggle button").forEach((b)=>b.addEventListener("click",()=>{
+  document.querySelectorAll(".langtoggle button").forEach((o)=>o.setAttribute("aria-pressed",String(o===b)));
+}));
+</script>
+</body>
+</html>

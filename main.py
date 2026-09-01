@@ -349,6 +349,13 @@ def cmd_export(args):
         shutil.copy2(shared_js, config.EXPORT_DIR / "shared-modal.js")
         print(f"[export] shared-modal.js 복사 → {config.EXPORT_DIR / 'shared-modal.js'}")
 
+    # 리디자인 공용 CSS/스프라이트(2026-09) — shared-modal.js와 동일 패턴으로 복사.
+    for name in ("shared-tokens.css", "shared-sprite.js"):
+        src = config.ROOT / "web" / name
+        if src.exists():
+            shutil.copy2(src, config.EXPORT_DIR / name)
+            print(f"[export] {name} 복사 → {config.EXPORT_DIR / name}")
+
 
 def cmd_admin(_args):
     import admin_export

@@ -2,247 +2,148 @@
 <html lang="ko">
 <head>
 <meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>KB 글로벌 데일리 브리핑 — 모니터링</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>KB Global One Team — 모니터링</title>
+<meta name="description" content="KB 글로벌 원팀 뉴스 — 규제·거래투자·사건사고 이벤트 모니터링"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap"/>
+<link rel="stylesheet" href="shared-tokens.css"/>
+<!-- 데이터: export_json 이 아래 스크립트에 주입(오프라인). 없으면 topics.json fetch. -->
 <script id="topics-data" type="application/json">null</script>
-<!-- 기사 상세 모달(공용 컴포넌트) — brief.html/countries.html과 동일 파일 공유 -->
 <script src="shared-modal.js"></script>
 <style>
-  :root{--kb-yellow:#FFBC00;--kb-dark:#545045;--kb-gold:#85754E;--kb-silver:#8A8D8F;
-        --ink:#2b2926;--line:#e8e4dd;--card:#fff;--sub:#7a746c;--page:#dcd8d2;}
-  *{box-sizing:border-box}
-  body{margin:0;background:var(--page);color:var(--ink);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;font-size:14px}
-  .wrap{max-width:760px;margin:0 auto;padding:22px 16px 0}
-  .mast{position:relative;overflow:hidden;border-radius:14px;padding:20px 24px 22px;color:#fff;background:linear-gradient(135deg,#5c574f 0%,#4a453e 100%)}
-  .mast .kbwm{position:absolute;right:-6px;top:-26px;font-size:132px;font-weight:900;color:rgba(255,255,255,.05);letter-spacing:-6px;pointer-events:none}
-  .mast .row{display:flex;align-items:center;gap:10px;position:relative;z-index:1}
-  .mast .kb{font-weight:800}.mast .kb b{color:var(--kb-yellow)}.mast .kb span{color:#d9d4cc;font-weight:600;margin-left:4px}
-  .mast .rt{margin-left:auto;display:flex;align-items:center;gap:12px;font-size:12px;color:#cfc9c0}
-  .mast .en{border:1px solid rgba(255,188,0,.6);color:var(--kb-yellow);border-radius:20px;padding:2px 10px;font-weight:700;cursor:pointer}
-  .mast .en .off{color:#a49c8f}
-  .dsel{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.28);border-radius:8px;padding:2px 7px;font-size:12px;max-width:130px}
-  .mast h1{position:relative;z-index:1;font-size:26px;font-weight:800;margin:14px 0 8px;line-height:1.2}
-  .mast .sub{position:relative;z-index:1;font-size:12.5px;color:#cfc9c0}
-  .nav{display:flex;gap:4px;margin:14px 0 0;overflow-x:auto}
-  .nav a{font-size:12px;font-weight:700;color:var(--sub);text-decoration:none;padding:7px 0;border-radius:20px;border:1px solid var(--line);background:#fff;flex:1;text-align:center;white-space:nowrap}
-  .nav a.on{background:var(--kb-dark);color:#fff;border-color:var(--kb-dark)}
-
-  /* 진출/미진출 토글 */
-  .fil{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-  .chip{border:1px solid var(--line);background:#fff;border-radius:20px;padding:6px 13px;font-size:13px;cursor:pointer;font-weight:700;color:var(--sub)}
-  .chip.on{background:var(--kb-dark);color:#fff;border-color:var(--kb-dark)}
-
-  /* 카테고리 탭 */
-  .cats{display:flex;gap:6px;overflow-x:auto;padding:14px 0 2px;scrollbar-width:none}
-  .cats::-webkit-scrollbar{display:none}
-  /* 진출/미진출 토글(.chip.on, 위)과 헷갈리지 않게 톤 분리 — 카테고리는 골드 아웃라인 */
-  .ct{font-size:12.5px;font-weight:700;color:var(--sub);background:#fff;border:1.5px solid var(--line);border-radius:8px;padding:5px 14px;cursor:pointer;white-space:nowrap;flex-shrink:0;transition:all .15s}
-  .ct.on{background:#fdf6e3;color:var(--kb-gold);border-color:var(--kb-gold)}
-  .ct:hover:not(.on){border-color:#bbb;color:var(--ink)}
-
-  /* 섹션 헤더 */
-  .sec-hd{display:flex;align-items:center;gap:8px;padding:14px 0 8px;border-bottom:2px solid var(--kb-yellow)}
-  .sec-hd .lbl{font-size:16px;font-weight:800}
-  .sec-hd .cnt{margin-left:auto;font-size:11.5px;color:var(--sub);font-weight:700}
-  .sec-hd .ccs{font-size:13px;letter-spacing:1px}
-
-  /* 기사 카드 */
-  .ca{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px 14px;margin-top:8px;cursor:pointer;transition:box-shadow .1s}
-  .ca:hover{box-shadow:0 2px 10px rgba(0,0,0,.06)}
-  .ca .meta{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-bottom:4px;font-size:11.5px;color:var(--sub)}
-  .ca .flag{font-size:14px}
-  .ca .score{margin-left:auto;font-weight:800;color:var(--kb-gold);font-size:12px}
-  .ca .tt{font-size:14px;font-weight:700;line-height:1.35;color:var(--ink)}
-  .ca .q{color:#463f37;line-height:1.5;font-size:13px;margin-top:4px}
-  .ca .k{margin-top:6px;background:#fffdf4;border-left:3px solid var(--kb-yellow);border-radius:5px;padding:5px 9px;font-size:12.5px;line-height:1.5}
-  .ca .k b{color:var(--kb-gold)}
-  .badge{font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;color:#fff}
-  .b-economy{background:#2b5f9e}.b-finance{background:#2f7d4f}.b-digital{background:#6a3fb5}
-  .b-esg{background:#3a8a6a}.b-risk{background:#b23b3b}.b-geo{background:#7a5500}
-
-  .empty{color:var(--sub);text-align:center;padding:40px;font-size:13px;line-height:1.6}
-  footer{text-align:center;color:var(--kb-silver);font-size:11.5px;letter-spacing:.5px;padding:22px 0 34px;margin-top:16px}
-  footer .tag{color:var(--kb-gold);font-weight:800;letter-spacing:1px}
-
-  @media(max-width:520px){
-    .wrap{padding:12px 8px 0}
-    .mast{padding:14px 14px 16px;border-radius:10px}
-    .mast h1{font-size:21px;margin:10px 0 5px}
-    .mast .kbwm{font-size:88px}
-    .nav a{font-size:11px;padding:5px 0}
-  }
+.pagettl{font-size:clamp(12.5px,1.9cqi,15px);color:var(--muted);margin:2px 2px 10px}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="mast">
-    <div class="kbwm">KB</div>
-    <div class="row">
-      <span class="kb"><b>KB</b><span>금융그룹</span></span>
-      <span class="rt">
-        <span class="en" id="lang-btn">KR<span class="off"> / EN</span></span>
-        <select id="dsel" class="dsel"></select>
-      </span>
+<script src="shared-sprite.js"></script>
+<div class="shell">
+  <header class="hd">
+    <div class="hd-brand">
+      <div class="brandline">
+        <svg class="kbmark" width="30" height="22" style="color:var(--gold-2)" aria-hidden="true"><use href="#kb-mark"/></svg>
+        <span>KB FINANCIAL GROUP</span>
+      </div>
+      <h1 class="en">GLOBAL ONE TEAM</h1>
+      <div class="hd-sub"><b data-en="Monitoring">모니터링 · TopicWatch</b><i class="dot-live"></i></div>
     </div>
-    <h1 data-en="Monitoring">모니터링</h1>
-    <div class="nav">
-      <a href="brief.html" data-en="Today's Global">글로벌 원팀 뉴스</a>
-      <a href="countries.html" data-en="Country News">국가별 뉴스</a>
-      <a class="on" href="topics.html" data-en="Monitoring">모니터링</a>
-      <a href="weekly.html" data-en="Weekly Report (Pending)">주간 리포트 (보류)</a>
+    <div class="hd-tools">
+      <div class="langtoggle" role="group" aria-label="언어 선택">
+        <button type="button" data-lang="ko" aria-pressed="true">KR</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </div>
     </div>
-  </div>
+  </header>
+  <p class="pagettl" data-en="Regulation · Deals · Incidents across presence and non-presence markets, merged and sorted by importance">주제별로 진출·미진출국 뉴스를 한데 모아 중요도순으로 모니터링합니다</p>
+  <div class="twtabs" id="twtabs"></div>
+  <div class="twhead" id="twhead"></div>
+  <ul class="twfeed" id="twfeed"></ul>
 
-  <div class="fil" id="presenceSel" style="margin:14px 0 0">
-    <span class="chip on" data-p="presence">진출국</span>
-    <span class="chip" data-p="non">KB 미진출국</span>
-  </div>
-
-  <div class="cats" id="cats"></div>
-  <div id="feed"></div>
-
-  <footer>
-    <div class="tag">CONNECTING PEOPLE, CREATING GLOBAL VALUE</div>
-    <div id="gen"></div>
-  </footer>
+  <nav class="botnav" id="botnav">
+    <a href="brief.html" data-en="Home">
+      <svg><use href="#ico-spark"/></svg><span data-en="Home">홈</span>
+    </a>
+    <a href="countries.html" data-en="Presence">
+      <svg><use href="#ico-grid"/></svg><span data-en="Presence">진출국</span>
+    </a>
+    <a href="countries.html?tab=non" data-en="Non-presence">
+      <svg><use href="#ico-grid"/></svg><span data-en="Non-presence">미진출국</span>
+    </a>
+    <a class="on" href="topics.html" data-en="Monitoring">
+      <svg><use href="#ico-chev-d"/></svg><span data-en="Monitoring">모니터링</span>
+    </a>
+  </nav>
 </div>
 
 <script>
 (async function(){
-  const P = new URLSearchParams(location.search);
-  const QD = P.get('date');
-  const EN = P.get('lang') === 'en';
-
+  const P = new URLSearchParams(location.search), QD = P.get('date'), EN = P.get('lang') === 'en';
   let D = null;
   if (QD) { try { D = await (await fetch('archive/' + QD + '/topics.json')).json(); } catch(e){} }
   try { if (!D) D = JSON.parse(document.getElementById('topics-data').textContent); } catch(e){}
   if (!D) { try { D = await (await fetch('topics.json')).json(); } catch(e){} }
 
-  const feed = document.getElementById('feed');
-  if (!D || !D.categories || !D.categories.length) {
-    feed.innerHTML = '<div class="empty">모니터링 데이터가 없습니다.<br><code>python main.py export</code> 로 생성하세요.</div>';
-    return;
-  }
-
-  // 공통 유틸
-  const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-  const md = s => String(s || '').slice(5);
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const chev = () => `<svg class="ar" width="15" height="15" aria-hidden="true"><use href="#ico-chev-r"/></svg>`;
   const NAMES = EN
     ? {GB:'UK',US:'US',HK:'Hong Kong',CN:'China',JP:'Japan',SG:'Singapore',IN:'India',VN:'Vietnam',MM:'Myanmar',ID:'Indonesia',KH:'Cambodia',TH:'Thailand',LA:'Laos',GLOBAL:'Global'}
     : {GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',TH:'태국',LA:'라오스',GLOBAL:'글로벌'};
-  const BL = EN
-    ? {economy:'Economy',finance:'Banking',digital:'Digital',esg:'ESG',risk:'Risk',geo:'Geopolitics'}
-    : {economy:'경제',finance:'금융산업',digital:'디지털',esg:'ESG',risk:'규제·리스크',geo:'지정학'};
-  const badges = cstr => (cstr || '').split(/\s+/).filter(Boolean)
-    .map(k => { const l = BL[k]; return l ? `<span class="badge b-${k}">${l}</span>` : ''; }).join(' ');
+  const ccName = (a) => EN ? (a.cc_label_en || NAMES[a.cc] || a.cc) : (a.cc_label || NAMES[a.cc] || a.cc);
+  const tq = (a) => EN ? (a.q_en || a.q) : (a.q || a.q_en);
 
-  const tq = a => EN ? (a.q_en || a.q) : (a.q || a.q_en);
-  const tk = a => EN ? (a.k_en || a.k) : (a.k || a.k_en);
-  const tl = c => EN ? (c.label_en || c.label) : c.label;
+  if (!D || !D.categories || !D.categories.length) {
+    $('#twfeed').innerHTML = `<div class="empty-state">${EN ? 'topics.json not found. Run' : 'topics.json 이 없습니다.'} <code>python main.py export</code></div>`;
+    return;
+  }
 
-  // 언어 토글
-  const langBtn = document.getElementById('lang-btn');
-  langBtn.innerHTML = EN ? '<span class="off">KR / </span>EN' : 'KR<span class="off"> / EN</span>';
-  langBtn.onclick = () => { P.set('lang', EN ? 'ko' : 'en'); location.search = P.toString(); };
+  // 백엔드 categories[]는 같은 code가 presence='진출'/'미진출' 2건으로 분리돼 있음 —
+  // 목업 디자인(진출+미진출 병합, score순, 카드별 진출/미진출 칩)에 맞춰 프런트에서 병합.
+  // 백엔드(export_json.py)는 그대로 둔다(HANDOFF §6.1: export 템플릿 연동만).
+  const byCode = new Map();
+  for (const c of D.categories) {
+    if (!byCode.has(c.code)) byCode.set(c.code, {code:c.code, ui:c.ui, label:c.label, label_en:c.label_en, arts:[], n_in:0, n_out:0});
+    const g = byCode.get(c.code);
+    const arts = (c.articles || []).map(a => ({...a, presence: c.presence}));
+    g.arts.push(...arts);
+    if (c.presence === '진출') g.n_in += arts.length; else g.n_out += arts.length;
+  }
+  const TOPICS = [...byCode.values()];
+  TOPICS.forEach(t => t.arts.sort((a,b) => (b.score||0) - (a.score||0)));
 
-  // 날짜 선택기
-  try {
-    const dates = await (await fetch('archive/dates.json')).json();
-    const sel = document.getElementById('dsel');
-    if (dates.length) {
-      sel.innerHTML = `<option value="">${EN ? 'Latest' : '최신'}</option>` +
-        dates.map(d => `<option value="${d}"${d === QD ? ' selected' : ''}>${d}</option>`).join('');
-      sel.onchange = () => { location.search = sel.value ? ('?date=' + sel.value) : ''; };
-    } else { sel.style.display = 'none'; }
-  } catch(e) { document.getElementById('dsel').style.display = 'none'; }
-
-  // nav 언어
-  if (EN) document.querySelectorAll('[data-en]').forEach(el => { el.textContent = el.getAttribute('data-en'); });
-  document.querySelectorAll('.nav a').forEach(a => { a.href = a.getAttribute('href').split('?')[0] + location.search; });
-
-  document.getElementById('gen').textContent = (EN ? 'Updated ' : '업데이트 ') + (D.generated_at || '').slice(0, 16).replace('T', ' ');
-
-  // 진출/미진출 토글 — 같은 code가 그룹별로 최대 2개 등장(presence로 구분)
-  let pMode = 'presence';
-  const groupCats = () => D.categories.filter(c => c.presence === (pMode === 'non' ? '미진출' : '진출'));
-  let cats = groupCats();
-  let activeCat = cats.length ? cats[0].code : null;
-
-  const catsEl = document.getElementById('cats');
-  const ccName = a => a.presence === '미진출'
-    ? esc(EN ? (a.cc_label_en || a.cc) : (a.cc_label || a.cc))
-    : esc(NAMES[a.cc] || a.cc || '');
-
-  function buildCatsTab() {
-    cats = groupCats();
-    if (!cats.length) {
-      catsEl.innerHTML = '';
-      feed.innerHTML = `<div class="empty">${EN ? 'Not enough non-presence data yet.' : 'KB 미진출국 데이터가 아직 부족합니다.'}</div>`;
+  function render(code){
+    const t = TOPICS.find(x => x.code === code) || TOPICS[0];
+    document.querySelectorAll('.tw-tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.code === t.code)));
+    $('#twhead').innerHTML = `<span class="tt">${esc(EN ? (t.label_en||t.label) : t.label)}</span>`+
+      `<span class="sub">${EN?'Presence':'진출'} <b>${t.n_in}</b> · ${EN?'Non-presence':'미진출'} <b>${t.n_out}</b></span>`;
+    if (!t.arts.length) {
+      $('#twfeed').innerHTML = `<div class="empty-state">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;
+      $('#twfeed')._rows = [];
       return;
     }
-    if (!cats.find(c => c.code === activeCat)) activeCat = cats[0].code;
-    catsEl.innerHTML = cats.map(c =>
-      `<button class="ct${c.code === activeCat ? ' on' : ''}" data-code="${c.code}">${tl(c)} <small style="opacity:.7">${c.count}</small></button>`
-    ).join('');
-    renderFeed(activeCat);
+    $('#twfeed').innerHTML = t.arts.map((a,i) => {
+      const pres = a.presence === '진출'
+        ? `<span class="tw-pres in">${EN?'Presence':'진출'}</span>` : `<span class="tw-pres">${EN?'Non-presence':'미진출'}</span>`;
+      return `<li class="tw-item" data-i="${i}">
+        <div class="tw-tags"><span class="tw-cc"><span class="fg">${esc(a.flag||'')}</span>${esc(ccName(a))}</span>${pres}</div>
+        <div class="tw-t">${esc(a.t)}</div>
+        ${tq(a)?`<div class="tw-q">${esc(tq(a))}</div>`:''}
+        <div class="tw-m"><span class="src">${esc(a.src||'')}</span>${a.d?`<span>${esc(a.d)}</span>`:''}${chev()}</div>
+      </li>`;
+    }).join('');
+    $('#twfeed')._rows = t.arts;
   }
 
-  function renderFeed(code) {
-    const cat = cats.find(c => c.code === code);
-    if (!cat) return;
-    // 국기는 카테고리 소속 기사에서 직접 뽑음(진출·미진출 국가코드 공용)
-    const flagByCc = {};
-    cat.articles.forEach(a => { flagByCc[a.cc] = a.flag || ''; });
-    const ccsFlags = (cat.ccs || []).map(cc => flagByCc[cc] || '').join('');
-    feed.innerHTML =
-      `<div class="sec-hd">
-        <span class="lbl">${esc(tl(cat))}</span>
-        <span class="ccs">${ccsFlags}</span>
-        <span class="cnt">${cat.count}${EN ? ' articles' : '건'} · ${cat.ccs.length}${EN ? ' hubs' : '개국'}</span>
-      </div>` +
-      cat.articles.map((a, i) =>
-        `<div class="ca" data-i="${i}">
-          <div class="meta">
-            <span class="flag">${a.flag || ''}</span>
-            <b>${ccName(a)}</b> · ${esc(a.src)} · ${esc(md(a.d))}
-            ${badges(a.c)}
-            <span class="score">${a.score}</span>
-          </div>
-          <div class="tt">${esc(a.t)}</div>
-          ${tq(a) ? `<div class="q">${esc(tq(a))}</div>` : ''}
-          ${tk(a) ? `<div class="k"><b>${EN ? 'KB implication' : 'KB 시사점'}</b> ${esc(tk(a))}</div>` : ''}
-        </div>`
-      ).join('');
-    feed._rows = cat.articles;
-  }
+  $('#twtabs').innerHTML = TOPICS.map((t,i) => `
+    <button class="tw-tab" data-code="${t.code}" aria-selected="${i===0}">${esc(EN?(t.label_en||t.label):t.label)} <span class="n">${t.arts.length}</span></button>`).join('');
+  document.querySelectorAll('.tw-tab').forEach(b => b.addEventListener('click', () => render(b.dataset.code)));
+  render(QD ? TOPICS[0].code : (P.get('topic') || TOPICS[0].code));
 
-  // 기사 상세 모달 — 공용 컴포넌트(shared-modal.js). topics.json article 필드
-  // (t/q/q_en/k/k_en/u/src/d/c)가 이미 공용 모달이 기대하는 모양과 같아 그대로 전달.
-  feed.addEventListener('click', e => {
-    const el = e.target.closest('.ca'); if (!el) return;
-    const a = (feed._rows || [])[+el.dataset.i];
+  document.getElementById('twfeed').addEventListener('click', (e) => {
+    const el = e.target.closest('.tw-item'); if (!el) return;
+    const a = (document.getElementById('twfeed')._rows || [])[+el.dataset.i];
     if (a) openArticleModal(a);
   });
 
-  catsEl.addEventListener('click', e => {
-    const btn = e.target.closest('.ct');
-    if (!btn) return;
-    activeCat = btn.dataset.code;
-    catsEl.querySelectorAll('.ct').forEach(b => b.classList.toggle('on', b.dataset.code === activeCat));
-    renderFeed(activeCat);
+  // 언어 토글 — ?lang= 로 재로드
+  document.querySelectorAll('.langtoggle button').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.lang === (EN ? 'en' : 'ko')));
+    b.addEventListener('click', () => { P.set('lang', b.dataset.lang); location.search = P.toString(); });
   });
+  if (EN) document.querySelectorAll('[data-en]').forEach(el => { el.textContent = el.getAttribute('data-en'); });
 
-  document.getElementById('presenceSel').onclick = e => {
-    const c = e.target.closest('.chip'); if (!c) return;
-    pMode = c.dataset.p;
-    document.querySelectorAll('#presenceSel .chip').forEach(x => x.classList.toggle('on', x.dataset.p === pMode));
-    buildCatsTab();
-  };
-  if (EN) document.querySelectorAll('#presenceSel .chip').forEach(c => {
-    c.textContent = c.dataset.p === 'presence' ? 'Presence' : 'KB Non-Presence';
+  // 날짜/언어 보존한 채 다른 탭·하단 내비로 이동. 각 링크 고유 쿼리(예: ?tab=non)는
+  // 유지하고 그 위에 현재 ?date/?lang만 덧붙인다.
+  const carry = new URLSearchParams(location.search); carry.delete('tab'); carry.delete('topic');
+  document.querySelectorAll('.botnav a').forEach(a => {
+    const raw = a.getAttribute('href');
+    const [path, ownQuery] = raw.split('?');
+    const merged = new URLSearchParams(ownQuery || '');
+    for (const [k,v] of carry) merged.set(k, v);
+    const qs = merged.toString();
+    a.href = path + (qs ? '?' + qs : '');
   });
-
-  buildCatsTab();
 })();
 </script>
 </body>

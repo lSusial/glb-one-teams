@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>KB 글로벌 원팀 · 국가 상세</title>
+<meta name="description" content="KB 글로벌 원팀 뉴스 — 오늘 글로벌 금융시장의 주요 변화를 한눈에"/>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" as="style" crossorigin
+      href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"/>
+<link rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap"/>
+<style>
+/* ══════════════════════════════════════════════════════════════════════
+   KB GLOBAL ONE TEAM — Global Pulse
+   · 시안(KakaoTalk_20260901_083938788_01.png) 재현
+   · 사진/국기 등 모든 에셋은 인라인 SVG로 대체 (외부 이미지 0개)
+   · 지도 거점은 하단 GLOBAL_PULSE.points 배열로 전량 제어
+   ══════════════════════════════════════════════════════════════════════ */
+:root{
+  /* 브랜드 */
+  --navy:#15294D; --navy-2:#1E3565; --navy-deep:#091B3C;
+  --gold:#F1A33A; --gold-2:#FFB300; --gold-soft:#FEEAB8;
+
+  /* 시그널 */
+  --risk:#E20817;    --risk-bg:#FDECEE;
+  --watch:#F4A418;   --watch-bg:#FEF3E0;
+  --positive:#209D47;--positive-bg:#E7F6EC;
+
+  /* 중립 */
+  --ink:#152048; --ink-2:#33415C; --muted:#7A8699; --faint:#A8B2C1;
+  --line:#EEF1F6; --line-2:#E3E8F0;
+  --bg:#FBFCFE; --card:#FFFFFF; --map-dot:#D7DBE4;
+
+  --r-lg:22px; --r-md:16px; --r-sm:12px; --r-xs:9px;
+  --shadow:0 2px 16px rgba(20,32,72,.055), 0 1px 3px rgba(20,32,72,.04);
+  --shadow-pop:0 6px 22px rgba(20,32,72,.13), 0 1px 4px rgba(20,32,72,.07);
+
+  --pad:clamp(10px, 2.4cqi, 15px);
+  --shell:864px;
+
+  --f-ko:'Pretendard Variable',Pretendard,-apple-system,BlinkMacSystemFont,
+         'Segoe UI','Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+  --f-en:'Poppins','Pretendard Variable',Pretendard,-apple-system,'Segoe UI',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:var(--f-ko); font-size:15px; line-height:1.6;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+a{color:inherit;text-decoration:none}
+h1,h2,h3,p{margin:0}
+ul{margin:0;padding:0;list-style:none}
+.en{font-family:var(--f-en);letter-spacing:.005em}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ── 셸 ─────────────────────────────────────────────── */
+.shell{max-width:var(--shell);margin:0 auto;padding:0 var(--pad) 20px;
+       container-type:inline-size;container-name:shell}
+.col{container-type:inline-size;min-width:0}
+
+/* ── 상태바(프레젠테이션용) ─────────────────────────── */
+
+/* ── 헤더 ───────────────────────────────────────────── */
+.hd{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:6px 0 16px}
+.hd-brand{min-width:0}
+.brandline{display:flex;align-items:center;gap:8px}
+.brandline .kbmark{flex:none}
+.brandline span{
+  font-family:var(--f-en);font-weight:600;font-size:clamp(12px,2.2cqi,19px);
+  color:var(--navy);letter-spacing:.01em;white-space:nowrap;
+}
+.hd h1{
+  font-family:var(--f-en);font-weight:700;color:var(--navy);
+  font-size:clamp(22px,4.4cqi,38px);line-height:1.1;letter-spacing:-.012em;margin-top:5px;
+}
+.hd-sub{display:flex;align-items:center;gap:7px;margin-top:4px}
+.hd-sub b{font-weight:600;font-size:clamp(13px,2.32cqi,20px);color:var(--navy-2)}
+.dot-live{width:7px;height:7px;border-radius:50%;background:var(--gold-2);flex:none}
+
+.hd-tools{display:flex;flex-direction:column;align-items:flex-end;gap:10px;flex:none}
+.langtoggle{
+  display:flex;background:#fff;border:1px solid var(--line-2);border-radius:999px;
+  padding:3px;box-shadow:var(--shadow);
+}
+.langtoggle button{
+  font-family:var(--f-en);font-weight:600;font-size:clamp(11.5px,1.74cqi,15px);letter-spacing:.03em;
+  color:var(--faint);padding:clamp(5px,.8cqi,8px) clamp(12px,2cqi,17px);border-radius:999px;transition:.18s;
+}
+.langtoggle button[aria-pressed="true"]{background:var(--navy);color:#fff}
+
+/* ── 공통 카드 ──────────────────────────────────────── */
+.card{
+  background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
+  box-shadow:var(--shadow);margin-bottom:10px;
+}
+.sec-h{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.sec-t{font-family:var(--f-en);font-weight:600;font-size:clamp(17px,2.9cqi,25px);color:var(--navy);letter-spacing:-.005em}
+.sec-more{
+  display:inline-flex;align-items:center;gap:3px;font-size:clamp(12.5px,1.74cqi,15px);color:var(--muted);font-weight:500;
+}
+.count-pill{
+  display:inline-grid;place-items:center;padding:0 clamp(6px,1cqi,9px);border-radius:999px;
+  min-width:clamp(24px,3.4cqi,30px);height:clamp(24px,3.4cqi,30px);
+  background:var(--gold-soft);color:#B67611;
+  font-family:var(--f-en);font-weight:600;font-size:clamp(12px,1.74cqi,15px);
+}
+
+/* ── GLOBAL PULSE ───────────────────────────────────── */
+.pulse{padding:12px var(--pad) 10px}
+.pulse-sub{font-size:clamp(11px,1.6cqi,13.5px);color:var(--muted);margin-top:3px}
+.pulse .sec-t{font-size:clamp(14.5px,2.3cqi,19px)}
+
+.map-wrap{
+  position:relative;width:100%;aspect-ratio:78/46;margin:clamp(6px,1.2cqi,10px) 0 5px;
+  container-type:inline-size;
+}
+.map-dots{position:absolute;inset:0;width:100%;height:100%;display:block}
+.map-dots circle{fill:var(--map-dot)}
+
+.mk{position:absolute;transform:translate(-50%,-50%);z-index:2}
+.mk-dot{
+  position:relative;display:block;border-radius:50%;
+  width:clamp(11px,2.4cqw,20px);height:clamp(11px,2.4cqw,20px);
+  border:2px solid #fff;box-shadow:0 1px 4px rgba(20,32,72,.25);
+}
+.mk-dot::before,.mk-dot::after{
+  content:"";position:absolute;inset:-2px;border-radius:50%;
+  background:currentColor;opacity:.45;animation:ripple 2.8s cubic-bezier(.2,.6,.3,1) infinite;
+}
+.mk-dot::after{animation-delay:1.4s}
+@keyframes ripple{0%{transform:scale(1);opacity:.42}70%{opacity:0}100%{transform:scale(3.6);opacity:0}}
+.mk[data-level="risk"] .mk-dot{background:var(--risk);color:var(--risk)}
+.mk[data-level="watch"] .mk-dot{background:var(--watch);color:var(--watch)}
+.mk[data-level="positive"] .mk-dot{background:var(--positive);color:var(--positive)}
+
+.mk-hq{
+  display:grid;place-items:center;width:clamp(28px,5.7cqw,46px);height:clamp(28px,5.7cqw,46px);
+  border-radius:50%;background:linear-gradient(150deg,#FFB74D,#F08C1E);
+  color:#fff;border:2.5px solid #fff;position:relative;
+  box-shadow:0 3px 12px rgba(240,140,30,.5);
+}
+.mk-hq::before{
+  content:"";position:absolute;inset:-6px;border-radius:50%;background:var(--gold);
+  opacity:.3;animation:ripple 3.2s cubic-bezier(.2,.6,.3,1) infinite;z-index:-1;
+}
+.mk-hq svg{width:58%;height:58%}
+
+/* 거점 말풍선 */
+.pop{
+  position:absolute;z-index:3;background:#fff;border-radius:var(--r-md);
+  border:1px solid var(--line-2);box-shadow:var(--shadow-pop);
+  padding:clamp(8px,1.5cqw,13px) clamp(10px,1.9cqw,17px);
+  min-width:max-content;pointer-events:none;
+  opacity:0;transition:opacity .22s ease;
+}
+.pop.on{opacity:1}
+.pop-h{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.pop-code{font-family:var(--f-en);font-weight:600;font-size:clamp(13px,2.58cqw,20px);color:var(--navy);letter-spacing:-.01em}
+.pop-topic{font-size:clamp(11.5px,2.19cqw,17px);font-weight:600;color:var(--ink-2);margin-top:6px;white-space:nowrap}
+.pop-n{font-size:clamp(10.5px,1.94cqw,15px);color:var(--muted);margin-top:3px}
+.pop[data-level="risk"]{border-color:#FAD4D8}
+.pop[data-level="watch"]{border-color:#FAE3BE}
+.pop[data-level="positive"],.pop[data-level="hq"]{border-color:var(--line-2)}
+
+.badge{
+  display:inline-flex;align-items:center;border-radius:7px;
+  font-family:var(--f-en);font-weight:600;letter-spacing:.03em;
+  font-size:clamp(9.5px,1.5cqi,13px);padding:clamp(3px,.55cqi,5px) clamp(6px,1cqi,9px);line-height:1;
+}
+.badge[data-level="risk"]{background:var(--risk-bg);color:var(--risk)}
+.badge[data-level="watch"]{background:var(--watch-bg);color:#D98B0C}
+.badge[data-level="positive"]{background:var(--positive-bg);color:var(--positive)}
+
+/* 범례 */
+.legend{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+  border:1px solid var(--line);border-radius:var(--r-md);padding:8px 12px;margin-top:6px;
+}
+.legend-l{display:flex;align-items:center;gap:clamp(8px,2.8vw,16px)}
+.lg{display:flex;align-items:center;gap:5px;font-family:var(--f-en);font-size:clamp(11px,1.85cqi,16px);font-weight:500;color:var(--ink-2);white-space:nowrap}
+.lg i{width:clamp(8px,1.2cqi,11px);height:clamp(8px,1.2cqi,11px);border-radius:50%;flex:none}
+.lg b{font-weight:600;color:var(--navy);margin-left:2px}
+.legend-r{font-family:var(--f-en);font-size:clamp(10.5px,1.74cqi,15px);color:var(--muted);font-weight:500;white-space:nowrap}
+
+
+/* ── TODAY'S GLOBAL BRIEF ───────────────────────────── */
+.brief{background:linear-gradient(170deg,#FFFDF8 0%,#FFFCF5 100%);border-color:#F6EDDD;padding:14px var(--pad)}
+.brief-h{display:flex;align-items:center;gap:9px}
+.brief-h .ico{
+  display:grid;place-items:center;width:clamp(24px,3.2cqi,30px);height:clamp(24px,3.2cqi,30px);border-radius:50%;
+  background:#FEF2DC;color:var(--gold-2);flex:none;
+}
+.brief-h .ico svg{width:15px;height:15px}
+.brief-txt{margin-top:9px;font-size:clamp(13px,2.03cqi,17.5px);line-height:1.66;color:var(--ink-2);word-break:keep-all}
+.chips{display:flex;gap:8px;margin-top:10px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px}
+.chips::-webkit-scrollbar{display:none}
+.chip{display:flex;align-items:center;gap:clamp(5px,1.3cqi,11px);
+       border-radius:var(--r-md);border:1px solid;padding:clamp(4px,.6cqi,6px) clamp(8px,1.5cqi,13px);
+       flex:none;width:clamp(140px,42vw,172px)}
+.chip .tx{min-width:0}
+.chip .row{display:flex;align-items:center;gap:4px}
+.chip .nm{font-size:clamp(11.5px,1.97cqi,17px);font-weight:600;color:var(--ink);white-space:nowrap;line-height:1.1}
+.chip .dsc{font-size:clamp(10px,1.62cqi,13.5px);color:var(--muted);margin-top:0;line-height:1.2;white-space:nowrap}
+.chip .ic{width:clamp(22px,4.4cqi,38px);height:clamp(22px,4.4cqi,38px);flex:none}
+.chip .ar{width:clamp(9px,1.35cqi,12px);height:clamp(10px,1.5cqi,14px);flex:none}
+.chip[data-k="rate"]  {background:#FEF4F4;border-color:#FBE3E5}
+.chip[data-k="fx"]    {background:#F7FAFE;border-color:#E2ECFA}
+.chip[data-k="energy"]{background:#FEF8F0;border-color:#FAE8D2}
+.chip[data-k="reg"]   {background:#F9F6FD;border-color:#EBE3F8}
+
+/* ── TOP ISSUES ─────────────────────────────────────── */
+.issues{padding:14px var(--pad) 6px}
+.hero{
+  border:1px solid var(--line);border-radius:var(--r-md);padding:clamp(11px,1.7cqi,15px);margin-top:11px;
+}
+.hero-rank{
+  display:grid;place-items:center;flex:none;
+  width:clamp(24px,3.4cqi,30px);height:clamp(24px,3.4cqi,30px);border-radius:8px;background:var(--navy);
+  color:#fff;font-family:var(--f-en);font-weight:600;font-size:clamp(12px,1.7cqi,15px);
+}
+.hero-body{display:flex;flex-direction:column;min-width:0;padding:4px 4px 2px 0}
+.hero-top{display:flex;align-items:center;gap:8px}
+.hero-cc{font-family:var(--f-en);font-size:clamp(12px,1.8cqi,15.5px);font-weight:500;color:var(--ink-2);letter-spacing:.03em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hero-top .badge{margin-left:auto;flex:none}
+.hero-t{font-size:clamp(16px,2.6cqi,23px);font-weight:700;line-height:1.34;color:var(--navy);margin-top:8px;letter-spacing:-.015em;word-break:keep-all}
+.hero-d{font-size:clamp(13px,1.9cqi,16.5px);line-height:1.62;color:var(--muted);margin-top:7px;word-break:keep-all}
+.tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+.tag{background:#EEF3FC;color:#3D5A94;border-radius:8px;padding:clamp(4px,.7cqi,7px) clamp(8px,1.3cqi,12px);
+     font-size:clamp(11px,1.62cqi,14px);font-weight:500}
+
+.rows{margin-top:10px}
+.row{
+  display:flex;align-items:center;gap:clamp(6px,1.2cqi,10px);
+  padding:clamp(10px,1.5cqi,13px) 2px clamp(10px,1.5cqi,13px) 0;
+  border-top:1px solid var(--line);border-left:4px solid var(--line2);border-radius:0 8px 8px 0;
+}
+.rows .row:first-child{border-top:0}
+.row-top{border-left-color:var(--gold);background:#FFFCF5}
+.row-rank{
+  display:grid;place-items:center;flex:none;border-radius:50%;
+  width:clamp(28px,4cqi,36px);height:clamp(28px,4cqi,36px);
+  background:var(--navy);color:#fff;font-family:var(--f-en);font-weight:600;font-size:clamp(12px,1.74cqi,15px);
+}
+.row-flag{width:clamp(24px,3.5cqi,32px);height:clamp(24px,3.5cqi,32px);flex:none}
+.row-cc{
+  font-family:var(--f-en);font-size:clamp(11px,1.62cqi,14px);font-weight:500;color:var(--ink-2);
+  letter-spacing:.03em;width:clamp(66px,10.5cqi,96px);flex:none;
+}
+.row .badge{flex:none;width:clamp(58px,9.2cqi,84px);justify-content:center}
+.row-t{font-size:clamp(12.5px,1.85cqi,15.5px);font-weight:600;color:var(--navy);min-width:0;flex:1;
+       overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.4}
+.row-ar{color:var(--faint);flex:none}
+.more-btn{display:grid;place-items:center;width:100%;padding:8px 0 12px;color:var(--faint)}
+.rflag{flex:none;display:block;border-radius:0 6px 6px 0}
+.fbar{display:inline-flex;align-items:center;line-height:0;border-left:4px solid}
+.cat{font-family:var(--f-en);font-weight:600;letter-spacing:.02em;flex:none;white-space:nowrap;
+     font-size:clamp(10px,1.5cqi,12.5px);padding:clamp(2px,.4cqi,3px) clamp(6px,1cqi,9px);border-radius:6px}
+.cat.mono{color:var(--muted);background:#EEF1F6}
+
+/* ── COUNTRIES ──────────────────────────────────────── */
+.countries{padding:14px var(--pad)}
+.cty-scroll{
+  display:flex;gap:clamp(10px,3vw,16px);margin-top:14px;
+  overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+  padding-bottom:2px;
+}
+.cty-scroll::-webkit-scrollbar{display:none}
+.cty{display:flex;flex-direction:column;align-items:center;gap:8px;flex:none;width:clamp(56px,8.6cqi,80px);cursor:pointer}
+.cty svg{width:clamp(40px,6.1cqi,54px);height:clamp(40px,6.1cqi,54px);filter:drop-shadow(0 2px 5px rgba(20,32,72,.14))}
+.cty span{font-size:clamp(11px,1.62cqi,14px);color:var(--ink-2);text-align:center;line-height:1.25;white-space:nowrap}
+.cty-more .box{
+  display:grid;place-items:center;border-radius:14px;
+  width:clamp(40px,6.1cqi,54px);height:clamp(40px,6.1cqi,54px);
+  background:#fff;border:1px solid var(--line-2);color:var(--navy-2);
+}
+
+
+/* ── 반응형: 넓은 화면에서 2단 ──────────────────────── */
+@media (min-width:1280px){
+  :root{--shell:1240px}
+  .grid2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;align-items:start}
+  .grid2>.col{min-width:0}
+  .hero{grid-template-columns:minmax(0,.5fr) minmax(0,1fr)}
+}
+/* 좁은 화면: 지도 말풍선을 컴팩트 모드로 (겹침 방지) */
+@media (max-width:600px){
+  .pop{padding:6px 8px;border-radius:11px}
+  .pop-code{font-size:12px}
+  .pop-topic{font-size:10.5px;margin-top:3px}
+  .pop-n{display:none}
+  .badge{font-size:9px;padding:2px 5px;border-radius:5px}
+  .mk-dot{width:11px;height:11px;border-width:1.5px}
+}
+@media (max-width:520px){
+  .row-cc{width:64px;font-size:11px}
+  .row .badge{width:58px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+
+/* ── 국가 상세 ── */
+.pagettl{font-size:clamp(12.5px,1.9cqi,15px);color:var(--muted);margin:2px 2px 10px}
+.picker{display:flex;gap:clamp(10px,3vw,15px);overflow-x:auto;scrollbar-width:none;padding:2px 0 8px}
+.picker::-webkit-scrollbar{display:none}
+.pk{display:flex;flex-direction:column;align-items:center;gap:6px;flex:none;width:clamp(52px,8cqi,64px);cursor:pointer;opacity:.55;transition:.15s}
+.pk svg{width:clamp(38px,5.8cqi,48px);height:clamp(38px,5.8cqi,48px);filter:drop-shadow(0 2px 5px rgba(20,32,72,.14));
+        border-radius:50%;box-shadow:0 0 0 0 var(--gold);transition:.15s}
+.pk span{font-size:clamp(10px,1.5cqi,12px);color:var(--ink-2);white-space:nowrap;font-weight:500}
+.pk[aria-selected="true"]{opacity:1}
+.pk[aria-selected="true"] svg{box-shadow:0 0 0 2.5px var(--gold)}
+.pk[aria-selected="true"] span{color:var(--navy);font-weight:700}
+
+.dhead{display:flex;align-items:center;gap:11px;padding:2px 2px 0}
+.dhead .fbar{border-left-width:5px}
+.dname{font-size:clamp(20px,3.4cqi,27px);font-weight:800;color:var(--navy);line-height:1.1;display:flex;align-items:center;gap:8px}
+.dname .cc{font-family:var(--f-en);font-size:clamp(12px,1.8cqi,15px);color:var(--faint);font-weight:600}
+.dmeta{margin-top:3px;font-size:clamp(11px,1.7cqi,13px);color:var(--muted)}
+.dstatus{display:inline-block;font-family:var(--f-en);font-weight:600;font-size:clamp(9.5px,1.4cqi,12px);
+         padding:2px 8px;border-radius:6px;margin-left:6px}
+.dstatus.on{color:#B67611;background:#FEEAB8}.dstatus.off{color:var(--muted);background:#EEF1F6}
+
+.bignums{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin-top:12px;padding-bottom:2px}
+.bignums::-webkit-scrollbar{display:none}
+.bn{flex:1 1 0;min-width:96px;border:1px solid var(--line);border-radius:var(--r-sm);padding:9px 11px;background:#fff}
+.bn-l{font-size:clamp(10px,1.5cqi,12px);color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.bn-v{font-family:var(--f-en);font-size:clamp(16px,2.5cqi,21px);font-weight:700;color:var(--navy);margin-top:2px;line-height:1.1}
+.bn-c{font-family:var(--f-en);font-size:clamp(10px,1.5cqi,12px);font-weight:600;margin-top:2px}
+.bn-c.up{color:#E0303F}.bn-c.down{color:#2563EB}.bn-c.flat{color:var(--faint)}
+.bn-note{font-size:clamp(9.5px,1.4cqi,11px);color:var(--faint);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.dsec-t{display:flex;align-items:center;gap:7px;margin:16px 2px 8px;font-weight:700;color:var(--navy);font-size:clamp(13.5px,2.1cqi,16px)}
+.dsec-t .bar{width:4px;height:15px;border-radius:2px;background:var(--gold)}
+.dbrief{font-size:clamp(12.5px,2cqi,15px);line-height:1.7;color:var(--ink-2);word-break:keep-all}
+
+.feed{list-style:none;margin:0;padding:0}
+.fitem{padding:12px 2px;border-top:1px solid var(--line)}
+.fitem:first-child{border-top:0}
+.fi-t{font-size:clamp(14px,2.2cqi,16.5px);font-weight:700;color:var(--navy);line-height:1.4;word-break:keep-all}
+.fi-q{font-size:clamp(12px,1.9cqi,14px);color:var(--muted);line-height:1.55;margin-top:5px;word-break:keep-all;
+      overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.fi-m{display:flex;align-items:center;gap:8px;margin-top:7px;font-family:var(--f-en);font-size:clamp(10.5px,1.5cqi,12.5px);color:var(--faint)}
+.fi-m .src{font-weight:600;color:var(--muted)}
+.dnote{font-size:clamp(12px,1.9cqi,13.5px);color:var(--faint);padding:14px 2px}
+</style>
+</head>
+<body>
+<svg class="sr" aria-hidden="true" focusable="false"><defs>
+  <path id="p-star" d="M0,-1 .224,-.309 .951,-.309 .363,.118 .588,.809 0,.382 -.588,.809 -.363,.118 -.951,-.309 -.224,-.309Z"/>
+
+  <!-- KB 심볼 -->
+  <symbol id="kb-mark" viewBox="0 0 46 34">
+    <g fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round">
+      <path d="M13 4v26M3.5 9.5l19 15M22.5 9.5l-19 15"/>
+    </g>
+    <path d="M28 4v22" fill="none" stroke="currentColor" stroke-width="3.6" stroke-linecap="round"/>
+    <path d="M28 14c5-6 14-4 14 4 0 7-8 11-14 6" fill="none" stroke="currentColor"
+          stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+
+  <!-- UI 아이콘 -->
+  <symbol id="ico-chev-r" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"
+          stroke-linecap="round" stroke-linejoin="round"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="ico-chev-d" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1"
+          stroke-linecap="round" stroke-linejoin="round"><path d="m5 9 7 7 7-7"/></symbol>
+  <symbol id="ico-grid" viewBox="0 0 24 24" fill="currentColor">
+    <rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/>
+    <rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="2"/>
+  </symbol>
+  <symbol id="ico-spark" viewBox="0 0 24 24" fill="currentColor">
+    <path d="M12 2c.5 4.5 1.8 6 6 7-4.2 1-5.5 2.5-6 7-.5-4.5-1.8-6-6-7 4.2-1 5.5-2.5 6-7Z"/>
+  </symbol>
+  <symbol id="ico-up" viewBox="0 0 12 14" fill="currentColor">
+    <path d="M6 0 11 6H7.6v8H4.4V6H1z"/>
+  </symbol>
+
+  <!-- BRIEF 지표 아이콘 -->
+  <symbol id="ico-rate" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="20" fill="#FBDDE0"/>
+    <path d="M11 27 19 19l4 4 7-8" fill="none" stroke="#E0303F" stroke-width="3"
+          stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M24 11h7v7" fill="none" stroke="#E0303F" stroke-width="3"
+          stroke-linecap="round" stroke-linejoin="round"/>
+  </symbol>
+  <symbol id="ico-fx" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="20" fill="#DCE9FC"/>
+    <circle cx="20" cy="20" r="11.5" fill="none" stroke="#2563EB" stroke-width="2.6"
+            stroke-linecap="round" stroke-dasharray="42 10"/>
+    <path d="M20 12.5v15M23.6 16.4c-.7-1.3-2-2-3.6-2-2.1 0-3.5 1.1-3.5 2.8 0 3.9 7.3 2.2 7.3 6.1 0 1.8-1.6 2.9-3.8 2.9-1.8 0-3.2-.8-3.9-2.2"
+          fill="none" stroke="#2563EB" stroke-width="2.2" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="ico-energy" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="20" fill="#FDE6CB"/>
+    <path d="M20 8c1 5-4 6.5-4.5 11.5C15 24.5 17 27 17 27s-1-4 2-6c2.5-1.7 2-4 2-4s3.5 3 3.5 7.5S22 32 20 32s-8-2.5-8-9S19 12 20 8Z"
+          fill="#F08C1E"/>
+  </symbol>
+  <symbol id="ico-reg" viewBox="0 0 40 40">
+    <circle cx="20" cy="20" r="20" fill="#E7DEFA"/>
+    <path d="M20 8 32 15H8z" fill="#7C4DEC"/>
+    <rect x="11" y="17" width="3.6" height="10" rx="1.3" fill="#7C4DEC"/>
+    <rect x="18.2" y="17" width="3.6" height="10" rx="1.3" fill="#7C4DEC"/>
+    <rect x="25.4" y="17" width="3.6" height="10" rx="1.3" fill="#7C4DEC"/>
+    <rect x="9" y="29" width="22" height="3.4" rx="1.6" fill="#7C4DEC"/>
+  </symbol>
+
+  <!-- 상태바 -->
+
+  <!-- ── 원형 국기 (전부 직접 작도) ── -->
+  <clipPath id="cir"><circle cx="20" cy="20" r="20"/></clipPath>
+  <clipPath id="rr"><path d="M0 0H31a9 9 0 0 1 9 9V31a9 9 0 0 1-9 9H0Z"/></clipPath>
+
+  <symbol id="fl-id" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="20" fill="#E20817"/><rect y="20" width="40" height="20" fill="#fff"/>
+  </g><circle cx="20" cy="20" r="19.4" fill="none" stroke="#000" stroke-opacity=".07"/></symbol>
+
+  <symbol id="fl-vn" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#DA251D"/>
+    <use href="#p-star" fill="#FFCD00" transform="translate(20 20) scale(9)"/>
+  </g></symbol>
+
+  <symbol id="fl-sg" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="20" fill="#ED2939"/><rect y="20" width="40" height="20" fill="#fff"/>
+    <circle cx="11" cy="10" r="6.6" fill="#fff"/><circle cx="14.2" cy="10" r="6.2" fill="#ED2939"/>
+    <use href="#p-star" fill="#fff" transform="translate(17.6 5.6) scale(1.85)"/>
+    <use href="#p-star" fill="#fff" transform="translate(21.6 8.5) scale(1.85)"/>
+    <use href="#p-star" fill="#fff" transform="translate(20.1 13.1) scale(1.85)"/>
+    <use href="#p-star" fill="#fff" transform="translate(15.1 13.1) scale(1.85)"/>
+    <use href="#p-star" fill="#fff" transform="translate(13.6 8.5) scale(1.85)"/>
+  </g></symbol>
+
+  <symbol id="fl-kh" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#032EA1"/><rect y="10" width="40" height="20" fill="#E00025"/>
+    <g fill="#fff">
+      <path d="M19 12.5 21 12.5 21.6 15.5 18.4 15.5Z"/>
+      <path d="M13.6 15 15.4 15 16 17.8 13 17.8Z"/><path d="M24.6 15 26.4 15 27 17.8 24 17.8Z"/>
+      <rect x="12" y="18.4" width="16" height="2.2"/><rect x="13.6" y="21.4" width="12.8" height="1.9"/>
+      <rect x="10.6" y="24.2" width="18.8" height="2.4"/>
+    </g>
+  </g></symbol>
+
+  <symbol id="fl-cn" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#DE2910"/>
+    <use href="#p-star" fill="#FFDE00" transform="translate(11.5 13) scale(5.4)"/>
+    <use href="#p-star" fill="#FFDE00" transform="translate(21.5 6.6) scale(1.9)"/>
+    <use href="#p-star" fill="#FFDE00" transform="translate(25.4 10.4) scale(1.9)"/>
+    <use href="#p-star" fill="#FFDE00" transform="translate(25.4 16) scale(1.9)"/>
+    <use href="#p-star" fill="#FFDE00" transform="translate(21.5 19.6) scale(1.9)"/>
+  </g></symbol>
+
+  <symbol id="fl-hk" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#DE2910"/>
+    <g fill="#fff">
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(0 20 11.4)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(72 20 20)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(144 20 20)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(216 20 20)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(288 20 20)"/>
+    </g>
+    <circle cx="20" cy="20" r="2.4" fill="#DE2910"/>
+  </g></symbol>
+
+  <symbol id="fl-in" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="13.34" fill="#FF9933"/>
+    <rect y="13.34" width="40" height="13.33" fill="#fff"/>
+    <rect y="26.67" width="40" height="13.33" fill="#138808"/>
+    <g stroke="#000080" fill="none">
+      <circle cx="20" cy="20" r="5.4" stroke-width="1.5"/>
+      <circle cx="20" cy="20" r="1.2" stroke-width="1.4"/>
+      <g stroke-width=".8">
+        <path d="M14.6 20h10.8M20 14.6v10.8M16.2 16.2l7.6 7.6M23.8 16.2l-7.6 7.6"/>
+        <path d="M15 17.3 25 22.7M15 22.7 25 17.3M17.3 15l5.4 10M22.7 15l-5.4 10"/>
+      </g>
+    </g>
+  </g></symbol>
+
+  <symbol id="fl-my" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#fff"/>
+    <g fill="#CC0001">
+      <rect y="0" width="40" height="2.86"/><rect y="5.71" width="40" height="2.86"/>
+      <rect y="11.43" width="40" height="2.86"/><rect y="17.14" width="40" height="2.86"/>
+      <rect y="22.86" width="40" height="2.86"/><rect y="28.57" width="40" height="2.86"/>
+      <rect y="34.29" width="40" height="2.86"/>
+    </g>
+    <rect width="22" height="20" fill="#010066"/>
+    <circle cx="10" cy="10" r="6.2" fill="#FFCC00"/><circle cx="12.6" cy="10" r="5.4" fill="#010066"/>
+    <use href="#p-star" fill="#FFCC00" transform="translate(17 10) scale(3.6)"/>
+  </g></symbol>
+
+  <symbol id="fl-us" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#fff"/>
+    <g fill="#B22234">
+      <rect y="0" width="40" height="3.08"/><rect y="6.15" width="40" height="3.08"/>
+      <rect y="12.3" width="40" height="3.08"/><rect y="18.46" width="40" height="3.08"/>
+      <rect y="24.6" width="40" height="3.08"/><rect y="30.77" width="40" height="3.08"/>
+      <rect y="36.92" width="40" height="3.08"/>
+    </g>
+    <rect width="18" height="21.5" fill="#3C3B6E"/>
+    <g fill="#fff">
+      <circle cx="3.4" cy="3.4" r="1.15"/><circle cx="9" cy="3.4" r="1.15"/><circle cx="14.6" cy="3.4" r="1.15"/>
+      <circle cx="6.2" cy="7.5" r="1.15"/><circle cx="11.8" cy="7.5" r="1.15"/>
+      <circle cx="3.4" cy="11.5" r="1.15"/><circle cx="9" cy="11.5" r="1.15"/><circle cx="14.6" cy="11.5" r="1.15"/>
+      <circle cx="6.2" cy="15.5" r="1.15"/><circle cx="11.8" cy="15.5" r="1.15"/>
+      <circle cx="3.4" cy="19.4" r="1.15"/><circle cx="9" cy="19.4" r="1.15"/><circle cx="14.6" cy="19.4" r="1.15"/>
+    </g>
+  </g></symbol>
+
+  <symbol id="fl-eu" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#003399"/>
+    <g fill="#FFCC00">
+      <use href="#p-star" transform="translate(20 7.5) scale(2)"/>
+      <use href="#p-star" transform="translate(26.25 9.17) scale(2)"/>
+      <use href="#p-star" transform="translate(30.83 13.75) scale(2)"/>
+      <use href="#p-star" transform="translate(32.5 20) scale(2)"/>
+      <use href="#p-star" transform="translate(30.83 26.25) scale(2)"/>
+      <use href="#p-star" transform="translate(26.25 30.83) scale(2)"/>
+      <use href="#p-star" transform="translate(20 32.5) scale(2)"/>
+      <use href="#p-star" transform="translate(13.75 30.83) scale(2)"/>
+      <use href="#p-star" transform="translate(9.17 26.25) scale(2)"/>
+      <use href="#p-star" transform="translate(7.5 20) scale(2)"/>
+      <use href="#p-star" transform="translate(9.17 13.75) scale(2)"/>
+      <use href="#p-star" transform="translate(13.75 9.17) scale(2)"/>
+    </g>
+  </g></symbol>
+
+  <!-- 히어로 이미지 대체 일러스트 (미 연준 청사) -->
+  <symbol id="fl-jp" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#fff"/>
+    <circle cx="20" cy="20" r="11" fill="#BC002D"/>
+  </g></symbol>
+  <symbol id="flr-jp" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="40" fill="#fff"/>
+    <circle cx="20" cy="20" r="11" fill="#BC002D"/>
+  </g></symbol>
+  <symbol id="flr-hk" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="40" fill="#DE2910"/>
+    <g fill="#fff">
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(0 20 11.4)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(72 20 20)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(144 20 20)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(216 20 20)"/>
+      <ellipse cx="20" cy="11.4" rx="3" ry="6.4" transform="rotate(288 20 20)"/>
+    </g>
+    <circle cx="20" cy="20" r="2.4" fill="#DE2910"/>
+  </g></symbol>
+  <symbol id="flr-in" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="13.34" fill="#FF9933"/>
+    <rect y="13.34" width="40" height="13.33" fill="#fff"/>
+    <rect y="26.67" width="40" height="13.33" fill="#138808"/>
+    <g stroke="#000080" fill="none">
+      <circle cx="20" cy="20" r="5.4" stroke-width="1.5"/>
+      <circle cx="20" cy="20" r="1.2" stroke-width="1.4"/>
+      <g stroke-width=".8">
+        <path d="M14.6 20h10.8M20 14.6v10.8M16.2 16.2l7.6 7.6M23.8 16.2l-7.6 7.6"/>
+        <path d="M15 17.3 25 22.7M15 22.7 25 17.3M17.3 15l5.4 10M22.7 15l-5.4 10"/>
+      </g>
+    </g>
+  </g></symbol>
+  <symbol id="flr-vn" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="40" fill="#DA251D"/>
+    <use href="#p-star" fill="#FFCD00" transform="translate(20 20) scale(9)"/>
+  </g></symbol>
+  <symbol id="flr-us" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="40" fill="#fff"/>
+    <g fill="#B22234">
+      <rect y="0" width="40" height="3.08"/><rect y="6.15" width="40" height="3.08"/>
+      <rect y="12.3" width="40" height="3.08"/><rect y="18.46" width="40" height="3.08"/>
+      <rect y="24.6" width="40" height="3.08"/><rect y="30.77" width="40" height="3.08"/>
+      <rect y="36.92" width="40" height="3.08"/>
+    </g>
+    <rect width="18" height="21.5" fill="#3C3B6E"/>
+    <g fill="#fff">
+      <circle cx="3.4" cy="3.4" r="1.15"/><circle cx="9" cy="3.4" r="1.15"/><circle cx="14.6" cy="3.4" r="1.15"/>
+      <circle cx="6.2" cy="7.5" r="1.15"/><circle cx="11.8" cy="7.5" r="1.15"/>
+      <circle cx="3.4" cy="11.5" r="1.15"/><circle cx="9" cy="11.5" r="1.15"/><circle cx="14.6" cy="11.5" r="1.15"/>
+      <circle cx="6.2" cy="15.5" r="1.15"/><circle cx="11.8" cy="15.5" r="1.15"/>
+      <circle cx="3.4" cy="19.4" r="1.15"/><circle cx="9" cy="19.4" r="1.15"/><circle cx="14.6" cy="19.4" r="1.15"/>
+    </g>
+  </g></symbol>
+  <symbol id="flr-id" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="20" fill="#E20817"/><rect y="20" width="40" height="20" fill="#fff"/>
+  </g></symbol>
+  <symbol id="fl-th" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#fff"/><rect width="40" height="6.67" fill="#A51931"/>
+    <rect y="33.33" width="40" height="6.67" fill="#A51931"/><rect y="13.33" width="40" height="13.34" fill="#2D2A4A"/></g></symbol>
+  <symbol id="fl-la" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#CE1126"/><rect y="10" width="40" height="20" fill="#002868"/>
+    <circle cx="20" cy="20" r="6.5" fill="#fff"/></g></symbol>
+  <symbol id="fl-mm" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="13.34" fill="#FECB00"/><rect y="13.34" width="40" height="13.33" fill="#34B233"/>
+    <rect y="26.67" width="40" height="13.33" fill="#EA2839"/>
+    <use href="#p-star" fill="#fff" transform="translate(20 20) scale(9)"/></g></symbol>
+  <symbol id="fl-gb" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#012169"/>
+    <path d="M0 0 40 40M40 0 0 40" stroke="#fff" stroke-width="8"/>
+    <path d="M0 0 40 40M40 0 0 40" stroke="#C8102E" stroke-width="3.4"/>
+    <path d="M20 0V40M0 20H40" stroke="#fff" stroke-width="11"/>
+    <path d="M20 0V40M0 20H40" stroke="#C8102E" stroke-width="6.4"/></g></symbol>
+  <symbol id="flr-gb" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="40" fill="#012169"/>
+    <path d="M0 0 40 40M40 0 0 40" stroke="#fff" stroke-width="8"/>
+    <path d="M0 0 40 40M40 0 0 40" stroke="#C8102E" stroke-width="3.4"/>
+    <path d="M20 0V40M0 20H40" stroke="#fff" stroke-width="11"/>
+    <path d="M20 0V40M0 20H40" stroke="#C8102E" stroke-width="6.4"/></g></symbol>
+  <symbol id="flr-mm" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="13.34" fill="#FECB00"/><rect y="13.34" width="40" height="13.33" fill="#34B233"/>
+    <rect y="26.67" width="40" height="13.33" fill="#EA2839"/>
+    <use href="#p-star" fill="#fff" transform="translate(20 20) scale(9)"/></g></symbol>
+  <symbol id="flr-th" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="40" fill="#fff"/><rect width="40" height="6.67" fill="#A51931"/>
+    <rect y="33.33" width="40" height="6.67" fill="#A51931"/><rect y="13.33" width="40" height="13.34" fill="#2D2A4A"/></g></symbol>
+  <symbol id="flr-la" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="40" fill="#CE1126"/><rect y="10" width="40" height="20" fill="#002868"/>
+    <circle cx="20" cy="20" r="6.5" fill="#fff"/></g></symbol>
+  <symbol id="flr-sg" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="20" fill="#ED2939"/><rect y="20" width="40" height="20" fill="#fff"/>
+    <circle cx="11" cy="10" r="6.6" fill="#fff"/><circle cx="14.2" cy="10" r="6.2" fill="#ED2939"/>
+    <use href="#p-star" fill="#fff" transform="translate(17.6 5.6) scale(1.85)"/>
+    <use href="#p-star" fill="#fff" transform="translate(21.6 8.5) scale(1.85)"/>
+    <use href="#p-star" fill="#fff" transform="translate(20.1 13.1) scale(1.85)"/>
+    <use href="#p-star" fill="#fff" transform="translate(15.1 13.1) scale(1.85)"/>
+    <use href="#p-star" fill="#fff" transform="translate(13.6 8.5) scale(1.85)"/>
+  </g></symbol>
+  <symbol id="flr-cn" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="40" fill="#DE2910"/>
+    <use href="#p-star" fill="#FFDE00" transform="translate(11.5 13) scale(5.4)"/>
+    <use href="#p-star" fill="#FFDE00" transform="translate(21.5 6.6) scale(1.9)"/>
+    <use href="#p-star" fill="#FFDE00" transform="translate(25.4 10.4) scale(1.9)"/>
+    <use href="#p-star" fill="#FFDE00" transform="translate(25.4 16) scale(1.9)"/>
+    <use href="#p-star" fill="#FFDE00" transform="translate(21.5 19.6) scale(1.9)"/>
+  </g></symbol>
+  <symbol id="flr-kh" viewBox="0 0 40 40"><g clip-path="url(#rr)">
+    <rect width="40" height="40" fill="#032EA1"/><rect y="10" width="40" height="20" fill="#E00025"/>
+    <g fill="#fff">
+      <path d="M19 12.5 21 12.5 21.6 15.5 18.4 15.5Z"/>
+      <path d="M13.6 15 15.4 15 16 17.8 13 17.8Z"/><path d="M24.6 15 26.4 15 27 17.8 24 17.8Z"/>
+      <rect x="12" y="18.4" width="16" height="2.2"/><rect x="13.6" y="21.4" width="12.8" height="1.9"/>
+      <rect x="10.6" y="24.2" width="18.8" height="2.4"/>
+    </g>
+  </g></symbol>
+</defs></svg>
+
+<div class="shell">
+  <header class="hd">
+    <div class="hd-brand">
+      <div class="brandline">
+        <svg class="kbmark" width="30" height="22" style="color:var(--gold-2)" aria-hidden="true"><use href="#kb-mark"/></svg>
+        <span>KB FINANCIAL GROUP</span>
+      </div>
+      <h1 class="en">GLOBAL ONE TEAM</h1>
+      <div class="hd-sub"><b>국가별 뉴스</b><i class="dot-live"></i></div>
+    </div>
+    <div class="hd-tools">
+      <div class="langtoggle" role="group" aria-label="언어 선택">
+        <button type="button" data-lang="ko" aria-pressed="true">KR</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </div>
+    </div>
+  </header>
+  <p class="pagettl">국기를 선택해 국가별 브리핑과 현지 뉴스를 확인하세요</p>
+  <div class="picker" id="picker"></div>
+  <section class="card" id="detail" style="padding:14px 13px"></section>
+</div>
+
+
+<script>
+const DATA = [{"cc": "JP", "name": "일본", "status": "ACTIVE", "count": 4, "kfi": 0, "presence": "진출", "brief": "엔화가 3월 공동개입 이후 처음으로 달러당 160엔을 돌파했으며, 일본은행은 7~8월 96억달러 규모의 역대급 엔화 매입 개입을 단행했다. 미국 재무장관이 엔화 약세를 '질서 있는 움직임'으로 평가함에 따라 추가 개입 압박은 제한될 가능성이 높다. 연준의 강경 기조 지속으로 인한 금리 차이가 엔화 약세를 심화시키고 있으며, 이는 KB 도쿄지점의 환헤징 비용 증가와 엔화 자산 평가 하락으로 이어질 수 있다. 동시에 일본의 최저임금 인상과 산업생산 부진(7월 0.1% 증가)은 일본 기업 고객들의 수익성 악화 위험을 높이고 있다.", "inds": [{"kind": "fx", "label": "JPY", "value": 160.045067, "pct": 0.45, "note": null}, {"kind": "index", "label": "닛케이225", "value": 65601.0390625, "pct": -1.44, "note": null}, {"kind": "policy_rate", "label": "BOJ 정책금리", "value": 1.0, "pct": 0.0, "note": "기준일 2026-07-31"}], "arts": [{"t": "엔화 160엔/달러 돌파, 공동개입 이후 처음", "q": "일본과 미국의 3월 공동개입 이후 엔화가 처음으로 160엔/달러를 넘어섰다. 일본의 자본유출 지속과 일본은행·연준의 통화정책 차이가 약세를 심화시키고 있다.", "src": "Nikkei Asia", "d": "2026-08-31", "u": "https://asia.nikkei.com/business/markets/currencies/yen-falls-past-160-per-dollar-for-first-time-since-joint-intervention"}, {"t": "일본, 96억달러 엔화 매입 개입 공개", "q": "일본 재무부가 7~8월 실행한 96억달러 규모의 엔화 매입 개입을 공개했다. 1998년 이후 최대 규모 단일 개입으로, 엔화가 34년 만의 저점까지 하락하자 일본은행을 통해 시장 안정화에 나섰다.", "src": "Nikkei Asia", "d": "2026-08-31", "u": "https://asia.nikkei.com/business/markets/currencies/japan-reveals-96bn-yen-buying-intervention-in-july-august"}, {"t": "엔화 약세 '통제 범위' 평가", "q": "엔화가 달러당 160엔 아래로 약세를 보였으나 미국 재무장관이 '질서 있는 움직임'이라 평가했다. 이는 일본은행의 개입 압박이 당분간 제한될 가능성을 시사한다.", "src": "Japan Times", "d": "2026-08-31", "u": "https://www.japantimes.co.jp/business/2026/08/31/economy/bessent-yen-moves/"}, {"t": "달러 160엔대, Fed 강경 발언에", "q": "연방준비제도 의장의 강경 발언으로 도쿄에서 달러가 160엔대에서 거래됐다. 미국의 고금리 기조 지속 전망이 아시아 통화 시장 전반에 영향을 미치고 있다.", "src": "Mainichi", "d": "2026-08-31", "u": "https://news.google.com/rss/articles/CBMic0FVX3lxTE9RSG01cnRvcE9lS091ZUdqQmxsTV9IMThwZjRCSzlBVm5xZ3Y5VWZqMERSSjkwMGkwbEpwdmtnd1g2anEtc3Z5d2IxdC1NdU1vZnJhNHFIWGxwNXF2TEJPNWRvTExhbUgtM0Q0WmJHTHhoWVU?oc=5"}]}, {"cc": "IN", "name": "인도", "status": "ACTIVE", "count": 3, "kfi": 0, "presence": "진출", "brief": "인도 금융시장에서 주요 변화가 진행 중이다. HDFC Bank의 CEO 교체는 자산 건전성 악화 속 규제 감시 강화를 시사하며, SBI의 NSE 지분 1% 희석 및 Jio Platforms의 ₹37,700 crore 규모 IPO 승인은 대규모 자본시장 활동을 예고한다. 한편 미국-이란 군사 충돌 재개로 유가가 2% 이상 상승하면서 에너지 수입국인 인도의 인플레이션 압력이 가중되고 있다. 이러한 지정학적 긴장과 금리 우려로 인해 Sensex와 Nifty 지수는 약세를 보이고 있으며, KB의 구르구람 지점은 인도 금융규제 강화와 시장 변동성 확대에 대비해야 한다.", "inds": [{"kind": "fx", "label": "INR", "value": 95.581563, "pct": -0.01, "note": null}, {"kind": "index", "label": "NIFTY50", "value": 24045.349609375, "pct": -0.51, "note": null}, {"kind": "policy_rate", "label": "RBI 레포금리", "value": 5.25, "pct": 0.0, "note": "기준일 2026-08-05"}], "arts": [{"t": "유가 2% 상승, 미-이란 직접 충돌 재개", "q": "1개월 휴전 후 미국과 이란 간 직접 군사 충돌이 재개되면서 유가가 2% 이상 올랐다. 중동 긴장 고조는 인도 같은 에너지 수입국의 인플레이션 압력을 가중시킨다.", "src": "Times of India (Global)", "d": "2026-08-31", "u": "https://news.google.com/rss/articles/CBMiggJBVV95cUxOU0dKOFJ5dndLcmNnQWJ5cEszNU03SEtzRW1Lb2p4cWFFWkFiZENCWEVrTDRGaDVFdlZ2VEI4VUx6UXA1VkNIQy1IMHVKZktlNGttaW5hazZGRDVNQ0VIRmhzeE1wVGp3OWFZVnBpNDNBRVlSdWN3TjVGSWdEUUJ2SXRVQzBON1lMbTRJUGdPRU5acmpIUzdydW0wVTBxR1lYTEdyWFhJOWJObXBvT1h3VW1PeWFjRkR0SHlZMGZiQ045eC1uMC1pYTkxNURWdkI4NFJTTk12aDlpYUFFYW1EaTZKZWh6UUNRc1R3M04wWUkxX1AyNTQxY2l2RTFDaS0xVmfSAYcCQVVfeXFMTmNEMGpOWkE4eG9ZLW54YlhHY285T2pGcGhHMTNHS3g4RE1RakJuS0VzUVBCTkNNYTQyLWVrWnBzRGR5UUEzTmthM3NRNTBPZk56U0FVbXZYTGVLYzZ4Ynh0TnhhUndPYUZnaU9zYTVfcS1hVTBlWWJHZ0ZVV1RJRmRrOXEwTG5EYV96RTdyMkEyMTNsNVZ6YjNaS0lTQTNQUUhmZXJQQm53Y3g4ZzNGR0M2ZEVsblItWElnWS10cTV5U1VqcDJacXk0VDYxTzdkaE5GNGZGcU4zZklJNDk1LUJ6Y0tZYjZpbVBwR2FFRUoweHZ2ZWRfTmdIUU9aNjVmMjNHeTdqX3c?oc=5"}, {"t": "HDFC은행 CEO 교체, 투자자 신뢰 회복 기대", "q": "자산 건전성 악화와 규제 감시 속에서 CEO 교체가 이루어진다. 인도 최대 민간은행의 경영 및 지배구조 개선 신호로 평가된다.", "src": "Mint", "d": "2026-08-31", "u": "https://www.livemint.com/market/stock-market-news/hdfc-bank-share-price-ceo-sashidhar-jagdishan-exit-11788095039749.html"}, {"t": "SBI, NSE 공모에서 최대 1% 지분 희석", "q": "인도 최대 은행 SBI와 SBI캐피탈마켓스가 NSE 공모를 통해 결합 1% 지분을 희석한다. 국영 금융그룹의 거래소 투자에서의 부분 출구 의사를 나타낸다.", "src": "Times of India (Global)", "d": "2026-08-30", "u": "https://news.google.com/rss/articles/CBMi5AFBVV95cUxQVU9KbTJhZ24tTXJTZFc5aGZjTHc2SGNkZ0loWHRQMTVzM091UnNEaE5rTmdnSWpVTGd5Zno5RHlQUHRMaHF3cS1WWkFxVFRvdmpBTzV4UFJnaWVycHJEdDJ2QjFKOG02UThYZ3AxeWFVVVRmNGhzZFQ0cWdIMXRvSnVVMTRNczF2aDdFQTdMTFRTaFBLTW1IR2hkODZGWEpWWUV0MGZlSG41OFV5dGFBYVlmWnNMNFF0NC1KTnlaQlFTZTlCTlRUcFllSUI3NzMxUC1vNGdyZmZzS29NcE4wX2diTk_SAeoBQVVfeXFMUFdIeEp3R1VfX1BXXzVYYUJieDFuM1Z5bzA2RlRMQXNhUU01NDh1S2djMlRrdXJNeFR0blRrUzRYVW9URjFySEJkb2VEdWJ5c20tUmJfOE5IVDBXYmFZT0RMeXZENTQxdjJiNmNsajRiaGpHNlI3cldPdG4tUVl5YzJFV1lmNkhCNHdOdkNfdlllY2M4NVBuNE5tTG95Qm1hWTdCQzluMlVSc0dWRzl5OXk4bHp5WU1vU2NkWGV4TzVIcDhFVWVPQURlT2dXeGcyVzMwU0J3d3luZk9ZMnhRbEpVSmFkNnZJcDJn?oc=5"}]}, {"cc": "US", "name": "미국", "status": "ACTIVE", "count": 2, "kfi": 0, "presence": "진출", "brief": "미국 연방준비제도의 금리 인상 속도가 일본은행보다 빠를 것으로 예상되면서 엔화 약세와 미-일 수익률 격차가 확대되고 있으며, 미국 재무부와 연준 간 환율정책 조율 부족으로 엔화 시장 변동성이 증가하고 있다. 트럼프 행정부의 캐나다 및 브라질 관세 정책으로 북미 교역 불확실성이 심화되고 있으며, 특히 캐나다 중소기업들이 교역 의존도로 인해 직격탄을 맞고 있다. 미국 기업 실적은 강세를 보이고 있으나, 엔비디아 등 기술주는 연준 정책 신호에 민감하게 반응하며 변동성을 보이고 있다. KB뉴욕지점은 환율 변동성 확대, 북미 교역 리스크, 기술주 변동성 등에 대한 고객 포지셔닝 재검토와 리스크 관리 강화가 필요하다.", "inds": [{"kind": "index", "label": "S&P500", "value": null, "pct": 0.0, "note": null}, {"kind": "index", "label": "나스닥종합", "value": null, "pct": 0.0, "note": null}, {"kind": "policy_rate", "label": "Fed 기준금리(상단)", "value": 3.75, "pct": 0.0, "note": "기준일 2026-06-17"}, {"kind": "bond10y", "label": "미국 10년물 국채", "value": 4.671999931335449, "pct": 0.17, "note": null}], "arts": [{"t": "미국 고위층 엇갈린 발언에 흔들리는 엔화", "q": "미국 재무부와 연방준비제도 간 환율정책 조율 부족으로 엔화 시장에 불확실성이 확대되고 있다. 정부 부처 간 메시지 불일치가 엔화 거래 변동성을 키우고 투자자 포지셔닝에 영향을 미치는 중이다.", "src": "WSJ", "d": "2026-08-31", "u": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxOYmZyUEFWT1BPRU1EZnZvY0E1aU9jYm5WdEl0YVNpUWQ1VVdlbFhSVGd3OVpGQkM3V0JqM2h1U2VpaE1SeVlydV9TRDhCU0tlemhTS2ZsWl9mSUpUZXdMeE05Q1puSXk2RlU2U2JncFBEbUx0X3JadVk1dFdvbVBDb1IyVmdlVGJ5?oc=5"}, {"t": "Fed 인상 속도 > BOJ, 일본채 약세", "q": "연방준비제도의 금리 인상 속도가 일본은행보다 빠를 것으로 예상되면서 일본 국채 수익률이 하락 중이다. 두 중앙은행의 통화정책 방향 차이로 엔화 약세와 수익률 격차 확대가 진행 중이다.", "src": "WSJ", "d": "2026-08-31", "u": "https://news.google.com/rss/articles/CBMikAFBVV95cUxPZjJ0dVZ0ZzNyQXlWNXFBOHlSQjdhdEVEbnFmdTMwZVRlR3hwWkdzUVZESEF5VjZfMU1MZ25hYmFoNHNlVnNTazZZTW5tN1A4c3ZYZlRESHNvUzdGbkhyWVZRMW9FSi1sbC1NZlRTcVBFbGM2d3JNTEt6Z0xHQ0dXeTRuYmtDcndnN2w3cElBakc?oc=5"}]}, {"cc": "HK", "name": "홍콩", "status": "ACTIVE", "count": 2, "kfi": 0, "presence": "진출", "brief": "미국의 이란 제재 위협이 중국을 직접 겨냥하면서 홍콩 소재 60개 기업·개인·선박이 이미 제재 대상이 되었고, 이는 KB 홍콩지점의 거래처 리스크를 증대시킨다. 동시에 미-중 금리 괴리 심화(미국 30년물 5.3% vs 중국 10년물 1.65%)로 글로벌 자본이 미국 자산으로 이탈하면서 홍콩 금융시장의 자금 유출 압력이 가중되고 있다. 중국 본토 기업들의 미-중 무역 리스크 헤징 수요는 증가하고 있으나, 제재 확대와 자본 이동 변화는 홍콩 금융 중심지로서의 위상과 수익성에 부정적 영향을 미칠 수 있다.", "inds": [{"kind": "fx", "label": "HKD", "value": 7.84042, "pct": 0.02, "note": null}, {"kind": "index", "label": "항셍지수", "value": 25424.33984375, "pct": -1.01, "note": null}, {"kind": "policy_rate", "label": "HKMA 기준금리", "value": 4.0, "pct": 0.0, "note": "기준일 2026-07-30"}], "arts": [{"t": "중국 채권, 미국과 갈라지며 약세", "q": "중국 10년물 수익률이 1.65%로 내려갈 것으로 예상되는 반면, 미국 30년물은 20년 최고 수준인 5.304% 근처에서 맴돈다. 연방준비제도 관계자의 인플레 우선 기조 발언으로 미국 단기 수익률이 급등했고, 글로벌 자본이 미국 자산에서 이탈하며 두 채권시장의 괴리가 심화되고 있다.", "src": "SCMP", "d": "2026-08-31", "u": "https://www.scmp.com/business/china-business/article/3365689/china-bond-market-diverges-us-warsh-strikes-hawkish-tone-jackson-hole?utm_source=rss_feed"}, {"t": "미국, 이란유 구매국 제재 위협", "q": "미 재무부가 이란산 원유 구매국에 제재를 위협하며 최대 구매국인 중국을 겨냥했다. 미국은 이미 중국 본토와 홍콩의 60개 기업·개인·선박에 제재를 부과했다.", "src": "SCMP", "d": "2026-08-30", "u": "https://www.scmp.com/opinion/china-opinion/article/3365472/will-us-threats-over-iran-be-last-straw-beijing?utm_source=rss_feed"}]}, {"cc": "ID", "name": "인도네시아", "status": "ACTIVE", "count": 2, "kfi": 0, "presence": "진출", "brief": "인도네시아 정부가 광산 수출업체의 외환 예치금 규제를 완화하여 수출 대금의 30% 이상을 외화로 보유 가능하도록 허용했으며, 이는 기업 유동성 강화를 목표로 한다. 루피아화가 달러당 17,750으로 약세를 보이고 있으며, 미 연방준비제도의 강경 신호와 지역 통화 변동성이 인도네시아 종합주가지수(IHSG)에 하락 압력을 가하고 있다. 정부 관계자는 인도네시아 경제가 모든 노동력을 흡수하기 위해 연 6.5% 성장이 필요하다고 언급했다. KB인도네시아은행은 광산 부문의 외환 유동성 개선으로 기업 고객의 자금 조달 수요 증가를 기대할 수 있으나, 루피아 약세와 글로벌 금리 인상 압력에 따른 시장 변동성 리스크를 모니터링해야 한다.", "inds": [{"kind": "fx", "label": "IDR", "value": 17733.606384, "pct": -0.06, "note": null}, {"kind": "index", "label": "자카르타종합", "value": 6490.06298828125, "pct": -0.9, "note": null}, {"kind": "policy_rate", "label": "BI-Rate(7일 역레포)", "value": 5.75, "pct": 0.0, "note": "기준일 2026-08-19"}], "arts": [{"t": "루피아 17,750으로 약세", "q": "인도네시아 루피아가 미국 달러당 17,750으로 약세를 보였다. 지역 통화 변동성 속에서 루피아 약세 압력이 지속되고 있다.", "src": "Bisnis Indonesia", "d": "2026-08-31", "u": "https://market.bisnis.com/read/20260831/93/1999996/rupiah-layu-di-rp17750-per-dolar-as-pada-awal-perdagangan-hari-ini"}, {"t": "인도네시아, 광산 수출업체 외환 예치금 완화", "q": "인도네시아가 광산 수출업체의 외환 예치금 요건을 완화해 수출 대금의 30% 이상을 외화로 보유할 수 있도록 허용했다. 기업의 유동성과 운영 유연성 강화가 목표다.", "src": "Antara News", "d": "2026-08-30", "u": "https://en.antaranews.com/news/429031/indonesia-eases-forex-deposit-rules-for-qualifying-mining-exporters"}]}, {"cc": "VN", "name": "베트남", "status": "ACTIVE", "count": 1, "kfi": 0, "presence": "진출", "brief": "베트남 정부가 암호자산 시장 규제를 강화하고 있으며, 미인가 플랫폼 이용자에 최대 1,900달러 벌금을 부과하고 규제 파일럿을 추진 중이다. 동시에 베트남 은행들은 AI 기술을 고객서비스, 신용승인, 사기탐지 등에 적극 도입하고 있어 디지털 경쟁력이 강화되고 있다. 재정부문에서는 기업들이 주식시장을 통한 자본조달을 확대하고 있으며, VinFast 등 주요 기업들의 대규모 투자가 계속되고 있다. 이러한 변화는 베트남의 금융시장 규제 정상화, 기술혁신, 자본시장 발전이 동시에 진행되고 있음을 의미하며, KB 베트남법인의 디지털 금융 경쟁력 강화와 규제 준수 체계 정비가 시급하다.", "inds": [{"kind": "fx", "label": "VND", "value": 26006.374497, "pct": -0.15, "note": null}, {"kind": "index", "label": "VN (VNM ETF)", "value": null, "pct": 0.0, "note": null}, {"kind": "policy_rate", "label": "SBV 재할인금리", "value": 4.5, "pct": 0.0, "note": "기준일 2026-06-30"}], "arts": [{"t": "베트남, 암호화폐 시장 규제 강화", "q": "베트남이 미인가 플랫폼 이용자에 최대 1,900달러 벌금을 부과하고 규제 암호자산 거래 파일럿을 추진 중이다. 투자자 보호 강화와 법적 근거가 명확한 자산으로의 자금 이동에 대응하는 조치다.", "src": "VietnamPlus", "d": "2026-08-30", "u": "https://en.vietnamplus.vn/vietnam-moves-to-build-safer-crypto-asset-market-post350970.vnp"}]}, {"cc": "GB", "name": "영국", "status": "SOURCE WATCH", "count": 0, "kfi": 0, "presence": "진출", "brief": "인도 최대 민간은행의 CEO 교체로 인한 경영 리더십 변화가 진행 중이며, 경쟁 심화 시장에서의 운영 안정성이 주목된다. 미국 연방준비제도의 강경 금리 기조가 향후 고용 데이터에 따라 정책 조정 압박을 받을 가능성이 있어 글로벌 금리 환경 변화가 예상된다. 이러한 변화들은 KB런던지점의 국제 금융시장 노출과 신흥시장 포트폴리오에 영향을 미칠 수 있으므로 모니터링이 필요하다.", "inds": [{"kind": "fx", "label": "GBP", "value": 0.738249, "pct": 0.33, "note": null}, {"kind": "index", "label": "FTSE100", "value": 10792.5, "pct": 0.0, "note": null}, {"kind": "policy_rate", "label": "BOE 기준금리", "value": 3.75, "pct": 0.0, "note": "기준일 2026-07-30"}], "arts": []}, {"cc": "SG", "name": "싱가포르", "status": "SOURCE WATCH", "count": 0, "kfi": 0, "presence": "진출", "brief": "미국 연방준비제도 관계자의 추가 인상 발언으로 달러가 2주 고점 근처까지 상승했으며, 엔화는 160엔대를 넘어섰으나 미국 재무부는 엔화 변동이 통제 범위 내라고 평가했다. 싱가포르의 대규모 인프라 프로젝트들이 수십 년에 걸친 투자 기회를 제공할 것으로 예상되며, 이는 건설·에너지·관광 부문에 긍정적 영향을 미칠 것으로 보인다. 인도네시아의 신규 상품거래소 출범과 아시아 기업 가족들의 홍콩 이전 추세는 역내 금융 중심지 재편을 시사한다. KB의 싱가포르 지점은 현지 인프라 투자 기회 확대와 역내 자본 흐름 변화에 주목해야 한다.", "inds": [{"kind": "fx", "label": "SGD", "value": 1.273831, "pct": 0.22, "note": null}, {"kind": "index", "label": "STI", "value": 5726.58984375, "pct": 0.49, "note": null}], "arts": []}, {"cc": "CN", "name": "중국", "status": "SOURCE WATCH", "count": 0, "kfi": 0, "presence": "진출", "brief": "8월 중국 비제조업 PMI이 49로 하락하며 서비스업 부문의 수축을 시사했으며, 이는 국내 수요 약화를 반영합니다. 동시에 외국인직접투자(FDI)는 안정적이나 기술, 첨단제조, 서비스 등 고부가가치 산업으로 이동하는 추세를 보이고 있습니다. 중국-아세안 경제협력 강화 논의도 진행 중으로, 역내 성장 가능성이 제시되고 있습니다. KB 중국법인은 서비스업 부진에 따른 금융수요 감소와 고부가가치 산업 투자 기회 확대를 동시에 모니터링해야 하며, 아세안 지역 사업 확대 시 중국과의 연계 전략 수립이 필요합니다.", "inds": [{"kind": "fx", "label": "CNY", "value": 6.735761, "pct": -0.02, "note": null}, {"kind": "index", "label": "상하이종합", "value": 3944.463134765625, "pct": -0.38, "note": null}, {"kind": "policy_rate", "label": "PBOC 7일 역레포", "value": 1.4, "pct": 0.0, "note": "기준일 2026-08-07"}], "arts": []}, {"cc": "MM", "name": "미얀마", "status": "SOURCE WATCH", "count": 0, "kfi": 0, "presence": "진출", "brief": "미얀마 군부 지도자 민 아웅 흘라잉이 국제제재를 경제 침체의 주요 원인으로 지목하며 제재 해제 필요성을 강조했다. 러시아 로사톰이 2027년 미얀마 소규모 원전 건설을 시작하기로 발표하면서 미얀마의 에너지 인프라 개발이 진행 중이다. 동시에 베트남이 미얀마와의 양자무역을 현재 수준에서 70% 증가시켜 연 10억 달러 규모로 확대하기로 합의했다. 이는 미얀마가 국제제재 속에서도 러시아, 베트남 등 우호국과의 경제협력을 강화하고 있음을 보여준다. KB의 양곤사무소는 미얀마의 제재 환경 변화, 에너지 프로젝트 진전, 역내 무역 확대 추세를 주시하며 금융시장 리스크와 기회를 평가해야 한다.", "inds": [{"kind": "fx", "label": "MMK", "value": 2100.759437, "pct": 0.05, "note": "미얀마 중앙은행 공식환율 — 시장환율과 괴리 있음"}, {"kind": "policy_rate", "label": "CBM 정책금리", "value": 9.0, "pct": 0.0, "note": "기준일 2026-06-30"}], "arts": []}, {"cc": "KH", "name": "캄보디아", "status": "SOURCE WATCH", "count": 0, "kfi": 0, "presence": "진출", "brief": "캄보디아는 미국 시장 진출을 위해 MFN+0% 관세 요건이라는 높은 장벽에 직면해 있으며, 이는 수출 경쟁력에 영향을 미칠 수 있습니다. 정부는 젊은 인구 구조를 경제 성장으로 전환하기 위해 인력 개발 정책을 추진 중입니다. 한편 Nvidia 공급업체인 Unimicron이 중국산 반도체 부품을 위장 판매한 혐의로 조사받고 있어 공급망 투명성 문제가 대두되고 있습니다. 이러한 무역 장벽, 인구 정책, 공급망 리스크는 KB프라삭은행의 기업금융 및 무역금융 사업에 영향을 미칠 수 있습니다.", "inds": [{"kind": "fx", "label": "KHR", "value": 4041.895131, "pct": -0.05, "note": null}], "arts": []}, {"cc": "TH", "name": "태국", "status": "SOURCE WATCH", "count": 0, "kfi": 0, "presence": "진출", "brief": "태국 바트화가 연방준비제도(Fed) 정책 신호에 따른 달러 강세로 인해 1달러당 33바트 근처에서 약세를 보이고 있으며, 이는 KB의 태국 현지 통화 익스포저와 송금 수익성에 영향을 미칠 수 있다. 동시에 태국과 싱가포르 증권거래소가 AI 붐에 따른 기술 기업 상장 유치에 적극 나서고 있어, 역내 핀테크 및 디지털 금융 기업 투자 기회가 확대되고 있다. 중국 부동산 시장의 부분적 회복 신호는 역내 경제 심리 개선으로 이어질 수 있으나, 지속성 여부는 불확실한 상황이다.", "inds": [{"kind": "fx", "label": "THB", "value": 33.110487, "pct": 0.74, "note": null}, {"kind": "index", "label": "SET지수", "value": 1590.7900390625, "pct": -0.0, "note": null}, {"kind": "policy_rate", "label": "BOT 정책금리", "value": 1.0, "pct": 0.0, "note": "기준일 2026-08-26"}], "arts": []}, {"cc": "LA", "name": "라오스", "status": "SOURCE WATCH", "count": 0, "kfi": 0, "presence": "진출", "brief": "중국 CITIC은행이 중국 경제의 'K자형' 회복을 분석하며 고급 부문과 기업이 저급 부문을 앞지르는 양극화 현상을 지적했습니다. 이러한 경제 구조 변화는 기업 자산 배분 전략의 재편을 초래하고 있습니다. 라오스는 중국과의 경제 연계성이 높아 중국의 선별적 성장이 라오스 수출 및 투자 흐름에 영향을 미칠 수 있습니다. KB금융의 라오스 시장 진출 시 중국 자본의 선택적 이동 패턴을 모니터링하고 고급 부문 중심의 기업 고객 발굴이 필요합니다.", "inds": [{"kind": "fx", "label": "LAK", "value": 22243.157175, "pct": -0.56, "note": null}], "arts": []}];
+const SNAP = "2026-08-31";
+const $=(s)=>document.querySelector(s);
+const esc=(s)=>String(s==null?"":s).replace(/[&<>"]/g,(c)=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[c]));
+const svg=(id,w,h,cls)=>`<svg ${cls?`class="${cls}" `:""}width="${w}" height="${h}" aria-hidden="true"><use href="#${id}"/></svg>`;
+const fnum=(v)=> (Math.abs(v)>=1000? Math.round(v).toLocaleString() : (Math.round(v*100)/100).toString());
+function pctHtml(p){const cls=Math.abs(p)<0.005?"flat":(p>0?"up":"down");const ar=p>0?"▲":(p<0?"▼":"·");const sg=p>0?"+":"";return `<div class="bn-c ${cls}">${ar} ${sg}${p}%</div>`;}
+
+function bignum(i){
+  if(i.kind==="policy_rate"){
+    return `<div class="bn"><div class="bn-l">${esc(i.label)}</div><div class="bn-v">${fnum(i.value)}%</div>`+
+           `<div class="bn-note">${esc((i.note||"").replace("기준일","기준"))}</div></div>`;
+  }
+  const val = i.kind==="fx" ? fnum(i.value) : fnum(i.value);
+  return `<div class="bn"><div class="bn-l">${esc(i.label)}</div><div class="bn-v">${val}</div>${pctHtml(i.pct)}</div>`;
+}
+
+function render(cc){
+  const c=DATA.find(x=>x.cc===cc)||DATA[0];
+  document.querySelectorAll(".pk").forEach(p=>p.setAttribute("aria-selected",String(p.dataset.cc===c.cc)));
+  const active=c.status==="ACTIVE";
+  const accent=active?"var(--gold)":"var(--line2)";
+  const st=active?`<span class="dstatus on">뉴스 ${c.count}건</span>`:`<span class="dstatus off">관찰</span>`;
+  const bns=(c.inds||[]).map(bignum).join("");
+  let feed;
+  if((c.arts||[]).length){
+    feed=`<ul class="feed">`+c.arts.map(a=>`
+      <li class="fitem">
+        <div class="fi-t">${esc(a.t)}</div>
+        ${a.q?`<div class="fi-q">${esc(a.q)}</div>`:""}
+        <div class="fi-m"><span class="src">${esc(a.src||"")}</span>${a.d?`<span>${esc(a.d)}</span>`:""}
+          <span style="margin-left:auto">${svg("ico-chev-r",15,15)}</span></div>
+      </li>`).join("")+`</ul>`;
+  } else {
+    feed=`<div class="dnote">최근 수집된 현지 언론 기사가 없습니다 · 모니터링 중</div>`;
+  }
+  $("#detail").innerHTML=`
+    <div class="dhead">
+      <span class="fbar" style="border-left-color:${accent}">${svg("flr-"+c.cc.toLowerCase(),40,40,"rflag")}</span>
+      <div style="min-width:0">
+        <div class="dname">${esc(c.name)} <span class="cc">${esc(c.cc)}</span></div>
+        <div class="dmeta">KB ${esc(c.presence||"진출")}${st}</div>
+      </div>
+    </div>
+    <div class="bignums">${bns}</div>
+    <div class="dsec-t"><span class="bar"></span>국가 일일 브리핑</div>
+    <p class="dbrief">${esc(c.brief)}</p>
+    <div class="dsec-t"><span class="bar"></span>현지언론 피드</div>
+    ${feed}`;
+}
+
+$("#picker").innerHTML=DATA.map((c,i)=>`
+  <button class="pk" data-cc="${c.cc}" aria-selected="${i===0}">
+    ${svg("fl-"+c.cc.toLowerCase(),44,44)}<span>${esc(c.name)}</span>
+  </button>`).join("");
+document.querySelectorAll(".pk").forEach(p=>p.addEventListener("click",()=>render(p.dataset.cc)));
+render(DATA[0].cc);
+
+document.querySelectorAll(".langtoggle button").forEach((b)=>b.addEventListener("click",()=>{
+  document.querySelectorAll(".langtoggle button").forEach((o)=>o.setAttribute("aria-pressed",String(o===b)));
+}));
+</script>
+</body>
+</html>
