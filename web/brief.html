@@ -181,14 +181,20 @@
                mx:parseFloat(el.dataset.mx)/100*W, my:parseFloat(el.dataset.my)/100*H,
                pref:el.dataset.anchor||'n', bias:[(+el.dataset.nx||0)/(k2css||1), (+el.dataset.ny||0)/(k2css||1)] };
     });
+    // gap/lat 오프셋은 고정 px였는데, 폰처럼 지도 높이가 작을 땐 그대로 적용하면
+    // 카드가 마커에서 지도 크기 대비 훨씬 멀리 밀려나 "위치가 안 맞는" 것처럼
+    // 보인다. 지도 높이 기준(desktop 기준값 460px)으로 비례 축소.
+    const gapK = Math.min(1, Math.max(0.4, H / 460));
+    const GAP_STEPS = [16,26,40,58,80,108,140].map((g) => g * gapK);
+    const LAT_STEPS = [0,-28,28,-56,56,-88,88].map((l) => l * gapK);
     const placed = [];
     for (const c of cards){
       const dirs = [c.pref, ...DIR_ORDER.filter((d) => d !== c.pref)];
       let best = null;
       dirs.forEach((dn, di) => {
         const d = DIR[dn];
-        for (const gap of [16,26,40,58,80,108,140]){
-          for (const lat of [0,-28,28,-56,56,-88,88]){
+        for (const gap of GAP_STEPS){
+          for (const lat of LAT_STEPS){
             let cx = c.mx + d[0]*(gap + c.w/2) + c.bias[0];
             let cy = c.my + d[1]*(gap + c.h/2) + c.bias[1];
             if (Math.abs(d[1]) >= Math.abs(d[0])) cx += lat; else cy += lat;

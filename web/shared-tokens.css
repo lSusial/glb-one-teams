@@ -389,9 +389,9 @@ ul{margin:0;padding:0;list-style:none}
 }
 /* 좁은 화면: 지도 말풍선을 컴팩트 모드로 (겹침 방지) */
 @media (max-width:600px){
-  .pop{padding:6px 8px;border-radius:11px}
+  .pop{padding:6px 8px;border-radius:11px;min-width:0;max-width:132px}
   .pop-code{font-size:12px}
-  .pop-topic{font-size:10.5px;margin-top:3px}
+  .pop-topic{font-size:10.5px;margin-top:3px;white-space:normal;line-height:1.32;word-break:keep-all}
   .pop-n{display:none}
   .badge{font-size:9px;padding:2px 5px;border-radius:5px}
   .mk-dot{width:11px;height:11px;border-width:1.5px}
