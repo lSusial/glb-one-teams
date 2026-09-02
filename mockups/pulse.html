@@ -304,6 +304,27 @@ ul{margin:0;padding:0;list-style:none}
 @media (prefers-reduced-motion:reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
 }
+
+/* ── GLOBAL MARKETS 티커 ── */
+.mkt-marquee{overflow:hidden;margin-top:11px;
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);
+          mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}
+.mkt-track{display:flex;gap:9px;width:max-content;animation:mkt-scroll 48s linear infinite}
+.mkt-marquee:hover .mkt-track{animation-play-state:paused}
+@keyframes mkt-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.mkt{flex:none;width:clamp(162px,43cqi,190px);min-height:82px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
+.mkt-h{display:flex;align-items:center;gap:6px}
+.mkt-fl{flex:none;filter:drop-shadow(0 1px 2px rgba(20,32,72,.15))}
+.mkt-h .nm{font-size:13px;font-weight:700;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+.mkt-h .cc{font-family:var(--f-en);font-size:10px;font-weight:600;color:var(--faint);flex:none}
+.mkt-r{display:flex;align-items:baseline;gap:6px;margin-top:6px;font-size:11.5px;min-width:0}
+.mkt-r .l{color:var(--muted);font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mkt-r .rgt{margin-left:auto;display:flex;align-items:baseline;gap:5px;font-family:var(--f-en);white-space:nowrap;flex:none}
+.mkt-r .v{color:var(--ink-2);font-weight:600}
+.mkt-r .v.pol{color:var(--muted)}
+.mkt-r .c{font-weight:700}
+.mkt-r .c.up{color:#E0303F}.mkt-r .c.down{color:#2563EB}.mkt-r .c.flat{color:var(--faint)}
+@media (prefers-reduced-motion:reduce){.mkt-marquee{overflow-x:auto}.mkt-track{animation:none}}
 </style>
 </head>
 <body>
@@ -542,6 +563,22 @@ ul{margin:0;padding:0;list-style:none}
   <symbol id="flr-id" viewBox="0 0 40 40"><g clip-path="url(#rr)">
     <rect width="40" height="20" fill="#E20817"/><rect y="20" width="40" height="20" fill="#fff"/>
   </g></symbol>
+  <symbol id="fl-th" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#fff"/><rect width="40" height="6.67" fill="#A51931"/>
+    <rect y="33.33" width="40" height="6.67" fill="#A51931"/><rect y="13.33" width="40" height="13.34" fill="#2D2A4A"/></g></symbol>
+  <symbol id="fl-la" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#CE1126"/><rect y="10" width="40" height="20" fill="#002868"/>
+    <circle cx="20" cy="20" r="6.5" fill="#fff"/></g></symbol>
+  <symbol id="fl-mm" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="13.34" fill="#FECB00"/><rect y="13.34" width="40" height="13.33" fill="#34B233"/>
+    <rect y="26.67" width="40" height="13.33" fill="#EA2839"/>
+    <use href="#p-star" fill="#fff" transform="translate(20 20) scale(9)"/></g></symbol>
+  <symbol id="fl-gb" viewBox="0 0 40 40"><g clip-path="url(#cir)">
+    <rect width="40" height="40" fill="#012169"/>
+    <path d="M0 0 40 40M40 0 0 40" stroke="#fff" stroke-width="8"/>
+    <path d="M0 0 40 40M40 0 0 40" stroke="#C8102E" stroke-width="3.4"/>
+    <path d="M20 0V40M0 20H40" stroke="#fff" stroke-width="11"/>
+    <path d="M20 0V40M0 20H40" stroke="#C8102E" stroke-width="6.4"/></g></symbol>
 </defs></svg>
 
 <!-- ═══ 화면 ═══ -->
@@ -585,12 +622,12 @@ ul{margin:0;padding:0;list-style:none}
   </section>
 
   <!-- ── TODAY’S GLOBAL BRIEF ── -->
-  <section class="card brief" aria-labelledby="t-brief">
+  <section class="card brief" aria-labelledby="t-mkt">
     <div class="brief-h">
       <span class="ico"><svg><use href="#ico-spark"/></svg></span>
-      <h2 class="sec-t en" id="t-brief">TODAY’S GLOBAL BRIEF</h2>
+      <h2 class="sec-t en" id="t-mkt">GLOBAL MARKETS</h2>
     </div>
-    <div class="chips" id="brief-chips"></div>
+    <div class="mkt-marquee"><div class="mkt-track" id="mkt-track"></div></div>
   </section>
 
   </div>
@@ -961,19 +998,39 @@ function renderPulse(){
 }
 
 /* ── 3. BRIEF ── */
+const MARKETS = [
+  { cc:"US", name:"미국", fx:null, idx:{label:"S&P500",value:0,pct:0.0}, pol:{label:"Fed금리",value:3.75,pct:0.0} },
+  { cc:"JP", name:"일본", fx:{label:"JPY",value:160.05,pct:0.45}, idx:{label:"닛케이",value:65601.04,pct:-1.44}, pol:{label:"BOJ",value:1.0,pct:0.0} },
+  { cc:"CN", name:"중국", fx:{label:"CNY",value:6.74,pct:-0.02}, idx:{label:"상하이",value:3944.46,pct:-0.38}, pol:{label:"PBOC",value:1.4,pct:0.0} },
+  { cc:"HK", name:"홍콩", fx:{label:"HKD",value:7.84,pct:0.02}, idx:{label:"항셍지수",value:25424.34,pct:-1.01}, pol:{label:"HKMA",value:4.0,pct:0.0} },
+  { cc:"IN", name:"인도", fx:{label:"INR",value:95.58,pct:-0.01}, idx:{label:"NIFTY50",value:24045.35,pct:-0.51}, pol:{label:"RBI",value:5.25,pct:0.0} },
+  { cc:"ID", name:"인도네시아", fx:{label:"IDR",value:17733.61,pct:-0.06}, idx:{label:"자카르타",value:6490.06,pct:-0.9}, pol:{label:"BI금리",value:5.75,pct:0.0} },
+  { cc:"VN", name:"베트남", fx:{label:"VND",value:26006.37,pct:-0.15}, idx:{label:"VN ETF",value:0,pct:0.0}, pol:{label:"SBV",value:4.5,pct:0.0} },
+  { cc:"SG", name:"싱가포르", fx:{label:"SGD",value:1.27,pct:0.22}, idx:{label:"STI",value:5726.59,pct:0.49}, pol:null },
+  { cc:"TH", name:"태국", fx:{label:"THB",value:33.11,pct:0.74}, idx:{label:"SET지수",value:1590.79,pct:0.0}, pol:{label:"BOT",value:1.0,pct:0.0} },
+  { cc:"GB", name:"영국", fx:{label:"GBP",value:0.74,pct:0.33}, idx:{label:"FTSE100",value:10792.5,pct:0.0}, pol:{label:"BOE",value:3.75,pct:0.0} },
+  { cc:"MM", name:"미얀마", fx:{label:"MMK",value:2100.76,pct:0.05}, idx:null, pol:{label:"CBM",value:9.0,pct:0.0} },
+  { cc:"KH", name:"캄보디아", fx:{label:"KHR",value:4041.9,pct:-0.05}, idx:null, pol:null },
+  { cc:"LA", name:"라오스", fx:{label:"LAK",value:22243.16,pct:-0.56}, idx:null, pol:null }
+];
+function fmtMkt(v){ return Math.abs(v)>=1000 ? Math.round(v).toLocaleString() : (Math.round(v*100)/100).toString(); }
+function mktRow(m){
+  if(m.isPol) return `<div class="mkt-r"><span class="l">${esc(m.label)}</span><span class="rgt"><span class="v pol">${fmtMkt(m.value)}%</span></span></div>`;
+  const p=m.pct, cls=Math.abs(p)<0.005?"flat":(p>0?"up":"down"), ar=p>0?"▲":(p<0?"▼":"·"), sg=p>0?"+":"";
+  const val=m.value?`<span class="v">${fmtMkt(m.value)}</span>`:"";
+  return `<div class="mkt-r"><span class="l">${esc(m.label)}</span><span class="rgt">${val}<span class="c ${cls}">${ar}${sg}${p}%</span></span></div>`;
+}
+function mktCard(c){
+  const ms=[]; if(c.fx)ms.push(c.fx); if(c.idx)ms.push(c.idx);
+  if(ms.length<2 && c.pol) ms.push(Object.assign({isPol:true}, c.pol));
+  return `<div class="mkt">
+    <div class="mkt-h">${svg("fl-"+c.cc.toLowerCase(),20,20,"mkt-fl")}<span class="nm">${esc(c.name)}</span><span class="cc en">${esc(c.cc)}</span></div>
+    ${ms.slice(0,2).map(mktRow).join("")}
+  </div>`;
+}
 function renderBrief(){
-  $("#brief-chips").innerHTML = BRIEF.chips.map((c) =>
-    `<div class="chip" data-k="${c.k}">
-       ${svg(c.icon, 28, 28, "ic")}
-       <div class="tx">
-         <div class="row"><span class="nm">${esc(c.name)}</span>
-           <svg class="ar" viewBox="0 0 12 14" fill="${c.color}" aria-hidden="true"
-                style="transform:rotate(${c.dir === "down" ? 180 : 0}deg)"><use href="#ico-up"/></svg>
-         </div>
-         <div class="dsc">${esc(c.desc)}</div>
-       </div>
-     </div>`
-  ).join("");
+  const cards = MARKETS.map(mktCard).join("");
+  $("#mkt-track").innerHTML = cards + cards;
 }
 
 /* ── 4. TOP ISSUES ── */

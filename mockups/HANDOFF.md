@@ -33,7 +33,7 @@
 ### 3.1 홈 (pulse)
 - 상단 상태바·알림벨·LIVE펄·탭·하단 배너 **없음**(목업에서 이미 제거됨).
 - GLOBAL PULSE: 도트 세계지도 + 거점 말풍선. 지도는 `CROP={c0:16,c1:73,r0:9,r1:35}` 상수로 크롭(빈 태평양/아메리카 서부 컷). 하단 집계(N Markets·Signals·Articles)·건수 표시 **없음**. 범례는 RISK/WATCH/POSITIVE만.
-- TODAY'S GLOBAL BRIEF: 제목 밑 설명 문단 **없음**. 지표 칩(금리/FX/에너지/규제)은 **한 줄 가로 스크롤**. 칩 상하 패딩 타이트.
+- GLOBAL MARKETS(구 TODAY'S GLOBAL BRIEF 자리): **KB 진출국 금융지표 티커**. 한 박스=한 국가(국기+국가명+환율·지수 변동%), **왼쪽으로 계속 흐르는 가로 마퀴**(hover 시 일시정지, 양끝 페이드 마스크, prefers-reduced-motion이면 애니메이션 끄고 스와이프). 변동 색상 한국식(상승 빨강/하락 파랑). 데이터 countries.json→countries[](presence 진출)의 indicators[fx/index/policy_rate].
 - TODAY'S TOP ISSUES: `daily_highlights` 10건을 **한 줄 행**으로. rank 번호·국가명·View All·헤더 카운트 **없음**. Top1만 골드 강조(연골드 배경). 국기는 **좌측 컬러바에 flush로 붙인 둥근 직사각형**(왼쪽 각짐, 오른쪽 라운드; clipPath `#rr`). 나머지 무채색.
 - COUNTRIES: 하단 국기 스크롤(원형 국기). 각 국기 → 해당 국가 상세로 이동(3.2).
 

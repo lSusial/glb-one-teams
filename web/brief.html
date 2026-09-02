@@ -12,15 +12,6 @@
 <!-- 데이터: export_json 이 아래 스크립트에 주입(오프라인). 없으면 pulse.json fetch. -->
 <script id="pulse-data" type="application/json">null</script>
 <script src="shared-modal.js"></script>
-<style>
-.chip[data-k="market"]  {background:#F7FAFE;border-color:#E2ECFA}
-.chip[data-k="banking"] {background:#F1FAF5;border-color:#DCF0E4}
-.chip[data-k="digital"] {background:#F7F5FE;border-color:#E7E2FA}
-.chip[data-k="esg"]     {background:#F1FAF5;border-color:#DCF0E4}
-.chip[data-k="risk"]    {background:#FEF4F4;border-color:#FBE3E5}
-.chip .ic[data-k="market"] {color:#2563EB}
-.chip .tmp{font-family:var(--f-en);font-weight:700}
-</style>
 </head>
 <body>
 <script src="shared-sprite.js"></script>
@@ -54,12 +45,12 @@
     <div class="legend"><div class="legend-l" id="legend-l"></div></div>
   </section>
 
-  <section class="card brief" aria-labelledby="t-brief">
+  <section class="card brief" aria-labelledby="t-mkt">
     <div class="brief-h">
       <span class="ico"><svg><use href="#ico-spark"/></svg></span>
-      <h2 class="sec-t en" id="t-brief">TODAY'S GLOBAL BRIEF</h2>
+      <h2 class="sec-t en" id="t-mkt">GLOBAL MARKETS</h2>
     </div>
-    <div class="chips" id="brief-chips"></div>
+    <div class="mkt-marquee"><div class="mkt-track" id="mkt-track"></div></div>
   </section>
 
   </div>
@@ -304,17 +295,32 @@
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => layoutCards(wrap));
   }
 
-  // ── TODAY'S GLOBAL BRIEF: Pulse 5개 카테고리 온도계를 지표칩으로 ──
+  // ── GLOBAL MARKETS: 진출국 fx/index/policy_rate 가로 마퀴 티커 ──
+  function fmtMkt(v){ return Math.abs(v)>=1000 ? Math.round(v).toLocaleString() : (Math.round(v*100)/100).toString(); }
+  function mktRow(m){
+    if (m.isPol) return `<div class="mkt-r"><span class="l">${esc(m.label)}</span><span class="rgt"><span class="v pol">${fmtMkt(m.value)}%</span></span></div>`;
+    const p = m.change_pct || 0, cls = Math.abs(p) < 0.005 ? 'flat' : (p > 0 ? 'up' : 'down'),
+          ar = p > 0 ? '▲' : (p < 0 ? '▼' : '·'), sg = p > 0 ? '+' : (p < 0 ? '-' : '');
+    const val = m.value != null ? `<span class="v">${fmtMkt(m.value)}</span>` : '';
+    return `<div class="mkt-r"><span class="l">${esc(m.label)}</span><span class="rgt">${val}<span class="c ${cls}">${ar}${sg}${Math.abs(p).toFixed(2)}%</span></span></div>`;
+  }
+  function pickMktRows(inds){
+    const byKind = (k) => inds.find((i) => i.kind === k);
+    const rows = [];
+    const fx = byKind('fx'); if (fx) rows.push(fx);
+    const idx = byKind('index'); if (idx) rows.push(idx);
+    if (rows.length < 2) { const pol = byKind('policy_rate'); if (pol) rows.push(Object.assign({ isPol:true }, pol)); }
+    return rows.slice(0, 2);
+  }
+  function mktCard(c){
+    return `<div class="mkt">
+      <div class="mkt-h">${svg('fl-'+c.cc.toLowerCase(),20,20,'mkt-fl')}<span class="nm">${esc(EN?(c.name_en||c.name):c.name)}</span><span class="cc en">${esc(c.cc)}</span></div>
+      ${pickMktRows(c.indicators || []).map(mktRow).join('')}
+    </div>`;
+  }
   function renderBrief(){
-    const cats = D.categories || [];
-    $('#brief-chips').innerHTML = cats.map((c) => `
-      <div class="chip" data-k="${(c.code||'').toLowerCase()}">
-        ${svg('ico-spark',28,28,'ic')}
-        <div class="tx">
-          <div class="row"><span class="nm">${esc(EN?(c.label_en||c.label):c.label)}</span></div>
-          <div class="dsc"><span class="tmp">${c.temp!=null?c.temp:'-'}°</span> · ${c.count||0}${EN?' articles':'건'}</div>
-        </div>
-      </div>`).join('');
+    const cards = (D.market_ticker || []).map(mktCard).join('');
+    $('#mkt-track').innerHTML = cards + cards;
   }
 
   // ── TODAY'S TOP ISSUES: daily_highlights ──

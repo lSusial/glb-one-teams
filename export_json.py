@@ -822,6 +822,25 @@ def _compute_country_signals(conn, days: int | None = 1) -> list[dict]:
     return out
 
 
+def _market_ticker(conn) -> list[dict]:
+    """홈 GLOBAL MARKETS 티커 — 진출국 13개국의 fx/index/policy_rate 스냅샷.
+
+    countries.json의 country_indicators()와 같은 소스(indicators 테이블)를
+    재사용해 pulse.json에도 노출한다 — 홈 탭에서 countries.json 전체(기사·KFI·
+    인사동향 포함)를 별도로 불러올 필요가 없도록.
+    """
+    indicators = _country_indicators(conn)
+    out = []
+    for cc, flag in _FLAGS.items():
+        inds = [i for i in indicators.get(cc, []) if i.get("value") is not None]
+        out.append(dict(
+            cc=cc, flag=flag, name=_PRESENCE_NAMES_KO.get(cc, cc), name_en=_PRESENCE_NAMES_EN.get(cc, cc),
+            indicators=[{"kind": i["kind"], "label": i["label"], "value": i["value"],
+                         "change_pct": i["change_pct"]} for i in inds],
+        ))
+    return out
+
+
 def export_pulse(conn, days: int | None = None) -> dict:
     """pulse.json + brief.html(온도계 화면) 생성."""
     if days is None: days = 1          # 첫 화면 = 전일+당일 ('오늘의 ...')
@@ -835,6 +854,7 @@ def export_pulse(conn, days: int | None = None) -> dict:
         "daily_highlights": _daily_highlights(conn),
         "country_section": _compute_country_section(conn, days=days),
         "country_signals": _compute_country_signals(conn, days=days),
+        "market_ticker": _market_ticker(conn),
     }
     _write_json("pulse", payload)
 
