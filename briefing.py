@@ -16,6 +16,7 @@ from datetime import date, timedelta
 import config
 import db
 import kb_network
+import ranking
 from llm_provider import LLMProvider, get_provider
 
 log = logging.getLogger("briefing")
@@ -288,16 +289,19 @@ def generate_daily_highlights(
 
     rows = conn.execute(
         f"""
-        SELECT a.title, a.summary_ko, a.summary_en, a.kb_implication, a.kb_implication_en,
-               a.topics, a.ai_score, m.primary_country_code AS cc
+        SELECT a.article_id, a.title, a.summary_ko, a.summary_en, a.kb_implication, a.kb_implication_en,
+               a.topics, a.ai_score, a.published_at, a.event_type, a.korean_fi, a.personnel_move,
+               m.tier, m.primary_country_code AS cc
         FROM articles_raw a
         JOIN media_sources m ON m.source_id = a.source_id
         WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}{exc}
         ORDER BY a.ai_score DESC
         LIMIT ?
         """,
-        (config.AI_SCORE_ACTIVE_THRESHOLD, *dp, *exp, config.HIGHLIGHTS_MAX_ARTICLES),
+        (config.AI_SCORE_ACTIVE_THRESHOLD, *dp, *exp, config.HIGHLIGHTS_MAX_ARTICLES * 3),
     ).fetchall()
+    # LLM에 넘길 후보풀을 복합 rank_score(ranking.py) 순으로 — ai_score 양자화(동점) 보완.
+    rows = ranking.order(conn, rows)[:config.HIGHLIGHTS_MAX_ARTICLES]
 
     if not rows:
         log.info("글로벌 핵심 — 대상 기사 없음, 스킵")

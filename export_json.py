@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 
 import config
 import db
+import ranking
 import taxonomy
 
 log = logging.getLogger("export_json")
@@ -187,15 +188,16 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
     근접중복(의역) 클러스터링: 같은 국가(cc) 내에서 제목 토큰 겹침 비율(교집합/min,
     Jaccard와 동등한 대안 — 길이가 다른 헤드라인 쌍에서도 안정적)이
     config.NON_PRESENCE_DEDUP_SIM 이상이면 같은 사건으로 보고 대표 1건만 남긴다.
-    후보를 (ai_score DESC, published_at DESC)로 뽑으므로 각 클러스터에서 가장
-    먼저 나오는 기사가 곧 대표(점수 최고 → 동점이면 최신)가 된다."""
+    후보를 복합 rank_score(ranking.py) 순으로 정렬하므로 각 클러스터에서 가장
+    먼저 나오는 기사가 곧 대표(랭킹 최고)가 된다."""
     if not config.NON_PRESENCE_CODES:
         return []
     dc, dparams = _date_clause(days)
     ph = ",".join("?" * len(config.NON_PRESENCE_CODES))
     fetch_limit = limit * 5   # 클러스터링으로 줄어들 것을 감안해 후보를 넉넉히 뽑음
     rows = conn.execute(
-        f"""SELECT a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics, a.korean_fi,
+        f"""SELECT a.article_id, a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics, a.korean_fi,
+                   a.event_type, a.personnel_move, m.tier,
                    a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score IS NOT NULL AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'
@@ -203,6 +205,9 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
             ORDER BY a.ai_score DESC, a.published_at DESC LIMIT ?""",
         (*config.NON_PRESENCE_CODES, *dparams, fetch_limit),
     ).fetchall()
+    # 표시 정렬은 복합 rank_score(ranking.py) — ai_score 양자화(대부분 동점) 보완.
+    cm = ranking.cluster_sizes(conn)
+    rows = ranking.order(conn, rows, cluster_map=cm)
 
     clusters: dict[str, list[dict]] = {}   # cc -> [{"row": Row, "tk": set, "n": int}, ...]
     for r in rows:
@@ -216,7 +221,7 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
             bucket.append({"row": r, "tk": tk, "n": 1})
 
     reps = [c for bucket in clusters.values() for c in bucket]
-    reps.sort(key=lambda c: c["row"]["ai_score"], reverse=True)
+    reps.sort(key=lambda c: ranking.rank_score(c["row"], cm.get(c["row"]["article_id"], 0)), reverse=True)
     reps = reps[:limit]
 
     out = []
@@ -232,6 +237,7 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
             t=r["title_ko"] or r["title"], q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
             c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
             related_count=c["n"] - 1,
+            rank_score=ranking.rank_score(r, cm.get(r["article_id"], 0)),
             kfi=[x for x in (r["korean_fi"] or "").split(",") if x],
         ))
     return out
@@ -265,7 +271,8 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
     all_cc = list(_FLAGS.keys()) + list(config.NON_PRESENCE_CODES)
     ph = ",".join("?" * len(all_cc))
     rows = conn.execute(
-        f"""SELECT a.title, a.title_ko, a.summary_ko, a.summary_en, a.korean_fi, a.topics,
+        f"""SELECT a.article_id, a.title, a.title_ko, a.summary_ko, a.summary_en, a.korean_fi, a.topics,
+                   a.event_type, a.personnel_move, m.tier,
                    a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.korean_fi IS NOT NULL AND a.korean_fi != '' AND a.duplicate_of IS NULL
@@ -273,8 +280,9 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
               AND a.link NOT LIKE '%/topic/%' AND a.link NOT LIKE '%/topics/%'
               AND m.primary_country_code IN ({ph}){dc}
             ORDER BY a.ai_score DESC LIMIT ?""",
-        (*all_cc, *params, limit),
+        (*all_cc, *params, limit * 3),
     ).fetchall()
+    rows = ranking.order(conn, rows)[:limit]   # 표시 정렬 = 복합 rank_score
 
     out = []
     for r in rows:
@@ -310,7 +318,8 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
     all_cc = list(_FLAGS.keys()) + list(config.NON_PRESENCE_CODES)
     ph = ",".join("?" * len(all_cc))
     rows = conn.execute(
-        f"""SELECT a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics,
+        f"""SELECT a.article_id, a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics,
+                   a.korean_fi, a.event_type, a.personnel_move, m.tier,
                    a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.personnel_move = 1 AND a.ai_score IS NOT NULL AND a.duplicate_of IS NULL
@@ -318,8 +327,9 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
               AND a.link NOT LIKE '%/topic/%' AND a.link NOT LIKE '%/topics/%'
               AND m.primary_country_code IN ({ph}){dc}
             ORDER BY a.ai_score DESC LIMIT ?""",
-        (*all_cc, *params, limit),
+        (*all_cc, *params, limit * 3),
     ).fetchall()
+    rows = ranking.order(conn, rows)[:limit]   # 표시 정렬 = 복합 rank_score
 
     out = []
     for r in rows:
@@ -361,21 +371,25 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     countries = []
     total = 0
 
+    cm = ranking.cluster_sizes(conn)   # 표시 정렬용 복합 rank_score 재료(export 1회 계산)
     for cc, flag in _FLAGS.items():
         rows = conn.execute(
             f"""
-            SELECT a.title, a.title_ko, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
-                   a.expanded_summary, a.expanded_summary_en,
-                   a.topics, a.link, a.published_at, a.ai_score, a.source_links, a.korean_fi, m.media_name
+            SELECT a.article_id, a.title, a.title_ko, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
+                   a.expanded_summary, a.expanded_summary_en, a.event_type, a.personnel_move, m.tier,
+                   a.topics, a.link, a.published_at, a.ai_score, a.source_links, a.korean_fi, m.media_name,
+                   m.primary_country_code cc
             FROM articles_raw a
             JOIN media_sources m ON m.source_id = a.source_id
             WHERE m.primary_country_code = ?
               AND {where}{dc}
             ORDER BY {order}
-            LIMIT 20
+            LIMIT {60 if active_only else 20}
             """,
             (cc, *params_tail, *dparams),
         ).fetchall()
+        if active_only:
+            rows = ranking.order(conn, rows, cluster_map=cm)[:20]   # 표시 정렬 = 복합 rank_score
 
         articles = []
         for i, a in enumerate(rows):
@@ -419,6 +433,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                 "u": a["link"],
                 "rl": rl[:2],
                 "score": a["ai_score"],
+                "rank_score": ranking.rank_score(a, cm.get(a["article_id"], 0)),
                 "kfi": [c for c in (a["korean_fi"] or "").split(",") if c],
             })
         total += len(articles)
@@ -520,12 +535,15 @@ def _compute_key_flows(conn, days: int | None = None, limit: int = 6) -> list[di
     """
     dc, params = _date_clause(days)
     rows = conn.execute(
-        f"""SELECT a.ai_score, a.title, a.summary_ko, a.summary_en, a.topics, m.primary_country_code cc
+        f"""SELECT a.article_id, a.ai_score, a.title, a.summary_ko, a.summary_en, a.topics,
+                   a.published_at, a.event_type, a.korean_fi, a.personnel_move, m.tier,
+                   m.primary_country_code cc
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'{dc}
             ORDER BY a.ai_score DESC LIMIT ?""",
-        (config.AI_SCORE_ACTIVE_THRESHOLD, *params, limit),
+        (config.AI_SCORE_ACTIVE_THRESHOLD, *params, limit * 4),
     ).fetchall()
+    rows = ranking.order(conn, rows)[:limit]   # 표시 정렬 = 복합 rank_score
     flows = []
     for r in rows:
         codes = [c for c in (r["topics"] or "").split(",") if c]
@@ -575,14 +593,15 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
     # KB 미진출국은 제외 — 이 블록은 진출 11개 거점 횡단 요약용.
     exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
     rows = conn.execute(
-        f"""SELECT a.ai_score, a.title, a.title_ko, a.summary_ko, a.summary_en,
-                   a.expanded_summary, a.expanded_summary_en,
+        f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.summary_ko, a.summary_en,
+                   a.expanded_summary, a.expanded_summary_en, a.event_type, a.korean_fi, a.personnel_move, m.tier,
                    a.topics, a.link, a.published_at, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}{exc}
             ORDER BY a.ai_score DESC, a.published_at DESC LIMIT 60""",
         (config.AI_SCORE_ACTIVE_THRESHOLD, *params, *exp),
     ).fetchall()
+    rows = ranking.order(conn, rows)   # 표시 정렬 = 복합 rank_score(근접중복·국가상한은 아래서 적용)
 
     out, seen_tokens, per_cc = [], [], {}
     for r in rows:
@@ -943,7 +962,7 @@ _EVENT_CATS = [
 
 
 def _event_bucket(rows: list, code: str, max_per: int, build) -> tuple[list, set]:
-    """rows(이미 ai_score DESC 정렬)에서 event_type 코드가 code인 기사를 최대 max_per개
+    """rows(이미 rank_score 순 정렬)에서 event_type 코드가 code인 기사를 최대 max_per개
     골라 (기사 dict 리스트, 국가코드 집합)으로 반환. build(row)가 표시 필드를 만든다
     (진출/미진출 카드 필드가 달라 호출부에서 주입; c 필드는 topics 기반으로 build 내부에서 유도)."""
     arts, ccs = [], set()
@@ -992,9 +1011,9 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
 
     exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
     pres_rows = conn.execute(
-        f"""SELECT a.ai_score, a.title, a.title_ko, a.summary, a.summary_ko, a.kb_implication,
+        f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.summary, a.summary_ko, a.kb_implication,
                    a.summary_en, a.kb_implication_en, a.expanded_summary, a.expanded_summary_en,
-                   a.topics, a.event_type, a.link,
+                   a.topics, a.event_type, a.link, a.korean_fi, a.personnel_move, m.tier,
                    a.published_at, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'{dc}{exc}
@@ -1006,14 +1025,20 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
     if config.NON_PRESENCE_CODES:
         ph = ",".join("?" * len(config.NON_PRESENCE_CODES))
         np_rows = conn.execute(
-            f"""SELECT a.ai_score, a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics,
-                       a.event_type, a.link, a.published_at, m.primary_country_code cc, m.media_name
+            f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics,
+                       a.event_type, a.link, a.published_at, a.korean_fi, a.personnel_move, m.tier,
+                       m.primary_country_code cc, m.media_name
                 FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
                 WHERE a.ai_score IS NOT NULL AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'
                   AND m.primary_country_code IN ({ph}){dc}
                 ORDER BY a.ai_score DESC""",
             (*config.NON_PRESENCE_CODES, *params),
         ).fetchall()
+
+    # 표시 정렬 = 복합 rank_score(ranking.py) — 버킷은 정렬된 순서대로 앞에서부터 담는다.
+    cm = ranking.cluster_sizes(conn)
+    pres_rows = ranking.order(conn, pres_rows, cluster_map=cm)
+    np_rows = ranking.order(conn, np_rows, cluster_map=cm)
 
     categories = []
     for code, ui, label_ko, label_en in _EVENT_CATS:
