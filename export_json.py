@@ -160,6 +160,24 @@ def _country_indicators(conn) -> dict:
     return out
 
 
+def _t_en(r) -> str:
+    """영어 화면용 기사 제목.
+
+    우선순위: ① LLM 영어 헤드라인(title_en) ② 영어 매체면 원문 제목 ③ 한국어 제목.
+    title_en 은 2026-09-03 도입이라 이전 채점분은 비어 있다 → 폴백 필요.
+    원문 제목은 구글뉴스 " - 매체명" 꼬리가 붙어 있어 제거한다.
+    """
+    keys = r.keys()
+    te = ((r["title_en"] if "title_en" in keys else None) or "").strip()
+    if te:
+        return te
+    title = ((r["title"] if "title" in keys else None) or "").strip()
+    lang = (r["language"] if "language" in keys else None) or ""
+    if lang == "en" and title:
+        return re.sub(r"\s+-\s+[^-]{1,60}$", "", title).strip() or title
+    return ((r["title_ko"] if "title_ko" in keys else None) or title)
+
+
 def _daily_highlights(conn) -> list:
     """오늘의 글로벌 핵심 3줄(briefing.generate_daily_highlights) 최신본. 없으면 빈 리스트."""
     try:
@@ -196,7 +214,7 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
     ph = ",".join("?" * len(config.NON_PRESENCE_CODES))
     fetch_limit = limit * 5   # 클러스터링으로 줄어들 것을 감안해 후보를 넉넉히 뽑음
     rows = conn.execute(
-        f"""SELECT a.article_id, a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics, a.korean_fi,
+        f"""SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en, a.topics, a.korean_fi,
                    a.event_type, a.personnel_move, m.tier,
                    a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
@@ -234,7 +252,7 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
             cc=cc, flag=meta.get("flag", ""),
             cc_label=meta.get("name_ko", cc), cc_label_en=meta.get("name_en", cc),
             src=r["media_name"], d=(r["published_at"] or "")[:10],
-            t=r["title_ko"] or r["title"], q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
+            t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
             c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
             related_count=c["n"] - 1,
             rank_score=ranking.rank_score(r, cm.get(r["article_id"], 0)),
@@ -271,7 +289,7 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
     all_cc = list(_FLAGS.keys()) + list(config.NON_PRESENCE_CODES)
     ph = ",".join("?" * len(all_cc))
     rows = conn.execute(
-        f"""SELECT a.article_id, a.title, a.title_ko, a.summary_ko, a.summary_en, a.korean_fi, a.topics,
+        f"""SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en, a.korean_fi, a.topics,
                    a.event_type, a.personnel_move, m.tier,
                    a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
@@ -298,7 +316,7 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
             cc=cc, flag=flag, cc_label=label, cc_label_en=label_en,
             kfi=[x for x in (r["korean_fi"] or "").split(",") if x],
             src=r["media_name"], d=(r["published_at"] or "")[:10],
-            t=r["title_ko"] or r["title"], q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
+            t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
             c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
         ))
     return out
@@ -318,7 +336,7 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
     all_cc = list(_FLAGS.keys()) + list(config.NON_PRESENCE_CODES)
     ph = ",".join("?" * len(all_cc))
     rows = conn.execute(
-        f"""SELECT a.article_id, a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics,
+        f"""SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en, a.topics,
                    a.korean_fi, a.event_type, a.personnel_move, m.tier,
                    a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
@@ -344,7 +362,7 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
         out.append(dict(
             cc=cc, flag=flag, cc_label=label, cc_label_en=label_en,
             src=r["media_name"], d=(r["published_at"] or "")[:10],
-            t=r["title_ko"] or r["title"], q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
+            t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
             c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
         ))
     return out
@@ -375,7 +393,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     for cc, flag in _FLAGS.items():
         rows = conn.execute(
             f"""
-            SELECT a.article_id, a.title, a.title_ko, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
+            SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
                    a.expanded_summary, a.expanded_summary_en, a.event_type, a.personnel_move, m.tier,
                    a.topics, a.link, a.published_at, a.ai_score, a.source_links, a.korean_fi, m.media_name,
                    m.primary_country_code cc
@@ -426,6 +444,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                 "src": a["media_name"],
                 "d": (a["published_at"] or "")[:10],
                 "t": a["title_ko"] or a["title"],
+                "t_en": _t_en(a),
                 "q": a["summary_ko"] or "",
                 "q_en": a["summary_en"] or "",
                 "expanded_summary": a["expanded_summary"] or "",
@@ -593,7 +612,7 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
     # KB 미진출국은 제외 — 이 블록은 진출 11개 거점 횡단 요약용.
     exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
     rows = conn.execute(
-        f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.summary_ko, a.summary_en,
+        f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en,
                    a.expanded_summary, a.expanded_summary_en, a.event_type, a.korean_fi, a.personnel_move, m.tier,
                    a.topics, a.link, a.published_at, m.primary_country_code cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
@@ -625,7 +644,7 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
         t_ko = r["title_ko"] if "title_ko" in r.keys() else None
         out.append(dict(cc=cc, flag=_FLAGS_ALL.get(cc, ""), src=r["media_name"],
                         d=(r["published_at"] or "")[:10],
-                        t=t_ko or r["title"], q=r["summary_ko"] or "",
+                        t=t_ko or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "",
                         q_en=r["summary_en"] or "",
                         expanded_summary=r["expanded_summary"] or "",
                         expanded_summary_en=r["expanded_summary_en"] or "",
@@ -736,7 +755,7 @@ def _compute_country_section(conn, days: int | None = 1, top_n: int = 5) -> list
     dc, params = _date_clause(days)
     ph = ",".join("?" * len(_FLAGS))
     rows = conn.execute(
-        f"""SELECT a.ai_score, a.title, a.title_ko, a.topics, m.primary_country_code cc
+        f"""SELECT a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.topics, m.primary_country_code cc
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL
               AND m.primary_country_code IN ({ph}){dc}
@@ -793,7 +812,7 @@ def _compute_country_signals(conn, days: int | None = 1) -> list[dict]:
     dc, params = _date_clause(days)
     ph = ",".join("?" * len(_FLAGS))
     rows = conn.execute(
-        f"""SELECT a.ai_score, a.title, a.title_ko, a.topics, m.primary_country_code cc
+        f"""SELECT a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.topics, m.primary_country_code cc
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL
               AND m.primary_country_code IN ({ph}){dc}
@@ -981,7 +1000,7 @@ def _pres_topic_article(r) -> dict:
     topic_codes = [c.strip() for c in (r["topics"] or "").split(",") if c.strip()]
     return dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""), presence="진출",
                 src=r["media_name"], d=(r["published_at"] or "")[:10],
-                t=r["title_ko"] or r["title"], q=r["summary_ko"] or "",
+                t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "",
                 k=r["kb_implication"] or "", q_en=r["summary_en"] or "",
                 k_en=r["kb_implication_en"] or "",
                 expanded_summary=r["expanded_summary"] or "",
@@ -996,7 +1015,7 @@ def _np_topic_article(r) -> dict:
                 cc_label=meta.get("name_ko", r["cc"]), cc_label_en=meta.get("name_en", r["cc"]),
                 presence="미진출",
                 src=r["media_name"], d=(r["published_at"] or "")[:10],
-                t=r["title_ko"] or r["title"], q=r["summary_ko"] or "",
+                t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "",
                 k="", q_en=r["summary_en"] or "", k_en="",   # KB 시사점 없음(거점 없는 시장)
                 c=taxonomy.ui_string(topic_codes), score=r["ai_score"], u=r["link"])
 
@@ -1011,7 +1030,7 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
 
     exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
     pres_rows = conn.execute(
-        f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.summary, a.summary_ko, a.kb_implication,
+        f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.summary, a.summary_ko, a.kb_implication,
                    a.summary_en, a.kb_implication_en, a.expanded_summary, a.expanded_summary_en,
                    a.topics, a.event_type, a.link, a.korean_fi, a.personnel_move, m.tier,
                    a.published_at, m.primary_country_code cc, m.media_name
@@ -1025,7 +1044,7 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
     if config.NON_PRESENCE_CODES:
         ph = ",".join("?" * len(config.NON_PRESENCE_CODES))
         np_rows = conn.execute(
-            f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.summary_ko, a.summary_en, a.topics,
+            f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en, a.topics,
                        a.event_type, a.link, a.published_at, a.korean_fi, a.personnel_move, m.tier,
                        m.primary_country_code cc, m.media_name
                 FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id

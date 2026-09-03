@@ -49,6 +49,9 @@ def ensure_columns(conn) -> None:
         # 본문 추출본(fulltext.py) — 있으면 rank 가 스니펫 대신 본문으로 분석
         ("full_text",         "ALTER TABLE articles_raw ADD COLUMN full_text         TEXT"),
         ("title_ko",          "ALTER TABLE articles_raw ADD COLUMN title_ko          TEXT"),
+        # 영어 헤드라인 — EN 모드에서 제목이 한국어로 남던 문제(2026-09-03) 해결용.
+        # 원문 title 은 소스 언어(id/zh 등)라 영어 화면에 그대로 쓸 수 없다.
+        ("title_en",          "ALTER TABLE articles_raw ADD COLUMN title_en          TEXT"),
         # 이벤트 유형(축 E, 모니터링 전용) — REG/DEAL/INCIDENT CSV, taxonomy.yaml event_types
         ("event_type",        "ALTER TABLE articles_raw ADD COLUMN event_type        TEXT"),
         # 다출처 종합에 실제로 쓰인 소스 목록(JSON [{"t":제목,"u":URL,"src":매체명}, ...]).
@@ -83,6 +86,7 @@ def _system_prompt() -> str:
         "Analyze one overseas news article and output ONLY this JSON:\n"
         '{"ai_score": (KB business importance, integer 0-100), '
         '"title_ko": "15자 이내 신문 헤드라인 스타일 한국어 제목", '
+        '"title_en": "one-line dry English newspaper headline (max ~70 chars)", '
         '"summary_en": "2-4 sentence English summary", '
         '"topics": ["TOPIC_CODE", ...], '
         '"event_type": ["EVENT_CODE", ...] (0-3, empty list if none apply), '
@@ -121,6 +125,7 @@ def _system_prompt_light() -> str:
         "Analyze one news article and output ONLY this JSON:\n"
         '{"ai_score": (importance, integer 0-100), '
         '"title_ko": "15자 이내 신문 헤드라인 스타일 한국어 제목", '
+        '"title_en": "one-line dry English newspaper headline (max ~70 chars)", '
         '"summary_en": "2-4 sentence English summary", '
         '"topics": ["TOPIC_CODE", ...], '
         '"event_type": ["EVENT_CODE", ...] (0-3, empty list if none apply)}\n\n'
@@ -269,12 +274,14 @@ def run_rank(conn, provider: LLMProvider | None = None,
         links = source_links_by_id.get(cid)
         source_links = json.dumps(links, ensure_ascii=False) if links else None
 
+        title_en = str(data.get("title_en") or "")[:300]
+
         cur.execute(
             """UPDATE articles_raw
-               SET ai_score = ?, title_ko = ?, summary_en = ?, topics = ?, event_type = ?,
-                   kb_implication_en = ?, source_links = ?, ai_model = ?
+               SET ai_score = ?, title_ko = ?, title_en = ?, summary_en = ?, topics = ?,
+                   event_type = ?, kb_implication_en = ?, source_links = ?, ai_model = ?
                WHERE article_id = ?""",
-            (score, title_ko, summary_en, ",".join(topics), ",".join(event_types),
+            (score, title_ko, title_en, summary_en, ",".join(topics), ",".join(event_types),
              kb_impl_en, source_links, provider.model_id, r["article_id"]),
         )
         stats["ranked"] += 1

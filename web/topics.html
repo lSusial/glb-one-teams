@@ -106,7 +106,7 @@
         ? `<span class="tw-pres in">${EN?'Presence':'진출'}</span>` : `<span class="tw-pres">${EN?'Non-presence':'미진출'}</span>`;
       return `<li class="tw-item" data-i="${i}">
         <div class="tw-tags"><span class="tw-cc"><span class="fg">${esc(a.flag||'')}</span>${esc(ccName(a))}</span>${pres}</div>
-        <div class="tw-t">${esc(a.t)}</div>
+        <div class="tw-t">${esc(EN ? (a.t_en || a.t) : (a.t || a.t_en))}</div>
         ${tq(a)?`<div class="tw-q">${esc(tq(a))}</div>`:''}
         <div class="tw-m"><span class="src">${esc(a.src||'')}</span>${a.d?`<span>${esc(a.d)}</span>`:''}${chev()}</div>
       </li>`;

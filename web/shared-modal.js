@@ -87,7 +87,7 @@
       <button class="sh-x" onclick="closeArticleModal()" aria-label="Close">×</button>
       ${meta ? `<div class="sh-meta">${meta}</div>` : ''}
       ${catBadges}
-      <h2>${esc(a.t || '')}</h2>
+      <h2>${esc((EN ? (a.t_en || a.t) : (a.t || a.t_en)) || '')}</h2>
       ${kb ? `<div class="sh-imp">💡 ${esc(kb)}</div>` : ''}
       <div class="sh-lb">${EN ? 'Summary' : '요약'}</div>
       <div class="sh-sum">${summary ? esc(summary) : `<span class="sh-empty">${EN ? '(No summary available.)' : '(요약 정보가 없습니다.)'}</span>`}</div>

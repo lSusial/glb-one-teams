@@ -108,6 +108,8 @@
     ? [['','All'],['economy','Economy'],['finance','Banking'],['digital','Digital'],['esg','ESG'],['risk','Risk'],['geo','Geopolitics']]
     : [['','전체'],['economy','경제'],['finance','금융'],['digital','디지털'],['esg','ESG'],['risk','리스크'],['geo','지정학']];
   const tq = (a) => EN ? (a.q_en || a.q) : (a.q || a.q_en);
+  // 제목도 요약과 같은 규칙 — EN 모드에서 제목만 한국어로 남던 문제(2026-09-03)
+  const tt = (a) => EN ? (a.t_en || a.t) : (a.t || a.t_en);
   const ccName = (a) => EN ? (a.cc_label_en || NAMES[a.cc] || a.cc) : (a.cc_label || NAMES[a.cc] || a.cc);
 
   const arts = []; (DATA.countries || []).forEach(c => (c.articles || []).forEach(a => arts.push({...a, cc:c.cc, flag:c.flag})));
@@ -183,7 +185,7 @@
     if (rows.length) {
       feed = `<ul class="feed">` + rows.map((a,i) => `
         <li class="fitem" data-i="${i}">
-          <div class="fi-t">${esc(a.t)}</div>
+          <div class="fi-t">${esc(tt(a))}</div>
           ${tq(a)?`<div class="fi-q">${esc(tq(a))}</div>`:''}
           <div class="fi-m"><span class="src">${esc(a.src||'')}</span>${a.d?`<span>${esc(md(a.d))}</span>`:''}
             <span style="margin-left:auto">${svg('ico-chev-r',15,15)}</span></div>
@@ -241,7 +243,7 @@
     $('#flatFeed').innerHTML = rows.map((a,i) => `
       <li class="nfitem" data-i="${i}">
         <span class="nf-tag"><span class="fg">${esc(a.flag||'')}</span>${esc(ccName(a))}</span>
-        <div class="nf-t">${esc(a.t)}${cfg.rel && a.related_count ? ` <span class="nf-rel">· ${EN?`related ${a.related_count}`:`관련 ${a.related_count}건`}</span>` : ''}</div>
+        <div class="nf-t">${esc(tt(a))}${cfg.rel && a.related_count ? ` <span class="nf-rel">· ${EN?`related ${a.related_count}`:`관련 ${a.related_count}건`}</span>` : ''}</div>
         ${tq(a)?`<div class="nf-q">${esc(tq(a))}</div>`:''}
         <div class="nf-m"><span class="src">${esc(a.src||'')}</span>${a.d?`<span>${esc(md(a.d))}</span>`:''}${svg('ico-chev-r',14,14,'ar')}</div>
       </li>`).join('');
