@@ -88,7 +88,7 @@
       ${meta ? `<div class="sh-meta">${meta}</div>` : ''}
       ${catBadges}
       <h2>${esc(a.t || '')}</h2>
-      ${kb ? `<div class="sh-imp">💡 ${EN ? 'KB Implication' : 'KB 시사점'} · ${esc(kb)}</div>` : ''}
+      ${kb ? `<div class="sh-imp">💡 ${esc(kb)}</div>` : ''}
       <div class="sh-lb">${EN ? 'Summary' : '요약'}</div>
       <div class="sh-sum">${summary ? esc(summary) : `<span class="sh-empty">${EN ? '(No summary available.)' : '(요약 정보가 없습니다.)'}</span>`}</div>
       <div class="sh-lb">${EN ? 'Related Articles' : '관련 기사 링크'}</div>
