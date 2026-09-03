@@ -452,13 +452,64 @@ KOREAN_FI_INCLUDE_KB = False
 # 나올 때만(AND) 태깅하도록 변경. 재검증: 6건, 전부 실제 임명·사임·기소 등
 # 인사 이벤트로 확인.
 # ---------------------------------------------------------------------------
-PERSONNEL_ROLE_TERMS: list[str] = [
-    "central bank governor", "bank governor", "monetary authority governor",
-    "bank chairman", "bank ceo", "bank president", "banking ceo",
-    "financial regulator chief", "insurance authority ceo", "insurance regulator chief",
+# v4 (2026-09-03): 역할어를 "연속 문자열"에서 정규식으로 교체.
+# 실측 버그 — 인도네시아 중앙은행 총재 취임 기사 4건 중 3건이 미태깅이었다.
+#   "Destry Damayanti sworn in as Bank Indonesia Governor"  → 미태깅
+#   "Resmi! MA Lantik ... jadi Gubernur Bank Indonesia"     → 미태깅
+#   "... first female central bank governor" (신화통신)      → 태깅
+# 원인: 역할어가 "bank governor" 같은 **연속 문자열**이라 기관명이 사이에 끼면
+# ("Bank *Indonesia* Governor") 매칭되지 않고, 현지어(id) 표현도 없었다.
+# → 기관어·직함어를 분리해 사이 토큰을 허용하는 패턴으로 바꾸고, 수집 언어
+#   (en/id/ko)의 현지어 역할·전환 표현을 추가. AND 게이트(역할+전환)는 유지.
+
+# 기관어와 직함 사이에 낄 수 있는 부분: 연결어(of/the/negara…) 최대 2개 +
+# 고유명사 1개. 서술어가 끼어 문장을 가로지르는 오탐("the bank said the
+# governor…")을 막기 위해 흔한 기능어·서술어는 제외한다.
+_P_GAP = (
+    r"(?:\s+(?:of|the|de|negara|sentral|central))"
+    r"{0,2}"
+    # 낱말 전체가 기능어일 때만 배제(어두 일치 금지 — 'in'이 'indonesia'를 막던 버그)
+    r"(?:\s+(?!(?:said|says|say|told|tells|and|or|but|that|which|who|when|where|"
+    r"after|before|with|from|as|to|in|on|at|by|for|its|his|her|their|a|an|the|"
+    r"is|was|are|were|has|have|had|will|would|also)(?![a-z0-9]))"
+    r"[a-z0-9\'\u2019-]+)?"
+    r"\s+"
+)
+
+# 금융 관련 기관어만(일반 기업 CEO 기사 배제)
+_P_INSTITUTION = (
+    r"(?:central\s+bank|reserve\s+bank|state\s+bank|people\'?s\s+bank|"
+    r"monetary\s+authority|financial\s+regulator|banking\s+regulator|"
+    r"insurance\s+regulator|insurance\s+authority|banking|bank)(?:\'s|\u2019s)?"
+)
+
+# 거버넌스 직함. chief economist(리서치 직책)는 인사동향이 아니라 제외.
+_P_TITLE = (
+    r"(?:governor|chairman|chairwoman|chairperson|ceo|chief\s+executive|"
+    r"president|managing\s+director|deputy\s+governor|chief(?!\s+economist))"
+)
+
+# 역할 정규식(re.search). 여기 없는 표현은 태깅되지 않는다.
+PERSONNEL_ROLE_PATTERNS: list[str] = [
+    # en: "central bank governor", "Bank Indonesia Governor",
+    #     "Reserve Bank of India Governor", "HDFC Bank CEO", "banking regulator chief"
+    r"(?<![a-z])" + _P_INSTITUTION + _P_GAP + _P_TITLE + r"(?![a-z])",
+    # en: "governor of Bank Indonesia", "CEO of the central bank"
+    r"(?<![a-z])" + _P_TITLE + r"\s+of\s+(?:the\s+)?" + _P_INSTITUTION + r"(?![a-z])",
+    # id: "Gubernur Bank Indonesia", "Gubernur BI", "Gubernur Senior BI"
+    r"gubernur(?:\s+senior)?\s+(?:bank|bi)(?![a-z])",
+    # id: "Direktur Utama Bank ...", "Dirut BNI"
+    r"(?:direktur\s+utama|dirut)\s+(?:bank|bri|bni|bca|bi)(?![a-z])",
+    # id: 감독당국(OJK) 수장
+    r"(?:ketua|kepala)\s+(?:dewan\s+komisioner\s+)?ojk(?![a-z])",
+    # ko: 직함과 인사 신호가 인접할 때만. 단독 "총재"는 통화정책 기사(총재 발언
+    # 인용)에서 오탐이 나므로 쓰지 않는다.
+    r"(?:신임|차기|전임|후임|새)\s*(?:총재|은행장|행장|회장|금융감독원장|금감원장|금융위원장)",
+    r"(?:총재|은행장|행장|회장|금융감독원장|금감원장|금융위원장)\s*"
+    r"(?:후보|취임|임명|선임|지명|내정|사임|사퇴|퇴임|교체|연임)",
 ]
 
-# 위 역할 단어와 함께(본문 어디든) 나와야만 태깅 — 단독으로는 재직 중 발언
+# 위 역할어와 함께(본문 어디든) 나와야만 태깅 — 단독으로는 재직 중 발언
 # 인용과 구분이 안 됨.
 PERSONNEL_TRANSITION_TERMS: list[str] = [
     "named", "appointed", "appoints", "appointment", "nominated", "nominates",
@@ -466,20 +517,46 @@ PERSONNEL_TRANSITION_TERMS: list[str] = [
     "steps down", "stepping down", "resigned", "resigns", "resignation",
     "quits", "ousted", "removed as", "exit", "exits", "outgoing", "incoming",
     "former", "ex-", "indicted", "replaces", "replacement", "candidate for",
+    "takes office", "inaugurated", "term begins", "tenure",
+    # id
+    "dilantik", "melantik", "lantik", "ditunjuk", "menunjuk", "pelantikan",
+    "calon", "pengganti", "menjabat", "mundur", "pengunduran diri",
+    # ko
+    "임명", "취임", "선임", "지명", "사임", "사퇴", "퇴임", "내정", "후보",
+    "신임", "차기", "교체",
 ]
 
 # 결합 없이 그 자체로 이미 "교체" 의미를 담은 복합 표현 — 단독 매치 허용
 PERSONNEL_STRONG_PHRASES: list[str] = [
     "new central bank governor", "next central bank governor",
     "new bank ceo", "new bank chairman", "new bank president",
-    "총재 후보", "신임 총재", "은행장 선임", "행장 선임",
+    "총재 후보", "신임 총재", "차기 총재", "총재 취임", "총재 지명",
+    "은행장 선임", "행장 선임", "신임 은행장", "신임 행장",
+    "gubernur bi baru", "gubernur baru",
 ]
+
+
+_ROLE_PATTERN_CACHE: list[re.Pattern] = []
+
+
+def _role_patterns() -> list[re.Pattern]:
+    if not _ROLE_PATTERN_CACHE:
+        _ROLE_PATTERN_CACHE.extend(re.compile(p) for p in PERSONNEL_ROLE_PATTERNS)
+    return _ROLE_PATTERN_CACHE
+
+
+def _first_role_match(text: str) -> str | None:
+    for pat in _role_patterns():
+        m = pat.search(text)
+        if m:
+            return m.group(0)
+    return None
 
 
 def _has_personnel_keyword(text: str) -> bool:
     if _first_match(text, PERSONNEL_STRONG_PHRASES) is not None:
         return True
-    return (_first_match(text, PERSONNEL_ROLE_TERMS) is not None
+    return (_first_role_match(text) is not None
             and _first_match(text, PERSONNEL_TRANSITION_TERMS) is not None)
 
 

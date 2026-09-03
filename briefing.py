@@ -74,7 +74,9 @@ def _system_highlights(count: int) -> str:
         "spread across as many different hubs/topics as the material genuinely supports). "
         "Base strictly on the provided items; no speculation. Output ONLY JSON:\n"
         '{"highlights": [{'
-        '"category": "금리|FX|규제|시장|디지털|지정학 중 하나", '
+        '"category": "금리|FX|규제|시장|디지털|지정학|인사 중 하나. '
+        '중앙은행 총재·금융감독기관장·은행 CEO 등 인물의 임명·취임·사임·교체가 '
+        '기사의 핵심이면 반드시 인사(그 인물의 정책 성향 언급은 이유가 되지 않는다)", '
         '"headline_ko": "건조한 신문 헤드라인 1줄(한국어, 설명체 금지)", '
         '"headline_en": "one-line dry newspaper headline (English)", '
         '"impact_ko": "어느 KB 거점/자회사에 어떤 영향인지 1줄(한국어)", '
