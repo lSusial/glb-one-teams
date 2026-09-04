@@ -428,11 +428,15 @@ ul{margin:0;padding:0;list-style:none}
 .gbn-mark{width:clamp(36px,5.2cqi,48px);height:auto;aspect-ratio:47/34;flex:none;color:var(--gold)}
 .gbn-l p{font-family:var(--f-en);font-weight:600;color:var(--navy);
          font-size:clamp(11px,1.8cqi,15.5px);line-height:1.34;letter-spacing:.005em}
+/* CTA: 크림 배경에 네이비 솔리드는 너무 무겁다는 피드백(2026-09-04) →
+   흰 버튼 + 네이비 글자. 대비 14.5:1 로 접근성도 가장 좋다.
+   (골드 솔리드안은 흰 글자 대비가 3:1 미만이라 채택하지 않음) */
 .gbn-cta{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
-  background:var(--navy);color:#fff;border-radius:var(--r-xs);
+  background:#fff;color:var(--navy);border:1px solid #EBD9B4;border-radius:var(--r-xs);
+  box-shadow:0 1px 3px rgba(20,32,72,.10);
   padding:clamp(8px,1.2cqi,12px) clamp(12px,1.8cqi,17px);
-  font-size:clamp(11.5px,1.7cqi,14.5px);font-weight:600;transition:background .18s}
-.gbn-cta:hover{background:var(--navy-2)}
+  font-size:clamp(11.5px,1.7cqi,14.5px);font-weight:700;transition:background .18s,border-color .18s}
+.gbn-cta:hover{background:#FFFDF8;border-color:#E0C893}
 @media (max-width:420px){
   .gbn-in{gap:10px}
   .gbn-l p{font-size:11px}
