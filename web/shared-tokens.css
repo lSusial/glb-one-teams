@@ -413,12 +413,15 @@ ul{margin:0;padding:0;list-style:none}
    --gold-soft(#FEEAB8) 를 중심으로 brief 카드의 크림(#FFFDF8)에서 시작해
    살짝 짙은 골드로 끝난다. 글자·CTA 는 --navy, 골드 텍스트는 이 사이트가
    이미 쓰는 #B67611(count-pill·dstatus.on·tw-pres.in 과 동일 쌍). */
+/* 배경은 홈 GLOBAL MARKETS 카드(.brief)와 동일하게 맞춘다(2026-09-04 피드백).
+   진한 크림 그라데이션은 페이지에서 혼자 튀었다 — 카드 톤을 맞추면 배너가
+   문서 흐름에 앉고, 유일한 강조는 CTA 하나로 정리된다. */
 .gbn{
   position:relative;overflow:hidden;isolation:isolate;
   display:flex;align-items:center;min-height:clamp(76px,11.2cqi,102px);
   margin:10px 0 2px;padding:clamp(12px,1.9cqi,17px) var(--pad);
-  border:1px solid #F2E3C6;border-radius:var(--r-lg);box-shadow:var(--shadow);
-  background:linear-gradient(112deg,#FFFDF8 0%,var(--gold-soft) 58%,#F4D69C 100%);
+  border:1px solid #F6EDDD;border-radius:var(--r-lg);box-shadow:var(--shadow);
+  background:linear-gradient(170deg,#FFFDF8 0%,#FFFCF5 100%);
   color:var(--navy);
 }
 .gbn-art{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
