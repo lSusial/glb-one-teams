@@ -64,6 +64,18 @@
   </div>
   </div>
 
+  <!-- ── 하단 브랜드 배너 ── -->
+  <a class="gbn" id="gbn" href="countries.html" aria-label="KB 글로벌 네트워크 보기">
+    <svg class="gbn-art" viewBox="0 0 400 110" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg>
+    <span class="gbn-in">
+      <span class="gbn-l">
+        <svg class="gbn-mark" viewBox="0 0 47 34" aria-hidden="true"><use href="#kb-mark"/></svg>
+        <p>CONNECTING PEOPLE,<br/>CREATING GLOBAL VALUE</p>
+      </span>
+      <span class="gbn-cta">KB 글로벌 네트워크 보기 <svg width="14" height="14"><use href="#ico-chev-r"/></svg></span>
+    </span>
+  </a>
+
   <nav class="botnav" id="botnav">
     <a class="on" href="brief.html"><svg><use href="#ico-spark"/></svg><span data-en="Home">홈</span></a>
     <a href="countries.html"><svg><use href="#ico-grid"/></svg><span data-en="News">뉴스</span></a>
@@ -362,7 +374,49 @@
     if (!highlights.length) $('#issue-rows').closest('.card').style.display = 'none';
   }
 
+
+  /* ── 하단 브랜드 배너 아트: 점 세계지도 + 서울 기점 연결호 ──
+     홈 상단 지도는 CROP 을 적용한 확대본이라, 여기서는 같은 LAND 를
+     크롭 없이 전세계로 그린다(배너 오른쪽 절반에 배치). */
+  function renderBanner(){
+    const el = document.querySelector('.gbn-art');
+    if (!el) return;
+    const X0 = 150, X1 = 398, Y0 = 22, Y1 = 88;   // 세로 중앙 밴드(가로로 긴 배너에서 잘림 방지)
+    const ARC_TOP = 20;                          // 연결호 정점 상한
+    const sx = (X1 - X0) / LAND[0].length, sy = (Y1 - Y0) / LAND.length;
+    let dots = '';
+    for (let r = 0; r < LAND.length; r++){
+      for (let c = 0; c < LAND[r].length; c++){
+        if (LAND[r][c] === '1' && (r + c) % 2 === 0)
+          dots += `<circle cx="${(X0 + c*sx).toFixed(1)}" cy="${(Y0 + r*sy).toFixed(1)}" r=".9"/>`;
+      }
+    }
+    const P = (lat, lon) => {
+      const col = (lon - PROJ.lon0) / (PROJ.lon1 - PROJ.lon0) * LAND[0].length;
+      const row = (PROJ.lat0 - lat) / (PROJ.lat0 - PROJ.lat1) * LAND.length;
+      return [X0 + col * sx, Y0 + row * sy];
+    };
+    const HUBS = [[37.5,127],[1.35,103.8],[-6.2,106.8],[22.3,114.2],[51.5,-0.1],[40.7,-74],[19.1,72.9]];
+    const a = P(37.5, 127);
+    const arcs = HUBS.slice(1).map((h) => {
+      const b = P(h[0], h[1]);
+      const mx = (a[0] + b[0]) / 2;
+      const my = Math.max(ARC_TOP, (a[1] + b[1]) / 2 - Math.abs(a[0] - b[0]) * .30 - 4);
+      return `<path d="M${a[0].toFixed(1)} ${a[1].toFixed(1)} Q${mx.toFixed(1)} ${my.toFixed(1)} ${b[0].toFixed(1)} ${b[1].toFixed(1)}"/>`;
+    }).join('');
+    const nodes = HUBS.map((h) => {
+      const q = P(h[0], h[1]);
+      return `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="4.6" fill="#B67611" opacity=".16"/>`
+           + `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="2" fill="#B67611"/>`;
+    }).join('');
+    el.innerHTML =
+      `<g fill="#C99F4E" opacity=".42">${dots}</g>`
+      + `<g fill="none" stroke="#B67611" stroke-width="1" opacity=".55" stroke-linecap="round">${arcs}</g>`
+      + nodes;
+  }
+
   renderLand();
+  renderBanner();
   renderPulse();
   renderBrief();
   renderIssues();
@@ -378,7 +432,7 @@
 
   // ?date/?lang 보존하며 하단 내비 이동
   const carry = new URLSearchParams(location.search); carry.delete('tab');
-  document.querySelectorAll('.botnav a').forEach(a => {
+  document.querySelectorAll('.botnav a, a.gbn').forEach(a => {
     const [path, ownQuery] = a.getAttribute('href').split('?');
     const merged = new URLSearchParams(ownQuery || '');
     for (const [k,v] of carry) merged.set(k, v);

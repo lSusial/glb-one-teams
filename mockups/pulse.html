@@ -325,6 +325,35 @@ ul{margin:0;padding:0;list-style:none}
 .mkt-r .c{font-weight:700}
 .mkt-r .c.up{color:#E0303F}.mkt-r .c.down{color:#2563EB}.mkt-r .c.flat{color:var(--faint)}
 @media (prefers-reduced-motion:reduce){.mkt-marquee{overflow-x:auto}.mkt-track{animation:none}}
+/* ── 하단 브랜드 배너(GLOBAL NETWORK) ─────────────────
+   시안 5안(KB Cream)을 사이트 토큰으로 재배색:
+   --gold-soft(#FEEAB8) 를 중심으로 brief 카드의 크림(#FFFDF8)에서 시작해
+   살짝 짙은 골드로 끝난다. 글자·CTA 는 --navy, 골드 텍스트는 이 사이트가
+   이미 쓰는 #B67611(count-pill·dstatus.on·tw-pres.in 과 동일 쌍). */
+.gbn{
+  position:relative;overflow:hidden;isolation:isolate;
+  display:flex;align-items:center;min-height:clamp(76px,11.2cqi,102px);
+  margin:10px 0 2px;padding:clamp(12px,1.9cqi,17px) var(--pad);
+  border:1px solid #F2E3C6;border-radius:var(--r-lg);box-shadow:var(--shadow);
+  background:linear-gradient(112deg,#FFFDF8 0%,var(--gold-soft) 58%,#F4D69C 100%);
+  color:var(--navy);
+}
+.gbn-art{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none}
+.gbn-in{position:relative;z-index:1;width:100%;display:flex;align-items:center;
+        justify-content:space-between;gap:clamp(10px,1.8cqi,18px);flex-wrap:wrap}
+.gbn-l{display:flex;align-items:center;gap:clamp(9px,1.6cqi,15px);min-width:0}
+.gbn-mark{width:clamp(36px,5.2cqi,48px);height:auto;aspect-ratio:47/34;flex:none;color:var(--gold)}
+.gbn-l p{font-family:var(--f-en);font-weight:600;color:var(--navy);
+         font-size:clamp(11px,1.8cqi,15.5px);line-height:1.34;letter-spacing:.005em}
+.gbn-cta{display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+  background:var(--navy);color:#fff;border-radius:var(--r-xs);
+  padding:clamp(8px,1.2cqi,12px) clamp(12px,1.8cqi,17px);
+  font-size:clamp(11.5px,1.7cqi,14.5px);font-weight:600;transition:background .18s}
+.gbn-cta:hover{background:var(--navy-2)}
+@media (max-width:420px){
+  .gbn-in{gap:10px}
+  .gbn-l p{font-size:11px}
+}
 </style>
 </head>
 <body>
@@ -645,6 +674,19 @@ ul{margin:0;padding:0;list-style:none}
     </div>
     <div class="cty-scroll" id="cty-scroll"></div>
   </section>
+
+  <!-- ── 하단 브랜드 배너 ── -->
+  <a class="gbn" href="#" aria-label="KB 글로벌 네트워크 보기">
+    <svg class="gbn-art" viewBox="0 0 400 110" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg>
+    <span class="gbn-in">
+      <span class="gbn-l">
+        <svg class="gbn-mark" viewBox="0 0 47 34" aria-hidden="true"><use href="#kb-mark"/></svg>
+        <p>CONNECTING PEOPLE,<br/>CREATING GLOBAL VALUE</p>
+      </span>
+      <span class="gbn-cta">KB 글로벌 네트워크 보기 <svg width="14" height="14"><use href="#ico-chev-r"/></svg></span>
+    </span>
+  </a>
+
 
 
   </div>
@@ -1067,7 +1109,49 @@ function bindUI(){
 }
 
 /* ── 부트 ── */
+
+/* ── 하단 브랜드 배너 아트: 점 세계지도 + 서울 기점 연결호 ──
+   홈 상단 지도는 CROP 을 적용한 확대본이라, 여기서는 같은 LAND 를
+   크롭 없이 전세계로 그린다(배너 오른쪽 절반에 배치). */
+function renderBanner(){
+  const el = document.querySelector(".gbn-art");
+  if (!el) return;
+  const X0 = 150, X1 = 398, Y0 = 22, Y1 = 88;   // 세로 중앙 밴드(가로로 긴 배너에서 잘림 방지)
+  const ARC_TOP = 20;                          // 연결호 정점 상한
+  const sx = (X1 - X0) / LAND[0].length, sy = (Y1 - Y0) / LAND.length;
+  let dots = "";
+  for (let r = 0; r < LAND.length; r++){
+    for (let c = 0; c < LAND[r].length; c++){
+      if (LAND[r][c] === "1" && (r + c) % 2 === 0)
+        dots += `<circle cx="${(X0 + c*sx).toFixed(1)}" cy="${(Y0 + r*sy).toFixed(1)}" r=".9"/>`;
+    }
+  }
+  const P = (lat, lon) => {
+    const col = (lon - PROJ.lon0) / (PROJ.lon1 - PROJ.lon0) * LAND[0].length;
+    const row = (PROJ.lat0 - lat) / (PROJ.lat0 - PROJ.lat1) * LAND.length;
+    return [X0 + col * sx, Y0 + row * sy];
+  };
+  const HUBS = [[37.5,127],[1.35,103.8],[-6.2,106.8],[22.3,114.2],[51.5,-0.1],[40.7,-74],[19.1,72.9]];
+  const a = P(37.5, 127);
+  const arcs = HUBS.slice(1).map((h) => {
+    const b = P(h[0], h[1]);
+    const mx = (a[0] + b[0]) / 2;
+    const my = Math.max(ARC_TOP, (a[1] + b[1]) / 2 - Math.abs(a[0] - b[0]) * .30 - 4);
+    return `<path d="M${a[0].toFixed(1)} ${a[1].toFixed(1)} Q${mx.toFixed(1)} ${my.toFixed(1)} ${b[0].toFixed(1)} ${b[1].toFixed(1)}"/>`;
+  }).join("");
+  const nodes = HUBS.map((h) => {
+    const q = P(h[0], h[1]);
+    return `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="4.6" fill="#B67611" opacity=".16"/>`
+         + `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="2" fill="#B67611"/>`;
+  }).join("");
+  el.innerHTML =
+    `<g fill="#C99F4E" opacity=".42">${dots}</g>`
+    + `<g fill="none" stroke="#B67611" stroke-width="1" opacity=".55" stroke-linecap="round">${arcs}</g>`
+    + nodes;
+}
+
 renderLand();
+renderBanner();
 renderPulse();
 renderBrief();
 renderIssues();
