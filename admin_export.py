@@ -8,7 +8,7 @@
   data/export/admin.json  — 데이터 계약(GitHub Pages fetch용)
   data/export/admin.html  — admin.json을 주입한 자기완결 페이지(더블클릭 열람)
 
-설계: 화면분석_개발가이드.md / STATUS.md (go-forward 정적 배포)
+설계: STATUS.md (go-forward 정적 배포)
 사용: python admin_export.py   (main.py 복원 후 서브커맨드로 편입 가능)
 """
 from __future__ import annotations

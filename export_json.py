@@ -1,7 +1,7 @@
 """
 DB → UI 데이터 계약(JSON) export (export_json.py)
 
-화면 코딩과 무관한 백엔드 export. 설계: 화면분석_개발가이드.md / 데이터_AI_카테고리_설계.md
+화면 코딩과 무관한 백엔드 export. 설계: mockups/HANDOFF.md / 데이터_AI_카테고리_설계.md
 현재: countries.json(현지언론 Intelligence 화면) 구현. 나머지 화면(subs/topics/brief)은
 동일 패턴으로 확장한다.
 
