@@ -161,7 +161,7 @@
 ### 세션 9 (2026-08-28) — 인사동향·지표확장·모달 긴요약·태국라오스 편입
 > 세션 8(2026-07-23) 이후 4탭 리브랜딩(글로벌 원팀 뉴스/국가별 뉴스/모니터링/주간 리포트)·
 > taxonomy.yaml·이슈 트래커 카테고리 탭 등 여러 세션이 있었으나 이 로그에는 미기록 —
-> 최신 확정 상태는 `docs/_INDEX_현황.md`·`STATUS.md` 참조.
+> 최신 확정 상태는 `STATUS.md` 참조.
 
 #### 인사동향(리더십 교체) 신설
 - `keyword_filter.py`: 중앙은행·은행·감독당국 "역할어"(bank ceo 등) 단독 매치는 재직 중
@@ -205,6 +205,48 @@
   expand 신규 편입) → `main.py indicators` → `main.py export` → `deploy_web.sh`.
 - 디자이너 공유용으로 `data/export/for_designer/`에 4개 화면 + `shared-modal.js` 사본 보관.
 
+### 세션 10 (2026-09-01~04) — mockups 기준 4화면 UI 전면 리디자인 + rank_score 도입
+
+#### UI 리디자인 (mockups/HANDOFF.md → web/*.html 실반영)
+- 디자이너가 `mockups/`에 완성 목업 4개(`pulse`/`country_detail`/`non_presence`/`topics`)와
+  구현 지시서 `HANDOFF.md`를 전달 → `web/{brief,countries,topics}.html`을 목업 기준으로
+  전면 리스킨, `weekly.html`은 목업 없이 같은 디자인 시스템 톤으로 신규 제작.
+- 공용 인프라 신설: `web/shared-tokens.css`(디자인 토큰+공용 컴포넌트 CSS),
+  `web/shared-sprite.js`(진출 13개국 커스텀 SVG 국기+아이콘 스프라이트) — 둘 다
+  `main.py export`가 `data/export/`로 복사. 기존 `web/shared-modal.js`(기사 상세 모달) 재사용.
+- **주입 계약 유지**: `<script id="{name}-data">` 주입 지점·`?date`/`?lang` 아카이브 내비·
+  `export_json.py` 데이터 계약 전부 그대로(HANDOFF §6.1 — export 템플릿 연동만, 수집/AI 무변경).
+  단, topics.html의 진출/미진출 카테고리 병합(같은 code가 2건으로 분리되어 오는 것)은
+  export_json.py를 안 고치고 프런트 JS에서 병합.
+- 공용 고정 하단내비(홈·뉴스·모니터링·주간 브리핑) 신설 — 여러 차례 사용자 피드백으로
+  라벨·순서 조정("진출국"→"뉴스", 모니터링↔주간브리핑 순서 교체 등).
+- 홈 화면(`brief.html`) 세부:
+  - 기존 D3+topojson 세계지도 → 목업의 자체 도트그리드 지도로 교체(외부 CDN 제거).
+  - "TODAY'S GLOBAL BRIEF" 온도계 칩 → **GLOBAL MARKETS 가로 마퀴 티커**로 교체(2026-09-03).
+    진출 13개국 fx/index/policy_rate 스냅샷, `pulse.json`에 `market_ticker[]` 필드 신설
+    (countries.json 전체를 홈에서 중복 로드하지 않도록 `_country_indicators()` 재사용).
+    hover 정지, `prefers-reduced-motion` 대응, 한국식 등락색(상승 빨강/하락 파랑).
+  - 지도 말풍선 반복 수정: 모바일 폭에서 카드 폭이 텍스트 길이만큼 늘어나 화면 밖으로
+    넘치던 버그(고정 px 기반 배치 알고리즘 — 지도 크기 비례로 스케일링해 수정) → 팝오버
+    개수를 심각도순 최대 4개로 축소 → 최종적으로 **키워드 텍스트 자체를 제거**하고
+    국가코드+신호등급 배지만 표시(요청: "깔끔하게").
+  - 기사 모달의 "💡 KB 시사점 · " 라벨 텍스트 제거, 아이콘+내용만 표시.
+- 검증 방식: 각 화면 구현 후 `python main.py export` → 로컬 서버 + Chrome 자동화 스크린샷
+  대조(데스크톱+iframe으로 강제한 375px 모바일폭 양쪽), KR/EN 토글 확인 후 커밋·
+  Cloudflare Pages 배포(우선 `redesign` 프리뷰 브랜치, 이후 프로덕션 승인받고 반영).
+
+#### rank_score 도입 (별도 세션, Opus 5 클라우드, 커밋 `d608f8a`)
+- 문제: `llm_ranker`의 ai_score는 LLM 절대채점이라 양자화 심함(ACTIVE 460건 중 459건이
+  60~64 구간) → "ai_score 순" 정렬이 사실상 동점 무작위.
+- `ranking.py` 신설: rank_score = ai_score + 다매체 커버리지(duplicate_of 형제수, 가장 강한
+  신호였는데 기존 정렬에 안 쓰이고 있었음) + 매체tier + 최신성 + 진출국 + 이벤트유형 +
+  한국계금융 + 인사이동. `export_json.py`의 미진출 피드·국가 기사피드·topics 등 정렬을
+  전부 교체. ai_score 게이트(임계 55)·국가 온도 계산은 불변(표시 정렬 전용).
+  가중치는 daily_highlights 이력 매칭 30건 그리드탐색 + eval_set_v2 교차검증으로 튜닝.
+- 상세: `docs/rank_score_spec.md`. 부가 산출물 `docs/esg_coverage_patch.md`(ESG 기사가
+  적은 원인 진단 — 분류 로직은 정상, 수집 자체가 공백. 적용 준비된 sources.yaml 패치 포함,
+  아직 미적용).
+
 ---
 
 ## 현재 관리 국가 (KB 거점 기준)
@@ -246,19 +288,20 @@ python main.py run
 
 ## 다음 과제
 
-> 아래 2026-07 목록 중 taxonomy.yaml·kb_implication 컬럼·llm_prefilter/ranker 이식·
-> 새 UI 데이터 연동은 이후 세션들에서 완료됨(이 로그엔 미기록 — `STATUS.md` 참조).
-> 최신 우선순위는 `STATUS.md` 8장·`docs/_INDEX_현황.md` "다음 할 일" 기준.
+> 최신 우선순위는 `STATUS.md` 8장 기준(2026-09-04 갱신). 아래는 이력 보존용 — 완료분은
+> 세션 9·10에서 반영됨.
 
 ### 수집원 보강
 - [ ] `OFFICIAL`/tier0 당국 피드 활성화 (규제 화면)
-- [ ] ID·KH 자회사 IR·공시 수집원 추가 (자회사 화면)
+- [ ] ESG 소스 패치 적용(`docs/esg_coverage_patch.md` — 진단 완료, 패치 미적용)
+- [ ] ID·KH 자회사 IR·공시 수집원 추가 (자회사 화면, 현재 진행 범위 밖)
 - [ ] 태국·라오스 큐레이션 매체 추가 확보(현재 최소 소스만)
 
 ### 기타
-- [ ] AI 프로바이더 실험 (Anthropic 외)
-- [ ] 정기 수집 자동화 (맥북 cron 또는 스케줄러)
+- [ ] 정기 수집 자동화 (맥북 cron 또는 Oracle Cloud 스케줄러)
+- [ ] rank_score 재튜닝(현재 라벨 30건 기반 — `docs/rank_score_spec.md` §8)
 - [ ] 라오스 정책금리 시드값 확보(신뢰 가능한 무료 소스 미발견)
+- [ ] Telegram 채널 발송(영어판, `broadcast.py` 배선은 있음)
 
 > RTHK 피드는 2026-08-28 소스 정리 때 제거(XML 파싱 계속 실패, 피드 자체 문제).
 > `web/regulations.html`(TopicWatch에 흡수돼 죽어있던 페이지)·`web/index_v2.html`
