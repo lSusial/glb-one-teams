@@ -285,15 +285,13 @@
       wrap.appendChild(mk);
 
       if (!popIds.has(s.cc)) return;
-      const kw = EN ? (s.keyword_en || s.keyword) : (s.keyword || s.keyword_en);
 
       const pop = document.createElement('div');
       pop.className = 'pop'; pop.dataset.level = level; pop.dataset.id = s.cc;
       pop.dataset.mx = x; pop.dataset.my = y; pop.dataset.anchor = 'n'; pop.dataset.nx = 0; pop.dataset.ny = 0;
       pop.style.left = x+'%'; pop.style.top = y+'%'; pop.style.transform = 'translate(-50%, -50%)';
       pop.innerHTML = `<div class="pop-h"><span class="pop-code en">${esc(s.cc)}</span>`+
-        `<span class="badge" data-level="${level}">${esc(STATE_BADGE[s.state]||STATE_BADGE.warn)}</span></div>`+
-        (kw ? `<div class="pop-topic">${esc(kw)}</div>` : '');
+        `<span class="badge" data-level="${level}">${esc(STATE_BADGE[s.state]||STATE_BADGE.warn)}</span></div>`;
       wrap.appendChild(pop);
     });
 
