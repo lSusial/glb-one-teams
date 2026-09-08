@@ -372,13 +372,19 @@ ul{margin:0;padding:0;list-style:none}
   padding-bottom:calc(6px + env(safe-area-inset-bottom, 0px));
 }
 .botnav a{
+  position:relative;
   flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
   padding:7px 2px;border-radius:var(--r-sm);color:var(--faint);
 }
-.botnav a svg{width:20px;height:20px}
+.botnav a svg{width:22px;height:22px}
 .botnav a span{font-size:clamp(10px,1.5cqi,11.5px);font-weight:600}
+/* 활성 표시(2026-09-08 시안): 아이콘·글자를 네이비로 올리고 강조는 상단 골드 바가 맡는다.
+   종전처럼 아이콘까지 골드로 칠하면 비활성과의 대비가 '색 차이'로만 남아 약했다. */
 .botnav a.on{color:var(--navy)}
-.botnav a.on svg{color:var(--gold-2)}
+.botnav a.on::before{
+  content:"";position:absolute;top:-6px;left:50%;transform:translateX(-50%);
+  width:26px;height:3px;border-radius:0 0 2px 2px;background:var(--gold-2);
+}
 
 /* ── 빈 상태 ────────────────────────────────────────── */
 .empty-state{padding:40px var(--pad);text-align:center;color:var(--muted);font-size:clamp(12.5px,1.9cqi,14.5px);line-height:1.7}
