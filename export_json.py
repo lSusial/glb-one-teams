@@ -888,7 +888,7 @@ def export_pulse(conn, days: int | None = None) -> dict:
         "snapshot_date": _snapshot_date(),
         "days": days,
         "categories": _compute_pulse(conn, days=days),
-        "top_news": _compute_top_news(conn, days=days, limit=8),
+        "top_news": _compute_top_news(conn, days=days, limit=10),
         "daily_highlights": _daily_highlights(conn),
         "country_section": _compute_country_section(conn, days=days),
         "country_signals": _compute_country_signals(conn, days=days),

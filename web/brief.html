@@ -95,6 +95,13 @@
     return;
   }
 
+  // 오늘의 글로벌 핵심(daily_highlights) 모달용 — top_news(다양성 위해 국가당 상한
+  // 있는 10건)에 없는 국가가 나오면 countries.json 전체 기사에서 보충 검색.
+  // export_json.py 계약 변경 없음(추가 fetch만, topics.html과 동일 패턴).
+  let CTR = null;
+  if (QD) { try { CTR = await (await fetch('archive/' + QD + '/countries.json')).json(); } catch(e){} }
+  if (!CTR) { try { CTR = await (await fetch('countries.json')).json(); } catch(e){} }
+
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const svg = (id, w, h, cls) => `<svg ${cls?`class="${cls}" `:''}width="${w}" height="${h}" aria-hidden="true"><use href="#${id}"/></svg>`;
@@ -335,9 +342,31 @@
   // ── TODAY'S TOP ISSUES: daily_highlights ──
   const highlights = D.daily_highlights || [];
   const HLFLAGS_SYM = {};
+  // 국가코드 → 그 국가 기사(score순) — top_news에 매칭이 없을 때 보충용.
+  const ctrArtsByCC = new Map();
+  if (CTR) {
+    for (const c of (CTR.countries || [])) {
+      const rows = [...(c.articles || [])].sort((a,b) => (b.score||0) - (a.score||0));
+      ctrArtsByCC.set(c.cc, rows);
+    }
+  }
+  // 헤드라인과 겹치는 토큰 수 — countries.json 후보 중 실제로 같은 사건을
+  // 다룬 기사를 점수순 잡동사니보다 우선시키기 위한 근사 유사도.
+  const tokenize = (s) => new Set(String(s||'').toLowerCase().match(/[a-z0-9가-힣]+/g) || []);
+  function titleOverlap(h, a){
+    const hTok = tokenize((h.headline_ko||'') + ' ' + (h.headline_en||''));
+    const aTok = tokenize((a.t||'') + ' ' + (a.t_en||'') + ' ' + (a.q||'') + ' ' + (a.q_en||''));
+    let n = 0; for (const t of hTok) if (aTok.has(t)) n++;
+    return n;
+  }
   function relatedFor(h){
     const codes = h.country_codes || [];
-    return (D.top_news || []).filter(n => codes.includes(n.cc)).slice(0,4);
+    const fromTop = (D.top_news || []).filter(n => codes.includes(n.cc)).slice(0,4);
+    if (fromTop.length) return fromTop;
+    const fromCtr = [];
+    for (const cc of codes) fromCtr.push(...(ctrArtsByCC.get(cc) || []));
+    fromCtr.sort((a,b) => titleOverlap(h,b) - titleOverlap(h,a) || (b.score||0) - (a.score||0));
+    return fromCtr.slice(0,4);
   }
   function hlHead(h){ return EN ? (h.headline_en||h.headline_ko) : (h.headline_ko||h.headline_en); }
   function hlImp(h){ return EN ? (h.impact_en||h.impact_ko) : (h.impact_ko||h.impact_en); }
