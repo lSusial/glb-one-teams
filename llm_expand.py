@@ -2,8 +2,10 @@
 모달 전용 긴 요약 (llm_expand.py)
 
 카드용 짧은 요약(summary_ko/summary_en, 2~4문장)과 별개로, 기사 상세 모달에서
-보여줄 15~35줄(6~10문단) 긴 요약(expanded_summary/_en)을 생성한다.
-(2026-09-08: 기존 10~20줄 대비 약 1.5~2배로 확대)
+보여줄 긴 요약(expanded_summary/_en)을 생성한다.
+분량 변경 이력:
+  기존 10~20줄 → 2026-09-08 15~35줄로 확대 → 같은 날 **약 2/3로 축소**(아래가 현재값).
+  실측(노출 99건) 중앙값 989자·6문단이 모달에서 과하게 길다는 피드백 → 목표 660자·4문단.
 
 비용 관리: 실제로 화면에 노출되는 기사(ACTIVE, ai_score>=임계, 중복 아님)에만
 생성 — 전량 생성 금지. 증분(expanded_summary IS NULL인 것만), Haiku + Batches.
@@ -37,19 +39,18 @@ _SYS = (
     "text is provided, and let the LENGTH instruction below (not this note) decide how long that is. "
     "Output ONLY this JSON, nothing else:\n"
     '{"expanded_summary_en": "...", "expanded_summary_ko": "..."}\n\n'
-    "Length: this MUST be substantially longer than a typical 4-paragraph news summary — target "
-    "at least 7-8 short paragraphs (roughly 20-35 lines when displayed). Separate paragraphs with "
+    "Length: aim for about 4-5 short paragraphs (roughly 12-20 lines when displayed, ~600-700 "
+    "Korean characters). This is a modal the reader opens for a bit more depth than the card — "
+    "not a full article. Separate paragraphs with "
     "a blank line (\\n\\n). Before writing, mine the source text(s) for everything usable: exact "
     "figures and dates, named people/institutions and their stated positions, direct or paraphrased "
     "quotes, comparisons to prior periods or similar events, dissenting or alternative views if "
     "present, and any process/procedural detail (how a decision was reached, what happens next, "
-    "who decides). Nearly every real news article contains enough of this raw material to fill "
-    "7-8 paragraphs once you extract it properly instead of compressing it away — treat a shorter "
-    "result as under-extraction, not as evidence the source was thin. Cover, in this order: "
+    "who decides). Pick the most load-bearing of that material and leave the rest out — this is a "
+    "tight briefing, so prefer one dense paragraph over two thin ones. Cover, in this order: "
     "(1) what happened — the core facts; (2) background/context — why now, what led here; "
-    "(3) concrete numbers/details from the source(s); (4) secondary parties, timeline, or related "
-    "prior events; (5) any quotes, reactions, or stated positions from named people/institutions; "
-    "(6) likely knock-on effects or outlook. If a source is genuinely just a headline plus a "
+    "(3) concrete numbers/details, key named parties, and any quotes or stated positions; "
+    "(4) likely knock-on effects or outlook. If a source is genuinely just a headline plus a "
     "one-sentence snippet with nothing more to extract, write however many paragraphs (even just "
     "one or two) that snippet actually supports — a short, honest summary from thin material is "
     "correct and expected in that case, not a failure. Never invent facts to hit the target, and "
@@ -102,23 +103,36 @@ def ensure_columns(conn) -> None:
 
 
 def run_expand(conn, provider: LLMProvider | None = None,
-                limit: int | None = None, use_batch: bool | None = None) -> dict:
+                limit: int | None = None, use_batch: bool | None = None,
+                redo_days: int | None = None) -> dict:
     """노출 기사(ACTIVE: ai_score>=임계, 중복 아님)에만 모달용 긴 요약을 생성.
-    이미 있으면 스킵(증분) — expanded_summary IS NULL 인 것만 대상.
+    기본은 증분 — expanded_summary IS NULL 인 것만 대상(이미 있으면 스킵).
+
+    redo_days=N 이면 최근 N일 게시 기사는 이미 요약이 있어도 다시 생성한다.
+    프롬프트(길이·구성)를 바꾼 뒤 기존분에 소급 적용할 때만 사용 — 재생성분만큼
+    LLM 비용이 그대로 추가되므로 창을 좁게 잡을 것.
     """
     ensure_columns(conn)
     provider = provider or get_provider("fast", use_batch=use_batch)   # 저비용(Haiku)
     limit = limit or 200
 
+    if redo_days:
+        # 재생성 모드: 창 안의 기사는 요약 유무와 무관하게 대상
+        date_clause, date_params = db.days_clause_now(redo_days, alias="a")
+        have_clause = ""
+    else:
+        date_clause, date_params = "", []
+        have_clause = " AND a.expanded_summary IS NULL"
+
     rows = conn.execute(
-        """SELECT a.article_id, a.title, a.summary, a.full_text, a.link,
-                  m.primary_country_code AS cc, m.media_name
-           FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
-           WHERE a.ai_score >= ? AND a.duplicate_of IS NULL
-             AND a.expanded_summary IS NULL
-           ORDER BY a.ai_score DESC
-           LIMIT ?""",
-        (config.AI_SCORE_ACTIVE_THRESHOLD, limit),
+        f"""SELECT a.article_id, a.title, a.summary, a.full_text, a.link,
+                   m.primary_country_code AS cc, m.media_name
+            FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
+            WHERE a.ai_score >= ? AND a.duplicate_of IS NULL
+              {have_clause}{date_clause}
+            ORDER BY a.ai_score DESC
+            LIMIT ?""",
+        (config.AI_SCORE_ACTIVE_THRESHOLD, *date_params, limit),
     ).fetchall()
 
     stats = dict(total=len(rows), written=0, synthesized=0)

@@ -262,8 +262,10 @@ def cmd_expand(args):
     import llm_expand
     conn = db.open_conn()
     ub = _batch_flag(args)
-    s = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub), "expand")
-    print(f"[expand] 대상={s['total']}  작성={s['written']}  다출처={s['synthesized']}")
+    rd = getattr(args, "redo_days", None)
+    s = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub, redo_days=rd), "expand")
+    print(f"[expand] 대상={s['total']}  작성={s['written']}  다출처={s['synthesized']}"
+          + (f"  (재생성 {rd}일창)" if rd else ""))
 
 
 def cmd_translate(args):
@@ -436,6 +438,8 @@ def main():
     rnk.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
     rnk.add_argument("--sync", action="store_true", help=_SYNC_HELP)
     exp = sub.add_parser("expand", help="모달용 긴 요약(expanded_summary, 노출 기사만·다출처 종합)")
+    exp.add_argument("--redo-days", type=int, dest="redo_days",
+                     help="최근 N일 게시분은 요약이 이미 있어도 재생성(프롬프트 변경 소급용, 비용 추가)")
     exp.add_argument("--sync", action="store_true", help=_SYNC_HELP)
     trn = sub.add_parser("translate", help="영어 기준본 → 한국어 번역 (표시분, 저비용)")
     trn.add_argument("--days", type=int, help="최근 N일만")
