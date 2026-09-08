@@ -29,7 +29,13 @@ _SYS = (
     "If multiple numbered sources are given below (\"Source 1:\", \"Source 2:\", ...), synthesize "
     "them into ONE independent account combining facts from all of them — do not paraphrase a "
     "single source or copy its sentence structure. If only one source is given, write from that "
-    "source alone. Output ONLY this JSON:\n"
+    "source alone.\n\n"
+    "You MUST always output the JSON below with a non-empty summary, no matter how little source "
+    "text is given — even a bare headline plus a one-sentence snippet is enough to write a short "
+    "summary from. NEVER refuse, ask for more information, or claim the source content is missing "
+    "or insufficient; that is not an acceptable response. Do the best job possible with whatever "
+    "text is provided, and let the LENGTH instruction below (not this note) decide how long that is. "
+    "Output ONLY this JSON, nothing else:\n"
     '{"expanded_summary_en": "...", "expanded_summary_ko": "..."}\n\n'
     "Length: this MUST be substantially longer than a typical 4-paragraph news summary — target "
     "at least 7-8 short paragraphs (roughly 20-35 lines when displayed). Separate paragraphs with "
@@ -43,9 +49,13 @@ _SYS = (
     "(1) what happened — the core facts; (2) background/context — why now, what led here; "
     "(3) concrete numbers/details from the source(s); (4) secondary parties, timeline, or related "
     "prior events; (5) any quotes, reactions, or stated positions from named people/institutions; "
-    "(6) likely knock-on effects or outlook. Only if a source is genuinely a short wire brief with "
-    "no further extractable detail should the result run shorter — do not invent facts to hit the "
-    "target, but do not stop early just because a shorter draft feels complete.\n"
+    "(6) likely knock-on effects or outlook. If a source is genuinely just a headline plus a "
+    "one-sentence snippet with nothing more to extract, write however many paragraphs (even just "
+    "one or two) that snippet actually supports — a short, honest summary from thin material is "
+    "correct and expected in that case, not a failure. Never invent facts to hit the target, and "
+    "never restate the same fact reworded across multiple paragraphs just to reach the target "
+    "length — if you notice a new paragraph would only rephrase a point already made, stop there "
+    "instead of adding it.\n"
     "Do NOT add a KB-implication section — that is handled elsewhere.\n"
     "Stay strictly within the facts given in the source(s); never invent numbers, quotes, or "
     "events not present in the source text.\n"
@@ -56,6 +66,32 @@ _SYS = (
     "expanded_summary_en in English; expanded_summary_ko is a natural Korean rendering of the "
     "SAME content (not a separate re-summary) — '~다' 체, 신문 기사 톤."
 )
+
+# 소스가 헤드라인+한두 문장뿐인 얇은 경우(페이월로 스니펫만 남은 Bloomberg/WSJ 등) 전용.
+# 위 _SYS의 "7~8문단 목표"를 그대로 두면 모델이 같은 얘기를 문단마다 다르게 돌려 말해
+# 억지로 채운다(실측 확인) — 분량 목표 자체를 없애고 "쓸 수 있는 만큼만" 쓰게 한다.
+_SYS_THIN = (
+    "You are a news desk editor at KB Financial Group writing a briefing for a modal popup. "
+    "The source material below is very thin (just a headline and a short snippet, likely because "
+    "the full article is paywalled).\n\n"
+    "Write however many short paragraphs (typically 1-3) that thin material actually supports — "
+    "a short, honest summary is correct here, not a failure. Do NOT pad, speculate, or restate the "
+    "same fact reworded across multiple paragraphs to appear longer; never invent facts, numbers, "
+    "or quotes not present in the source. If multiple numbered sources are given, synthesize them "
+    "into one account instead of paraphrasing a single one.\n\n"
+    "You MUST always output the JSON below with a non-empty summary — never refuse or ask for more "
+    "information. Output ONLY this JSON, nothing else:\n"
+    '{"expanded_summary_en": "...", "expanded_summary_ko": "..."}\n\n'
+    "Do NOT add a KB-implication section — that is handled elsewhere.\n"
+    "Tone: dry newspaper-desk, facts first. Ban AI-ish filler and clichés (\"in a significant "
+    "move\", \"marks a pivotal moment\", \"underscores\", \"delve\", \"realm\", \"tapestry\", "
+    "\"game-changer\", \"in today's fast-paced/evolving landscape\", \"in conclusion\"), no "
+    "meta-commentary about the article itself, no stacked hedging qualifiers.\n"
+    "expanded_summary_en in English; expanded_summary_ko is a natural Korean rendering of the "
+    "SAME content (not a separate re-summary) — '~다' 체, 신문 기사 톤."
+)
+
+_THIN_SOURCE_MAXLEN = 300  # 이 길이(자) 이하면 _SYS_THIN 사용
 
 
 def ensure_columns(conn) -> None:
@@ -91,13 +127,15 @@ def run_expand(conn, provider: LLMProvider | None = None,
     for i, r in enumerate(rows):
         cid = str(i)
         siblings = _cluster_sources(conn, r["article_id"], r["media_name"])
-        blocks = [f"Source 1 ({r['media_name']}): {r['title']}\n{_source_snippet(r)}"]
+        snippets = [_source_snippet(r)] + [_source_snippet(s) for s in siblings]
+        blocks = [f"Source 1 ({r['media_name']}): {r['title']}\n{snippets[0]}"]
         for n, src in enumerate(siblings, start=2):
-            blocks.append(f"Source {n} ({src['media_name']}): {src['title']}\n{_source_snippet(src)}")
+            blocks.append(f"Source {n} ({src['media_name']}): {src['title']}\n{snippets[n-1]}")
         if siblings:
             stats["synthesized"] += 1
         user = f"매체: {r['media_name']}  국가: {r['cc']}\n" + "\n\n".join(blocks)
-        requests.append((cid, _SYS, user, 4000))
+        sys_prompt = _SYS_THIN if sum(len(s) for s in snippets) <= _THIN_SOURCE_MAXLEN else _SYS
+        requests.append((cid, sys_prompt, user, 4000))
         row_by_id[cid] = r
 
     results = provider.complete_json_batch(requests) if requests else {}
