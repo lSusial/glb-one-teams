@@ -1,6 +1,6 @@
 # 현황 / 확정안 대비 정합 — glb-one-teams
 
-> 최초 작성 2026-05-29(prototype) | glb-one-teams 재작성 2026-07-14 | 전면 갱신 2026-08-14 | 부분 갱신 2026-08-28(거점 13개·인사동향·지표확장·모달 긴요약 반영) | **전면 갱신 2026-09-04**(mockups 기준 4화면 UI 리디자인 완료·rank_score 도입·GLOBAL MARKETS 티커) | For Internal Use Only
+> 최초 작성 2026-05-29(prototype) | glb-one-teams 재작성 2026-07-14 | 전면 갱신 2026-08-14 | 부분 갱신 2026-08-28(거점 13개·인사동향·지표확장·모달 긴요약 반영) | 전면 갱신 2026-09-04(mockups 기준 4화면 UI 리디자인 완료·rank_score 도입·GLOBAL MARKETS 티커) | **부분 갱신 2026-09-08**(인트로 화면 신설·하단내비 전용 아이콘·KFI/인사동향 모니터링 이전·모달 긴요약 확대·RANK_LIMIT 상향·근접중복 버그 2건 수정) | For Internal Use Only
 >
 > 본 문서는 **확정안 ↔ go-forward 레포(`glb-one-teams`) 현황 브리지**입니다. 화면 설계는 [`mockups/HANDOFF.md`](mockups/HANDOFF.md)(★현재 기준 — 구 `화면분석_개발가이드.md`/`데이터_AI_카테고리_설계.md`는 이 문서로 대체됨), 작업 이력은 [`docs/work_log.md`](docs/work_log.md), 랭킹 로직은 [`docs/rank_score_spec.md`](docs/rank_score_spec.md)를 참조하세요.
 
@@ -33,13 +33,13 @@ fetch → keyword_filter → dedup → prefilter(LLM) → fulltext → rank(LLM)
 | AI 분석 | `llm_ranker.py` | ✅ 운영 중 | ai_score·summary·topics·kb_implication |
 | 번역 | `llm_translate.py` | ✅ 운영 중 | ACTIVE분 한국어, EN canonical 폴백 |
 | 국가 브리핑 | `briefing.py` | ✅ 운영 중 | daily, 13~15개국 생성(태국·라오스 포함) |
-| 모달 긴 요약 | `llm_expand.py` | ✅ 운영 중 (신규 2026-08-28) | 노출(ACTIVE) 기사만 10~20줄 다출처 종합, 증분 |
-| 인사동향 태깅 | `keyword_filter.py` | ✅ 운영 중 (신규 2026-08-28) | 역할어×교체신호어 AND매치, LLM 없음 |
+| 모달 긴 요약 | `llm_expand.py` | ✅ 운영 중 (2026-09-08 분량 1.5~2배 확대: 10~20줄→15~35줄) | 노출(ACTIVE) 기사만, 다출처 종합, 증분. 소스가 얇으면(페이월 스니펫뿐) 별도 경량 프롬프트(`_SYS_THIN`)로 분기 — 거부·과장 늘리기 방지 |
+| 인사동향 태깅 | `keyword_filter.py` | ✅ 운영 중 (신규 2026-08-28) | 역할어×교체신호어 AND매치, LLM 없음. export 시 근접중복 클러스터링 추가(2026-09-08 — 같은 인사이벤트가 국가 오분류로 며칠에 걸쳐 재탕되던 버그 수정) |
 | 거시지표 | `indicators.py` | ✅ 운영 중 (확장 2026-08-28) | 환율·지수(+스파크라인)·정책금리·미국 10년물 국채 |
 | 프로바이더 | `llm_provider.py` | ✅ | Batches API(50%↓), `--sync` 동기 옵션 |
 | 복합 랭킹 | `ranking.py` | ✅ 운영 중 (신규 2026-09-03) | ai_score 양자화 보완용 rank_score(다매체 커버리지+tier+최신성 등) — 표시 정렬 전용, ACTIVE 게이트·mood는 ai_score 그대로. 상세 `docs/rank_score_spec.md` |
 | export | `export_json.py` | ✅ 운영 중 | countries/pulse/weekly/topics + 아카이브. rank_score 정렬 반영 |
-| UI (4탭, mockups 리디자인) | `web/*.html` | ✅ 실데이터 연동 (신디자인 2026-09-01~04 완료) | `mockups/{pulse,country_detail,non_presence,topics}.html`+`HANDOFF.md` 기준 4화면 전면 리스킨, 공용 하단내비, `shared-tokens.css`/`shared-sprite.js`. Cloudflare Pages 배포 완료 |
+| UI (4탭+인트로, mockups 리디자인) | `web/*.html` | ✅ 실데이터 연동 (신디자인 2026-09-01~04, 인트로·내비 아이콘 2026-09-08) | `mockups/{pulse,country_detail,non_presence,topics}.html`+`HANDOFF.md` 기준 4화면 전면 리스킨, 공용 하단내비(전용 SVG 아이콘 4종+활성 골드 상단바), 첫 진입 인트로 연출(`web/intro.html` — KB 진출 11개 거점 지도 애니메이션 → brief 자동 이동), `shared-tokens.css`/`shared-sprite.js`. Cloudflare Pages 배포 완료 |
 
 > **비용**: 모델=Haiku, Message Batches(50%↓), `--days 2` 물량 제한. ACTIVE 임계=55.
 
@@ -71,10 +71,12 @@ fetch → keyword_filter → dedup → prefilter(LLM) → fulltext → rank(LLM)
 
 | 탭 | 파일 | 데이터 창 | 내용 |
 |---|---|---|---|
-| ① 홈 | `brief.html` | 전일+당일 | GLOBAL PULSE 도트지도(거점 신호 말풍선, 최대 4개·심각도순, 국가코드+등급배지만) + **GLOBAL MARKETS 티커**(진출 13개국 fx/index/policy_rate 가로 마퀴, 신규 2026-09-03) + TODAY'S TOP ISSUES(daily_highlights 10건) |
-| ② 뉴스 | `countries.html` | 전일+당일 | 진출 13·미진출 13 토글(국기 선택기) + 거시지표 카드(rank_score순 기사) + 일일 브리핑 + 기사 피드. 한국계 금융기관·인사동향 탭 |
-| ③ 모니터링 | `topics.html` | 주간(7일) | 이벤트 유형 탭(규제·거래투자·사건사고), 진출+미진출 병합·rank_score순 |
+| ① 홈 | `brief.html` | 전일+당일 | GLOBAL PULSE 도트지도(거점 신호 말풍선, 최대 4개·심각도순, 국가코드+등급배지만) + **GLOBAL MARKETS 티커**(진출 13개국 fx/index/policy_rate 가로 마퀴, 2026-09-03) + TODAY'S TOP ISSUES(daily_highlights, top_news 10건). TOP ISSUES 모달은 top_news에 매칭이 없으면 countries.json 전체에서 제목 유사도로 보충(2026-09-08 수정) |
+| ② 뉴스 | `countries.html` | 전일+당일 | 진출 13·미진출 13 토글(국기 선택기) + 거시지표 카드(rank_score순 기사) + 일일 브리핑 + 기사 피드. **한국계 금융기관·인사동향은 2026-09-08 모니터링 탭으로 이전** |
+| ③ 모니터링 | `topics.html` | 주간(7일) | 이벤트 유형 탭(규제·거래투자·사건사고) + **한국계 금융기관·인사동향**(2026-09-08 편입, countries.json을 클라이언트에서 추가 fetch), 진출+미진출 병합·rank_score순. 인사동향은 export 시 근접중복 제거 |
 | ④ 주간 브리핑 | `weekly.html` | 주간 | 국기 선택기 + 국가별 주간 요약·이슈·전망·키워드(목업 없이 디자인 시스템 톤으로 신규 제작, 2026-09-01) |
+
+**인트로**: `intro.html` — 첫 진입(`/`) 시 KB 진출 11개 거점(서울 본점 기준) 지도 애니메이션 후 `brief.html`로 자동 이동, SKIP 가능. `?date`/`?lang` 쿼리 보존.
 
 **주제 카테고리 6종(축 C, UI 필터)**: 경제 · 금융 · 디지털 · ESG · 리스크 · 지정학
 **이벤트 유형 3종(축 E, 모니터링 전용)**: 규제 · 거래·투자 · 사건사고
@@ -129,6 +131,7 @@ python main.py eval --mode ranker
 - Oracle Cloud SSH 가끔 타임아웃 (서버 상태 확인 필요)
 - ESG 카테고리 기사 수 적음 — 원인은 분류 오탐이 아니라 **수집 공백**(진단·패치안 `docs/esg_coverage_patch.md`, 미적용)
 - DB integrity check 실패 이력 있음(인덱스 손상) → `REINDEX idx_articles_dedup`으로 복구
+- RANK_LIMIT이 최근 30일 중 절반 가까운 날 물량을 초과해 초과분이 영구 미처리로 빠지던 버그 발견 → 400→700 상향(2026-09-08, PREFILTER_LIMIT과 동일 병목 패턴). 재발 여지 있어 물량 계속 모니터링 필요
 
 **다음 과제 (우선순위)**:
 1. **정기 자동화** — Oracle Cloud cron (수집→AI→export→CF Pages)
@@ -138,7 +141,8 @@ python main.py eval --mode ranker
 5. **Oracle Cloud 서버 점검** — SSH 타임아웃 원인 파악
 6. **라오스 정책금리** — 신뢰 가능한 무료 시드값 미확보, 재검토 필요
 7. **rank_score 재튜닝** — 현재 표본 30건 기반(`docs/rank_score_spec.md` §8) — 라벨 늘려 재실행 여지
+8. **근접중복 클러스터링 일반화 검토** — 인사동향·미진출국에 이미 적용된 국가 오분류 대응 로직을 다른 모아보기 섹션(korean_fi 등)에도 필요한지 점검
 
 ---
 
-*최종 업데이트: 2026-09-04 (전면 갱신 — mockups 기준 4화면 리디자인·rank_score 도입 반영. 세션 상세는 `docs/work_log.md`)*
+*최종 업데이트: 2026-09-08 (부분 갱신 — 인트로 화면·내비 아이콘·탭 재배치·모달 요약 확대·RANK_LIMIT 버그 수정 반영. 세션 상세는 `docs/work_log.md`)*

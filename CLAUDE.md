@@ -78,7 +78,7 @@ python main.py list    # 최근 기사 확인
 - **AI 레이어 현황:** `schema.sql`에 AI 컬럼(`llm_prefilter`, `ai_score`, `summary_ko`, `topics`, `kb_implication`) + `country_briefings` 완비, 매일 운영 중. 모델=Haiku, **Message Batches API(50% 할인) 기본**(`--sync`로 동기 전환). ai_score ACTIVE 임계=**55**. 표시 정렬은 `ranking.py`의 rank_score(다매체 커버리지+매체tier+최신성 등, 상세 `docs/rank_score_spec.md`) — ai_score 게이트 자체는 불변.
 - **카테고리 3축:** 지역(`sources.yaml`) / 관련성게이트(`keyword_filter.py`) / 주제(`taxonomy.yaml`, AI `topics`로 분류).
 
-## 다음 과제 (우선순위) — 2026-09-04 갱신, 상세는 `STATUS.md` 8장
+## 다음 과제 (우선순위) — 2026-09-08 갱신, 상세는 `STATUS.md` 8장
 1. 정기 수집 자동화(Oracle Cloud cron)
 2. ESG 소스 보강 — `docs/esg_coverage_patch.md` 패치안 적용(분류는 정상, 수집 공백이 원인)
 3. Telegram 채널 발송(영어판)

@@ -373,10 +373,15 @@
   window.openHlModal = function(i){
     const h = highlights[i]; if (!h) return;
     const rel = relatedFor(h);
+    // 관련기사 중 모달용 긴 요약(expanded_summary)이 있으면 그걸 그대로 쓴다(뉴스
+    // 탭 모달과 동일한 상세도) — 없으면 기존처럼 카드용 짧은 요약(q)들을 이어붙임.
+    const withExpanded = rel.find(r => r.expanded_summary || r.expanded_summary_en);
     openArticleModal({
       t: hlHead(h),
       category: EN ? (h.category) : h.category,
       k: h.impact_ko, k_en: h.impact_en,
+      expanded_summary: withExpanded ? withExpanded.expanded_summary : '',
+      expanded_summary_en: withExpanded ? withExpanded.expanded_summary_en : '',
       q: rel.map(r => r.q).filter(Boolean).join(' '),
       q_en: rel.map(r => r.q_en||r.q).filter(Boolean).join(' '),
       rl: rel.map(r => ({t:r.t, u:r.u, src:r.src})),
