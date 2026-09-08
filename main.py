@@ -350,7 +350,10 @@ def cmd_export(args):
         print(f"[export] shared-modal.js 복사 → {config.EXPORT_DIR / 'shared-modal.js'}")
 
     # 리디자인 공용 CSS/스프라이트(2026-09) — shared-modal.js와 동일 패턴으로 복사.
-    for name in ("shared-tokens.css", "shared-sprite.js"):
+    # intro.html : 첫 진입 인트로 연출(자기완결, 데이터 주입 없음).
+    # index.html : 진입 게이트(/ → intro.html). 둘 다 템플릿이 아니라 정적 파일이라
+    #              _inject_html 대상이 아니고 여기서 그대로 복사한다.
+    for name in ("shared-tokens.css", "shared-sprite.js", "intro.html", "index.html"):
         src = config.ROOT / "web" / name
         if src.exists():
             shutil.copy2(src, config.EXPORT_DIR / name)
