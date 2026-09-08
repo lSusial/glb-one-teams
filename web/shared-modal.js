@@ -32,11 +32,11 @@
       const style = document.createElement('style');
       style.id = 'sharedModalStyle';
       style.textContent = `
-        #sharedArtOv{position:fixed;inset:0;background:rgba(20,18,15,.55);display:none;align-items:center;justify-content:center;padding:20px;z-index:9999}
+        #sharedArtOv{position:fixed;inset:0;background:rgba(20,18,15,.55);display:none;align-items:center;justify-content:center;padding:28px 20px;z-index:9999}
         #sharedArtOv.on{display:flex}
-        .sh-modal{background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:86vh;overflow:auto;padding:22px 24px;position:relative;
+        .sh-modal{background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:78vh;max-height:78dvh;overflow:auto;padding:22px 24px;position:relative;
           font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#2b2926;font-size:14px}
-        .sh-modal .sh-x{position:absolute;top:14px;right:16px;cursor:pointer;color:#aaa;font-size:22px;line-height:1;border:none;background:none}
+        .sh-modal .sh-x{position:sticky;top:-4px;float:right;z-index:2;width:40px;height:40px;margin:-8px -12px 0 0;display:grid;place-items:center;cursor:pointer;color:#8a857e;font-size:24px;line-height:1;border:none;background:rgba(255,255,255,.92);border-radius:50%;box-shadow:0 1px 6px rgba(20,18,15,.10)}
         .sh-modal .sh-meta{font-size:11px;color:#7a746c;margin-bottom:6px}
         .sh-modal .sh-cat{display:inline-block;font-size:10.5px;font-weight:800;color:#fff;border-radius:20px;padding:2px 9px;margin-right:5px}
         .sh-modal h2{font-size:17px;margin:8px 0 8px;line-height:1.4}
