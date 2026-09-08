@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>KB Global One Team — 모니터링</title>
-<meta name="description" content="KB 글로벌 원팀 뉴스 — 규제·거래투자·사건사고 이벤트 모니터링"/>
+<meta name="description" content="KB 글로벌 원팀 뉴스 — 규제·거래투자·사건사고 이벤트, 한국계 금융기관, 인사동향 모니터링"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap"/>
@@ -63,6 +63,12 @@
   try { if (!D) D = JSON.parse(document.getElementById('topics-data').textContent); } catch(e){}
   if (!D) { try { D = await (await fetch('topics.json')).json(); } catch(e){} }
 
+  // 한국계 금융기관·인사동향 — countries.json에 이미 있는 데이터를 그대로 재사용
+  // (export_json.py 계약 변경 없음). topics.json과 같은 3단 폴백.
+  let CTR = null;
+  if (QD) { try { CTR = await (await fetch('archive/' + QD + '/countries.json')).json(); } catch(e){} }
+  if (!CTR) { try { CTR = await (await fetch('countries.json')).json(); } catch(e){} }
+
   const $ = (s) => document.querySelector(s);
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const chev = () => `<svg class="ar" width="15" height="15" aria-hidden="true"><use href="#ico-chev-r"/></svg>`;
@@ -91,18 +97,33 @@
   const TOPICS = [...byCode.values()];
   TOPICS.forEach(t => t.arts.sort((a,b) => (b.score||0) - (a.score||0)));
 
+  // 한국계 금융기관·인사동향 — countries.html에서 이전(2026-09-08). 진출/미진출
+  // 구분 없는 평면 리스트라 n_in/n_out 대신 flat:true로 표시.
+  const PRESENCE_CODES = new Set(['GB','US','HK','CN','JP','SG','IN','VN','MM','ID','KH','TH','LA']);
+  if (CTR) {
+    const kfiArts = (CTR.korean_fi && CTR.korean_fi.articles) || [];
+    const personnelArts = (CTR.personnel && CTR.personnel.articles) || [];
+    if (kfiArts.length) TOPICS.push({code:'KFI', label:'한국계 금융기관', label_en:'Korean FI', flat:true,
+      arts:[...kfiArts].sort((a,b) => (b.score||0) - (a.score||0))});
+    if (personnelArts.length) TOPICS.push({code:'PERSONNEL', label:'인사동향', label_en:'Leadership Moves', flat:true,
+      arts:[...personnelArts].sort((a,b) => (b.score||0) - (a.score||0))});
+  }
+
   function render(code){
     const t = TOPICS.find(x => x.code === code) || TOPICS[0];
     document.querySelectorAll('.tw-tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.code === t.code)));
     $('#twhead').innerHTML = `<span class="tt">${esc(EN ? (t.label_en||t.label) : t.label)}</span>`+
-      `<span class="sub">${EN?'Presence':'진출'} <b>${t.n_in}</b> · ${EN?'Non-presence':'미진출'} <b>${t.n_out}</b></span>`;
+      (t.flat
+        ? `<span class="sub">${EN?'Total':'전체'} <b>${t.arts.length}</b></span>`
+        : `<span class="sub">${EN?'Presence':'진출'} <b>${t.n_in}</b> · ${EN?'Non-presence':'미진출'} <b>${t.n_out}</b></span>`);
     if (!t.arts.length) {
       $('#twfeed').innerHTML = `<div class="empty-state">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;
       $('#twfeed')._rows = [];
       return;
     }
     $('#twfeed').innerHTML = t.arts.map((a,i) => {
-      const pres = a.presence === '진출'
+      const isPresence = t.flat ? PRESENCE_CODES.has(a.cc) : a.presence === '진출';
+      const pres = isPresence
         ? `<span class="tw-pres in">${EN?'Presence':'진출'}</span>` : `<span class="tw-pres">${EN?'Non-presence':'미진출'}</span>`;
       return `<li class="tw-item" data-i="${i}">
         <div class="tw-tags"><span class="tw-cc"><span class="fg">${esc(a.flag||'')}</span>${esc(ccName(a))}</span>${pres}</div>

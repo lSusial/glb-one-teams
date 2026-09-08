@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>KB Global One Team — 국가별 뉴스</title>
-<meta name="description" content="KB 글로벌 원팀 뉴스 — 진출·미진출국 현지언론, 한국계 금융기관, 인사동향"/>
+<meta name="description" content="KB 글로벌 원팀 뉴스 — 진출·미진출국 현지언론"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap"/>
@@ -50,8 +50,6 @@
   <div class="chipbar" id="pmode">
     <button class="cb" data-p="presence" aria-selected="true" data-en="Presence">진출국</button>
     <button class="cb" data-p="non" data-en="Non-presence">KB 미진출국</button>
-    <button class="cb" data-p="kfi" data-en="🇰🇷 Korean FI">🇰🇷 한국계 금융기관</button>
-    <button class="cb" data-p="personnel" data-en="👤 Leadership Moves">👤 인사동향</button>
   </div>
 
   <!-- 진출국: 국기 피커 + 국가 상세 패널 -->
@@ -114,8 +112,6 @@
 
   const arts = []; (DATA.countries || []).forEach(c => (c.articles || []).forEach(a => arts.push({...a, cc:c.cc, flag:c.flag})));
   const nonArts = (DATA.non_presence && DATA.non_presence.articles) || [];
-  const kfiArts = (DATA.korean_fi && DATA.korean_fi.articles) || [];
-  const personnelArts = (DATA.personnel && DATA.personnel.articles) || [];
 
   let pMode = (P.get('tab') === 'non') ? 'non' : 'presence';
   let fCC = P.get('cc') || '', fCat = '', flatCat = '';
@@ -213,11 +209,9 @@
     };
   }
 
-  // ── 평면 리스트(미진출국/KFI/인사동향 공용) ──
+  // ── 평면 리스트(미진출국 전용, 한국계 금융기관·인사동향은 모니터링 탭으로 이전 2026-09-08) ──
   const FLAT_CFG = {
     non:        { ico:'🌐', h:EN?'KB Non-Presence Feed':'KB 미진출국 통합 피드', d:EN?'Markets with Korean banks but no KB entity — merged feed':'한국계 은행은 있지만 KB는 없는 시장의 통합 피드', src:() => nonArts, cats:true, rel:true },
-    kfi:        { ico:'🇰🇷', h:EN?'Korean FI Activity':'한국계 금융기관 동향', d:EN?'Shinhan · Hana · Woori · IBK · KDB · NH · Eximbank':'신한·하나·우리·IBK·KDB·NH·수출입은행', src:() => kfiArts, cats:false, rel:false },
-    personnel:  { ico:'👤', h:EN?'Leadership Moves':'인사동향', d:EN?'Central bank & bank leadership changes, presence + non-presence':'중앙은행·은행 리더십 교체 — 진출+미진출 전체', src:() => personnelArts, cats:false, rel:false },
   };
   function renderFlat(){
     const cfg = FLAT_CFG[pMode];
