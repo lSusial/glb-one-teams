@@ -331,10 +331,17 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
     네트워크(진출 11개국) + 미진출 14개국 전체의 금융권 리더십 동향을 폭넓게
     노출 — 사용자 요청(2026-08-28)으로 korean_fi 섹션과 별개의 새 섹션으로 신설.
     국내(KR)·GLOBAL 뉴스는 제외(다른 두 모아보기 함수와 동일 원칙).
-    ACTIVE 게이트 없음 — 신호 자체가 희소해 게이트를 걸면 항상 빈 화면이 됨."""
+    ACTIVE 게이트 없음 — 신호 자체가 희소해 게이트를 걸면 항상 빈 화면이 됨.
+
+    근접중복 클러스터링(2026-09-08): 한 인사 이벤트(지명→발언→취임 등)가 몇 주에
+    걸쳐 여러 매체에 보도되고, GNews 광역검색 특성상 실제로는 다른 나라 기사인데
+    엉뚱한 국가코드로 잡히는 경우도 있어(예: 인도네시아 총재 취임 기사가 GB/JP/MM
+    매체로 태깅) _compute_non_presence와 달리 국가 구분 없이 전체를 한 풀로
+    클러스터링한다(같은 사건 판정 기준은 동일: 제목 토큰 겹침 ≥ NON_PRESENCE_DEDUP_SIM)."""
     dc, params = _date_clause(days)
     all_cc = list(_FLAGS.keys()) + list(config.NON_PRESENCE_CODES)
     ph = ",".join("?" * len(all_cc))
+    fetch_limit = limit * 5   # 클러스터링으로 줄어들 것을 감안해 후보를 넉넉히 뽑음
     rows = conn.execute(
         f"""SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en, a.topics,
                    a.korean_fi, a.event_type, a.personnel_move, m.tier,
@@ -345,12 +352,27 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
               AND a.link NOT LIKE '%/topic/%' AND a.link NOT LIKE '%/topics/%'
               AND m.primary_country_code IN ({ph}){dc}
             ORDER BY a.ai_score DESC LIMIT ?""",
-        (*all_cc, *params, limit * 3),
+        (*all_cc, *params, fetch_limit),
     ).fetchall()
-    rows = ranking.order(conn, rows)[:limit]   # 표시 정렬 = 복합 rank_score
+    cm = ranking.cluster_sizes(conn)
+    rows = ranking.order(conn, rows, cluster_map=cm)
+
+    bucket: list[dict] = []   # 국가 구분 없는 단일 풀 — cc 오분류 케이스까지 잡기 위함
+    for r in rows:
+        tk = _sig_tokens(_strip_source_suffix(r["title"]))
+        for c in bucket:
+            if _overlap_ratio(tk, c["tk"]) >= config.NON_PRESENCE_DEDUP_SIM:
+                c["n"] += 1
+                break
+        else:
+            bucket.append({"row": r, "tk": tk, "n": 1})
+
+    bucket.sort(key=lambda c: ranking.rank_score(c["row"], cm.get(c["row"]["article_id"], 0)), reverse=True)
+    bucket = bucket[:limit]
 
     out = []
-    for r in rows:
+    for c in bucket:
+        r = c["row"]
         cc = r["cc"]
         if cc in config.NON_PRESENCE_COUNTRIES:
             meta = config.NON_PRESENCE_COUNTRIES[cc]
@@ -364,6 +386,7 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
             src=r["media_name"], d=(r["published_at"] or "")[:10],
             t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
             c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
+            related_count=c["n"] - 1,
         ))
     return out
 
