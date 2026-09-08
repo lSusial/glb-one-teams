@@ -21,21 +21,24 @@
       --land-edge: rgba(255, 255, 255, .22);
       --ease: cubic-bezier(.22,.84,.2,1);
 
-      /* ── 타임라인 (총 12.5초) ─────────────────────────── */
+      /* ── 타임라인 (총 12.6초) ─────────────────────────── */
+      /* 2026-09-08: 거점을 kb_network.py 실제 진출국으로 교체하며 2단계 → 3단계.
+         거점이 4곳에서 11곳으로 늘어 단계당 체류 시간을 유지하려면 총 길이가 늘어난다. */
       --t-topbar: .15s;
       --t-grat: .40s;
       --t-land: .70s;
       --t-seoul: 1.15s;
       --t-kb: 1.60s;
-      --t-s1: 3.30s;   /* 1단계 — 홍콩 · 호치민 */
-      --t-s2: 6.00s;   /* 2단계 — 뉴델리 · 런던 */
-      --t-badge: 7.80s;
-      --t-head: 8.15s;
-      --t-sub: 8.50s;
-      --t-eyebrow: 8.80s;
-      --t-wipe: 9.70s;
-      --t-wipetxt: 10.05s;
-      --total: 10.5s;
+      --t-s1: 3.10s;   /* 1단계 — 동아시아: 도쿄 · 베이징 · 홍콩 */
+      --t-s2: 5.40s;   /* 2단계 — 동남아: 하노이 · 양곤 · 프놈펜 · 싱가포르 · 자카르타 */
+      --t-s3: 7.90s;   /* 3단계 — 서남아 · 유럽 · 미주: 구르구람 · 런던 · 뉴욕 */
+      --t-badge: 9.90s;
+      --t-head: 10.25s;
+      --t-sub: 10.60s;
+      --t-eyebrow: 10.90s;
+      --t-wipe: 11.80s;
+      --t-wipetxt: 12.15s;
+      --total: 12.6s;
 
       --dur-draw: 1.3s;
       --dur-draw-long: 1.5s;
@@ -165,11 +168,13 @@
     /* 카메라는 끝까지 물러나지 않는다. 지구의 일부만 계속 보이게 두고
        단계가 넘어갈 때마다 조금씩만 넓혀 새 거점을 프레임 안으로 들인다.
        배경 레이어(.cam-bg)와 전경 레이어(.cam-fg)가 같은 키프레임을 공유한다. */
-    /* 세 프레임 사이를 옮겨 다닌다. 값은 최종 viewBox(205 60 395 230)를 각
-       프레임에 맞추는 translate+scale 이고, 세 프레임 모두 가로세로비가 같다.
-         F0  서울 · 동아시아   491.6 99.8 116.8 68    (3.38배)
-         F1  + 홍콩 · 호치민   393.9 95.5 266.2 155   (1.48배)
-         F2  + 뉴델리 · 런던   205 60 395 230         (1배 · 최종)          */
+    /* 네 프레임 사이를 옮겨 다닌다. 값은 최종 viewBox(205 60 395 230)를 각
+       프레임에 맞추는 translate+scale 이고, 네 프레임 모두 가로세로비가 같다.
+       (tx = 205 - s·x0,  ty = 60 - s·y0,  s = 395 / w)
+         F0  서울 클로즈업        491.6  99.8 116.8  68.0   (3.38배)
+         F1  + 동아시아           473.0 114.9 155.0  90.3   (2.55배)
+         F2  + 동남아             375.5 118.0 304.0 177.0   (1.30배)
+         F3  + 서남아·유럽·미주   205    60   395    230     (1배 · 최종)      */
     .cam-bg, .cam-fg {
       transform-box: view-box;
       transform-origin: 0 0;
@@ -178,9 +183,10 @@
     }
 
     @keyframes cam {
-      0%, 24.8% { transform: translate(-1457.5px, -277.5px) scale(3.3818); }
-      39%, 50.5% { transform: translate(-379.4px, -81.7px) scale(1.4838); }
-      65.7%, 100% { transform: translate(0px, 0px) scale(1); }
+      0%, 19% { transform: translate(-1457.5px, -277.5px) scale(3.3818); }
+      23%, 37.3% { transform: translate(-1000.4px, -232.8px) scale(2.5484); }
+      41.3%, 57.1% { transform: translate(-282.9px, -93.3px) scale(1.2993); }
+      61.1%, 100% { transform: translate(0px, 0px) scale(1); }
     }
 
     .land {
@@ -297,9 +303,10 @@
     }
 
     @keyframes pin-cam {
-      0%, 24.8% { transform: scale(.45); }
-      39%, 50.5% { transform: scale(.78); }
-      65.7%, 100% { transform: scale(1); }
+      0%, 19% { transform: scale(.45); }
+      23%, 37.3% { transform: scale(.60); }
+      41.3%, 57.1% { transform: scale(.84); }
+      61.1%, 100% { transform: scale(1); }
     }
 
     .pin-mark {
@@ -1099,82 +1106,161 @@
           <g class="routes"></g>
 
           <g class="pins">
+
+            <!-- 1단계 — 베이징 -->
+            <g class="pin" data-stage="1" transform="translate(522.3,131.6)">
+              <g class="pin-cam">
+                <circle class="arrive" r="12"/>
+                <g class="pin-mark">
+                  <circle r="12" fill="rgba(255,255,255,.07)"/>
+                  <circle r="9.5" fill="#0a1828" stroke="rgba(255,255,255,.5)" stroke-width="1"/>
+                  <clipPath id="f-cn"><circle r="8"/></clipPath>
+                  <g clip-path="url(#f-cn)"><circle r="8" fill="#de2910"/><path d="M-3.4,-3.6 L-2.5,-1.4 L-0.3,-1.4 L-2.1,0 L-1.4,2.2 L-3.4,0.9 L-5.4,2.2 L-4.7,0 L-6.5,-1.4 L-4.3,-1.4Z" fill="#ffde00"/><circle cx="0.4" cy="-4.6" r=".85" fill="#ffde00"/><circle cx="2.3" cy="-2.9" r=".85" fill="#ffde00"/><circle cx="2.3" cy="-.4" r=".85" fill="#ffde00"/><circle cx="0.4" cy="1.4" r=".85" fill="#ffde00"/></g>
+                </g>
+              </g>
+              <text class="pin-lbl" x="-24" y="-5" text-anchor="end">베이징</text>
+            </g>
+
+            <!-- 1단계 — 도쿄 -->
+            <g class="pin" data-stage="1" transform="translate(583.9,145.1)">
+              <g class="pin-cam">
+                <circle class="arrive" r="12"/>
+                <g class="pin-mark">
+                  <circle r="12" fill="rgba(255,255,255,.07)"/>
+                  <circle r="9.5" fill="#0a1828" stroke="rgba(255,255,255,.5)" stroke-width="1"/>
+                  <clipPath id="f-jp"><circle r="8"/></clipPath>
+                  <g clip-path="url(#f-jp)"><circle r="8" fill="#fff"/><circle r="4.3" fill="#bc002d"/></g>
+                </g>
+              </g>
+              <text class="pin-lbl" x="-26" y="20" text-anchor="end">도쿄</text>
+            </g>
+
             <!-- 1단계 — 홍콩 -->
-            <g class="pin" data-stage="1" transform="translate(515.4,188)">
+            <g class="pin" data-stage="1" transform="translate(515.3,188.0)">
               <g class="pin-cam">
                 <circle class="arrive" r="12"/>
                 <g class="pin-mark">
                   <circle r="12" fill="rgba(255,255,255,.07)"/>
                   <circle r="9.5" fill="#0a1828" stroke="rgba(255,255,255,.5)" stroke-width="1"/>
                   <clipPath id="f-hk"><circle r="8"/></clipPath>
-                  <g clip-path="url(#f-hk)">
-                    <circle r="8" fill="#de2910"/>
-                    <path d="M0,-4 L1.2,-1.2 L3.8,-1.2 L1.7,.5 L2.5,3.2 L0,1.5 L-2.5,3.2 L-1.7,.5 L-3.8,-1.2 L-1.2,-1.2Z" fill="#fff"/>
-                  </g>
+                  <g clip-path="url(#f-hk)"><circle r="8" fill="#de2910"/><g fill="#fff"><ellipse rx="1.15" ry="3.1" cy="-2.6"/><ellipse rx="1.15" ry="3.1" cy="-2.6" transform="rotate(72)"/><ellipse rx="1.15" ry="3.1" cy="-2.6" transform="rotate(144)"/><ellipse rx="1.15" ry="3.1" cy="-2.6" transform="rotate(216)"/><ellipse rx="1.15" ry="3.1" cy="-2.6" transform="rotate(288)"/></g></g>
                 </g>
               </g>
-              <text class="pin-lbl" x="-24" y="-5" text-anchor="end">홍콩</text>
+              <text class="pin-lbl" x="26" y="-5" text-anchor="start">홍콩</text>
             </g>
 
-            <!-- 1단계 — 호치민 -->
-            <g class="pin" data-stage="1" transform="translate(494,225.2)">
+            <!-- 2단계 — 하노이 -->
+            <g class="pin" data-stage="2" transform="translate(493.8,192.1)">
               <g class="pin-cam">
                 <circle class="arrive" r="12"/>
                 <g class="pin-mark">
                   <circle r="12" fill="rgba(255,255,255,.07)"/>
                   <circle r="9.5" fill="#0a1828" stroke="rgba(255,255,255,.5)" stroke-width="1"/>
                   <clipPath id="f-vn"><circle r="8"/></clipPath>
-                  <g clip-path="url(#f-vn)">
-                    <circle r="8" fill="#da251d"/>
-                    <path d="M0,-4 L1,-1 L4,-1 L1.6,.7 L2.4,4 L0,2 L-2.4,4 L-1.6,.7 L-4,-1 L-1,-1Z" fill="#ff0"/>
-                  </g>
+                  <g clip-path="url(#f-vn)"><circle r="8" fill="#da251d"/><path d="M0,-4 L1,-1 L4,-1 L1.6,.7 L2.4,4 L0,2 L-2.4,4 L-1.6,.7 L-4,-1 L-1,-1Z" fill="#ff0"/></g>
                 </g>
               </g>
-              <text class="pin-lbl" x="26" y="6" text-anchor="start">호치민</text>
+              <text class="pin-lbl" x="-24" y="-5" text-anchor="end">하노이</text>
             </g>
 
-            <!-- 2단계 — 뉴델리 -->
-            <g class="pin" data-stage="2" transform="translate(416.9,167.7)">
+            <!-- 2단계 — 양곤 -->
+            <g class="pin" data-stage="2" transform="translate(468.9,205.8)">
+              <g class="pin-cam">
+                <circle class="arrive" r="12"/>
+                <g class="pin-mark">
+                  <circle r="12" fill="rgba(255,255,255,.07)"/>
+                  <circle r="9.5" fill="#0a1828" stroke="rgba(255,255,255,.5)" stroke-width="1"/>
+                  <clipPath id="f-mm"><circle r="8"/></clipPath>
+                  <g clip-path="url(#f-mm)"><rect x="-8" y="-8" width="16" height="5.33" fill="#fecb00"/><rect x="-8" y="-2.67" width="16" height="5.34" fill="#34b233"/><rect x="-8" y="2.67" width="16" height="5.33" fill="#ea2839"/><path d="M0,-3.6 L1.15,-.35 L4.5,-.35 L1.8,1.6 L2.8,4.8 L0,2.85 L-2.8,4.8 L-1.8,1.6 L-4.5,-.35 L-1.15,-.35Z" fill="#fff"/></g>
+                </g>
+              </g>
+              <text class="pin-lbl" x="-24" y="6" text-anchor="end">양곤</text>
+            </g>
+
+            <!-- 2단계 — 프놈펜 -->
+            <g class="pin" data-stage="2" transform="translate(490.9,222.7)">
+              <g class="pin-cam">
+                <circle class="arrive" r="12"/>
+                <g class="pin-mark">
+                  <circle r="12" fill="rgba(255,255,255,.07)"/>
+                  <circle r="9.5" fill="#0a1828" stroke="rgba(255,255,255,.5)" stroke-width="1"/>
+                  <clipPath id="f-kh"><circle r="8"/></clipPath>
+                  <g clip-path="url(#f-kh)"><rect x="-8" y="-8" width="16" height="4" fill="#032ea1"/><rect x="-8" y="-4" width="16" height="8" fill="#e00025"/><rect x="-8" y="4" width="16" height="4" fill="#032ea1"/><path d="M-3.2,2.2 h6.4 v-.9 h-.8 v-1.6 l-1.1,-1.3 v-1.1 l-1.3,-1.5 l-1.3,1.5 v1.1 l-1.1,1.3 v1.6 h-.8Z" fill="#fff"/></g>
+                </g>
+              </g>
+              <text class="pin-lbl" x="26" y="6" text-anchor="start">프놈펜</text>
+            </g>
+
+            <!-- 2단계 — 싱가포르 -->
+            <g class="pin" data-stage="2" transform="translate(487.5,255.6)">
+              <g class="pin-cam">
+                <circle class="arrive" r="12"/>
+                <g class="pin-mark">
+                  <circle r="12" fill="rgba(255,255,255,.07)"/>
+                  <circle r="9.5" fill="#0a1828" stroke="rgba(255,255,255,.5)" stroke-width="1"/>
+                  <clipPath id="f-sg"><circle r="8"/></clipPath>
+                  <g clip-path="url(#f-sg)"><rect x="-8" y="-8" width="16" height="8" fill="#ed2939"/><rect x="-8" y="0" width="16" height="8" fill="#fff"/><path d="M-2.4,-4.1 a2.9,2.9 0 1 0 0,0.2 a2.35,2.35 0 1 1 0,-0.2Z" fill="#fff"/><g fill="#fff"><circle cx="1.1" cy="-5.6" r=".62"/><circle cx="2.6" cy="-4.5" r=".62"/><circle cx="2.0" cy="-2.7" r=".62"/><circle cx="0.2" cy="-2.7" r=".62"/><circle cx="-0.4" cy="-4.5" r=".62"/></g></g>
+                </g>
+              </g>
+              <text class="pin-lbl" x="26" y="-5" text-anchor="start">싱가포르</text>
+            </g>
+
+            <!-- 2단계 — 자카르타 -->
+            <g class="pin" data-stage="2" transform="translate(495.5,280.0)">
+              <g class="pin-cam">
+                <circle class="arrive" r="12"/>
+                <g class="pin-mark">
+                  <circle r="12" fill="rgba(255,255,255,.07)"/>
+                  <circle r="9.5" fill="#0a1828" stroke="rgba(255,255,255,.5)" stroke-width="1"/>
+                  <clipPath id="f-id"><circle r="8"/></clipPath>
+                  <g clip-path="url(#f-id)"><rect x="-8" y="-8" width="16" height="8" fill="#ce1126"/><rect x="-8" y="0" width="16" height="8" fill="#fff"/></g>
+                </g>
+              </g>
+              <text class="pin-lbl" x="26" y="6" text-anchor="start">자카르타</text>
+            </g>
+
+            <!-- 3단계 — 구르구람 -->
+            <g class="pin" data-stage="3" transform="translate(421.7,168.2)">
               <g class="pin-cam">
                 <circle class="arrive" r="12"/>
                 <g class="pin-mark">
                   <circle r="12" fill="rgba(255,255,255,.07)"/>
                   <circle r="9.5" fill="#0a1828" stroke="rgba(255,255,255,.5)" stroke-width="1"/>
                   <clipPath id="f-in"><circle r="8"/></clipPath>
-                  <g clip-path="url(#f-in)">
-                    <rect x="-8" y="-8" width="16" height="5.33" fill="#ff9933"/>
-                    <rect x="-8" y="-2.67" width="16" height="5.34" fill="#fff"/>
-                    <rect x="-8" y="2.67" width="16" height="5.33" fill="#138808"/>
-                    <circle r="2.1" fill="none" stroke="#000080" stroke-width=".7"/>
-                    <circle r=".5" fill="#000080"/>
-                  </g>
+                  <g clip-path="url(#f-in)"><rect x="-8" y="-8" width="16" height="5.33" fill="#ff9933"/><rect x="-8" y="-2.67" width="16" height="5.34" fill="#fff"/><rect x="-8" y="2.67" width="16" height="5.33" fill="#138808"/><circle r="2.1" fill="none" stroke="#000080" stroke-width=".7"/><circle r=".5" fill="#000080"/></g>
                 </g>
               </g>
-              <text class="pin-lbl" x="-24" y="-5" text-anchor="end">뉴델리</text>
+              <text class="pin-lbl" x="-24" y="-5" text-anchor="end">구르구람</text>
             </g>
 
-            <!-- 2단계 — 런던 -->
-            <g class="pin" data-stage="2" transform="translate(242.7,95.1)">
+            <!-- 3단계 — 런던 -->
+            <g class="pin" data-stage="3" transform="translate(242.7,94.6)">
               <g class="pin-cam">
                 <circle class="arrive" r="12"/>
                 <g class="pin-mark">
                   <circle r="12" fill="rgba(255,255,255,.07)"/>
                   <circle r="9.5" fill="#0a1828" stroke="rgba(255,255,255,.5)" stroke-width="1"/>
                   <clipPath id="f-gb"><circle r="8"/></clipPath>
-                  <g clip-path="url(#f-gb)">
-                    <circle r="8" fill="#012169"/>
-                    <path d="M-8,-8L8,8M8,-8L-8,8" stroke="#fff" stroke-width="2.6"/>
-                    <path d="M-8,-8L8,8M8,-8L-8,8" stroke="#c8102e" stroke-width="1.35"/>
-                    <path d="M0,-8V8M-8,0H8" stroke="#fff" stroke-width="3.35"/>
-                    <path d="M0,-8V8M-8,0H8" stroke="#c8102e" stroke-width="2"/>
-                  </g>
+                  <g clip-path="url(#f-gb)"><circle r="8" fill="#012169"/><path d="M-8,-8L8,8M8,-8L-8,8" stroke="#fff" stroke-width="2.6"/><path d="M-8,-8L8,8M8,-8L-8,8" stroke="#c8102e" stroke-width="1.35"/><path d="M0,-8V8M-8,0H8" stroke="#fff" stroke-width="3.35"/><path d="M0,-8V8M-8,0H8" stroke="#c8102e" stroke-width="2"/></g>
                 </g>
               </g>
               <text class="pin-lbl" x="26" y="-5" text-anchor="start">런던</text>
             </g>
 
+            <!-- 3단계 — 뉴욕. 이 지도에는 아메리카 데이터가 없어 핀 대신
+                 화면 왼쪽 밖으로 빠져나가는 노선과 가장자리 라벨로 나타낸다. -->
+            <g class="pin pin-off" data-stage="3" transform="translate(228,120.5)">
+              <g class="pin-cam">
+                <g class="pin-mark">
+                  <path d="M6,0 H-5.5 M-5.5,0 l3.4,-3 M-5.5,0 l3.4,3" fill="none"
+                        stroke="#ffb900" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+                </g>
+              </g>
+              <text class="pin-lbl" x="11" y="3.5" text-anchor="start">뉴욕</text>
+            </g>
+
             <!-- 서울 — 모든 노선의 원점. 라벨 없이 KB 심볼과 태극기로 나타낸다 -->
-            <g class="pin" data-stage="0" transform="translate(550,139.2)">
+            <g class="pin" data-stage="0" transform="translate(550,139.1)">
               <g class="pin-cam">
                 <circle class="sonar" r="14"/>
                 <circle class="sonar b" r="14"/>
@@ -1205,8 +1291,9 @@
 
     <!-- 단계 캡션 — 지금 무엇이 연결되고 있는지 말로 잡아준다 -->
     <div class="stage-caption" aria-hidden="true">
-      <span style="--at:calc(var(--t-s1) + .55s)"><b>01</b>홍콩 · 호치민</span>
-      <span style="--at:calc(var(--t-s2) + .55s)"><b>02</b>뉴델리 · 런던</span>
+      <span style="--at:calc(var(--t-s1) + .55s)"><b>01</b>동아시아 — 도쿄 · 베이징 · 홍콩</span>
+      <span style="--at:calc(var(--t-s2) + .55s)"><b>02</b>동남아 — 하노이 · 양곤 · 프놈펜 · 싱가포르 · 자카르타</span>
+      <span style="--at:calc(var(--t-s3) + .55s)"><b>03</b>서남아 · 유럽 · 미주 — 구르구람 · 런던 · 뉴욕</span>
     </div>
 
     <div class="statement">
@@ -1247,7 +1334,7 @@
       /* 상대 경로 + ?date/?lang 보존 — 아카이브·영문 진입이 인트로를 지나도 이어진다.
          (배포물은 brief.html 과 같은 폴더에 놓인다) */
       const TARGET = 'brief.html' + (location.search || '');
-      const TOTAL_MS = 10500;          /* CSS --total 및 .progress 와 동일하게 유지 */
+      const TOTAL_MS = 12600;          /* CSS --total 및 .progress 와 동일하게 유지 */
       const REDUCED_MS = 2600;
 
       /* ── 노선 ───────────────────────────────────────────
@@ -1255,10 +1342,17 @@
          제어점을 잡았고, b 쪽은 --pair-lag 만큼 늦게 출발시켜 "두 갈래"임을
          분명히 한다. 좌표는 참조 지도와 같은 1100×520 공간이다. */
       const ROUTES = [
-        { stage: 1, lag: 0, d: 'M550,139.2 Q566,162 515.4,188' },     /* 홍콩 — 동쪽으로 부풀려 */
-        { stage: 1, lag: 1, d: 'M550,139.2 Q478,165 494,225.2' },     /* 호치민 — 서쪽으로 부풀려 */
-        { stage: 2, lag: 0, d: 'M550,139.2 Q490,120 416.9,167.7' },     /* 뉴델리 — 북쪽으로 넘어 서진 (호치민 노선 회피) */
-        { stage: 2, lag: 1, d: 'M550,139.2 Q400,70 242.7,95.1' }      /* 런던 — 북쪽으로 크게 돌아 서진 */
+        { stage: 1, lag: 0, d: 'M550.0,139.1 Q538.5,126.7 522.3,131.6' },   /* 베이징 */
+        { stage: 1, lag: 1, d: 'M550.0,139.1 Q568.7,132.3 583.9,145.1' },   /* 도쿄 */
+        { stage: 1, lag: 2, d: 'M550.0,139.1 Q544.1,171.7 515.3,188.0' },   /* 홍콩 */
+        { stage: 2, lag: 0, d: 'M550.0,139.1 Q532.9,177.2 493.8,192.1' },   /* 하노이 */
+        { stage: 2, lag: 1, d: 'M550.0,139.1 Q528.5,195.6 468.9,205.8' },   /* 양곤 */
+        { stage: 2, lag: 2, d: 'M550.0,139.1 Q538.4,193.6 490.9,222.7' },   /* 프놈펜 */
+        { stage: 2, lag: 3, d: 'M550.0,139.1 Q548.7,213.4 487.5,255.6' },   /* 싱가포르 */
+        { stage: 2, lag: 4, d: 'M550.0,139.1 Q565.7,226.1 495.5,280.0' },   /* 자카르타 */
+        { stage: 3, lag: 0, d: 'M550.0,139.1 Q477.0,114.6 421.7,168.2' },   /* 구르구람 */
+        { stage: 3, lag: 1, d: 'M550.0,139.1 Q407.1,42.6 242.7,94.6' },   /* 런던 */
+        { stage: 3, lag: 2, d: 'M550.0,139.1 Q355.0,33.7 150.0,118.0' },   /* 뉴욕(화면 밖) */
       ];
 
       /* 경과 시간 옆에 현재 어느 대목인지 같이 띄운다 (CSS --t-* 와 같은 값) */
@@ -1266,14 +1360,16 @@
         [0, '서울 클로즈업'],
         [1.15, '서울 핀'],
         [1.60, 'KB 심볼'],
-        [2.60, '1차 축소'],
-        [3.30, '1단계 — 홍콩 · 호치민'],
-        [5.30, '2차 축소'],
-        [6.00, '2단계 — 뉴델리 · 런던'],
-        [7.80, '유닛 메시지'],
-        [8.15, '헤드라인'],
-        [9.70, '전환 와이프'],
-        [10.5, '종료']
+        [2.40, '1차 축소'],
+        [3.10, '1단계 — 동아시아'],
+        [4.70, '2차 축소'],
+        [5.40, '2단계 — 동남아'],
+        [7.20, '3차 축소'],
+        [7.90, '3단계 — 서남아 · 유럽 · 미주'],
+        [9.90, '유닛 메시지'],
+        [10.25, '헤드라인'],
+        [11.80, '전환 와이프'],
+        [12.6, '종료']
       ];
 
       const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -1317,7 +1413,7 @@
         const g = document.createElementNS(SVG_NS, 'g');
         g.setAttribute('class', 'route');
         g.style.setProperty('--delay', `calc(var(--t-s${r.stage}) + ${r.lag} * var(--pair-lag))`);
-        g.style.setProperty('--dur', r.stage === 2 ? 'var(--dur-draw-long)' : 'var(--dur-draw)');
+        g.style.setProperty('--dur', r.stage >= 2 ? 'var(--dur-draw-long)' : 'var(--dur-draw)');
 
         ['conn-glow', 'conn-draw', 'conn-final', 'conn-comet'].forEach((cls) => {
           const p = document.createElementNS(SVG_NS, 'path');
@@ -1363,7 +1459,7 @@
         const stage = pin.dataset.stage;
         pin.style.setProperty('--pin-at', stage === '0'
           ? 'var(--t-seoul)'
-          : `calc(var(--t-s${stage}) + ${stage === '2' ? 1.15 : .95}s)`);
+          : `calc(var(--t-s${stage}) + ${stage === '1' ? .95 : 1.15}s)`);
       });
 
       /* ── 이동 ───────────────────────────────────────────*/
