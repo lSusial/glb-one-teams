@@ -2,7 +2,8 @@
 모달 전용 긴 요약 (llm_expand.py)
 
 카드용 짧은 요약(summary_ko/summary_en, 2~4문장)과 별개로, 기사 상세 모달에서
-보여줄 10~20줄(4~6문단) 긴 요약(expanded_summary/_en)을 생성한다.
+보여줄 15~35줄(6~10문단) 긴 요약(expanded_summary/_en)을 생성한다.
+(2026-09-08: 기존 10~20줄 대비 약 1.5~2배로 확대)
 
 비용 관리: 실제로 화면에 노출되는 기사(ACTIVE, ai_score>=임계, 중복 아님)에만
 생성 — 전량 생성 금지. 증분(expanded_summary IS NULL인 것만), Haiku + Batches.
@@ -30,11 +31,15 @@ _SYS = (
     "single source or copy its sentence structure. If only one source is given, write from that "
     "source alone. Output ONLY this JSON:\n"
     '{"expanded_summary_en": "...", "expanded_summary_ko": "..."}\n\n'
-    "Length: 10-20 lines when displayed (roughly 4-6 short paragraphs, or paragraphs plus a few "
-    "key bullet-style facts) — long enough to read in one sitting, short enough to skim. "
-    "Separate paragraphs with a blank line (\\n\\n).\n"
+    "Length: 15-35 lines when displayed (roughly 6-10 short paragraphs, or paragraphs plus a few "
+    "key bullet-style facts) — thorough enough to stand alone as a full briefing, still organized "
+    "enough to skim. Separate paragraphs with a blank line (\\n\\n).\n"
     "Cover, in order: (1) what happened — the core facts; (2) background/context — why now; "
-    "(3) concrete numbers/details from the source(s); (4) likely knock-on effects or outlook. "
+    "(3) concrete numbers/details from the source(s); (4) additional relevant detail from the "
+    "source(s) not yet covered (secondary parties, timeline, related prior events); "
+    "(5) likely knock-on effects or outlook. Do NOT pad with restatement or filler to hit the "
+    "length — only include this much detail if the source(s) actually support it; a shorter, "
+    "fact-dense summary is better than a longer, thin one.\n"
     "Do NOT add a KB-implication section — that is handled elsewhere.\n"
     "Stay strictly within the facts given in the source(s); never invent numbers, quotes, or "
     "events not present in the source text.\n"
@@ -86,7 +91,7 @@ def run_expand(conn, provider: LLMProvider | None = None,
         if siblings:
             stats["synthesized"] += 1
         user = f"매체: {r['media_name']}  국가: {r['cc']}\n" + "\n\n".join(blocks)
-        requests.append((cid, _SYS, user, 2400))
+        requests.append((cid, _SYS, user, 4000))
         row_by_id[cid] = r
 
     results = provider.complete_json_batch(requests) if requests else {}
@@ -94,8 +99,8 @@ def run_expand(conn, provider: LLMProvider | None = None,
     cur = conn.cursor()
     for cid, r in row_by_id.items():
         data = results.get(cid) or {}
-        en = str(data.get("expanded_summary_en") or "").strip()[:4000]
-        ko = str(data.get("expanded_summary_ko") or "").strip()[:4000]
+        en = str(data.get("expanded_summary_en") or "").strip()[:7000]
+        ko = str(data.get("expanded_summary_ko") or "").strip()[:7000]
         if not (en or ko):
             continue
         cur.execute(
