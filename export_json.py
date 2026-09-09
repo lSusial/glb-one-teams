@@ -945,7 +945,7 @@ def _weekly_briefs(conn) -> list[dict]:
     if "cc" not in cols:
         return []
     wanted = ["cc", "summary", "summary_en", "issues", "issues_en", "outlook",
-              "outlook_en", "keywords", "key_stat", "week_start", "week_end"]
+              "outlook_en", "keywords", "keywords_en", "key_stat", "week_start", "week_end"]
     sel = ", ".join(c for c in wanted if c in cols)
     rows = conn.execute(
         f"SELECT {sel} FROM country_briefings WHERE briefing_type='weekly' "
@@ -973,6 +973,7 @@ def _weekly_briefs(conn) -> list[dict]:
             issues_en=jl(r["issues_en"] if "issues_en" in k else None),
             outlook=g("outlook"), outlook_en=g("outlook_en"),
             keywords=jl(r["keywords"] if "keywords" in k else None),
+            keywords_en=jl(r["keywords_en"] if "keywords_en" in k else None),
             key_stat=g("key_stat"),
             week_start=g("week_start"), week_end=g("week_end"),
         ))

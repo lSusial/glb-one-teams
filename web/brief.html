@@ -369,6 +369,10 @@
   }
   function hlHead(h){ return EN ? (h.headline_en||h.headline_ko) : (h.headline_ko||h.headline_en); }
   function hlImp(h){ return EN ? (h.impact_en||h.impact_ko) : (h.impact_ko||h.impact_en); }
+  // daily_highlights.category는 백엔드가 한국어 고정값(금리/FX/규제/시장/디지털/지정학/인사)
+  // 만 주므로(영어 필드 없음) 값이 7개뿐인 고정 목록이라 프론트에서 매핑.
+  const HL_CAT_EN = {금리:'Rates', 규제:'Regulation', 시장:'Market', 디지털:'Digital', 지정학:'Geopolitics', 인사:'Personnel'};
+  function hlCat(h){ return EN ? (HL_CAT_EN[h.category] || h.category) : h.category; }
   window.openHlModal = function(i){
     const h = highlights[i]; if (!h) return;
     const rel = relatedFor(h);
@@ -377,7 +381,7 @@
     const withExpanded = rel.find(r => r.expanded_summary || r.expanded_summary_en);
     openArticleModal({
       t: hlHead(h),
-      category: EN ? (h.category) : h.category,
+      category: hlCat(h),
       k: h.impact_ko, k_en: h.impact_en,
       expanded_summary: withExpanded ? withExpanded.expanded_summary : '',
       expanded_summary_en: withExpanded ? withExpanded.expanded_summary_en : '',
@@ -392,8 +396,8 @@
       const cc0 = (h.country_codes||[])[0];
       const flagSym = cc0 ? 'fl-'+cc0.toLowerCase() : null;
       const tag = h.category ? (top
-        ? `<span class="cat" style="color:#B67611;background:#FEEAB8">${esc(h.category)}</span>`
-        : `<span class="cat mono">${esc(h.category)}</span>`) : '';
+        ? `<span class="cat" style="color:#B67611;background:#FEEAB8">${esc(hlCat(h))}</span>`
+        : `<span class="cat mono">${esc(hlCat(h))}</span>`) : '';
       return `<li class="row${top?' row-top':''}" onclick="openHlModal(${i})">
         ${flagSym?svg(flagSym,28,28,'row-flag'):''}
         ${tag}

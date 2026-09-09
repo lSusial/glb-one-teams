@@ -73,6 +73,7 @@
   const ts = (c) => EN ? (c.summary_en || c.summary) : (c.summary || c.summary_en);
   const to = (c) => EN ? (c.outlook_en || c.outlook) : (c.outlook || c.outlook_en);
   const ti = (c) => { const a = EN ? (c.issues_en&&c.issues_en.length?c.issues_en:c.issues) : (c.issues&&c.issues.length?c.issues:c.issues_en); return a || []; };
+  const tk = (c) => { const a = EN ? (c.keywords_en&&c.keywords_en.length?c.keywords_en:c.keywords) : (c.keywords&&c.keywords.length?c.keywords:c.keywords_en); return a || []; };
 
   const cos = D ? (D.countries || []).filter(c => c.summary || c.summary_en) : [];
   if (!cos.length) {
@@ -87,7 +88,7 @@
       fCC = c.cc;
       document.querySelectorAll('.pk').forEach(p => p.setAttribute('aria-selected', String(p.dataset.cc === fCC)));
       const range = (c.week_start && c.week_end) ? `${mdSlash(c.week_start)} ~ ${mdSlash(c.week_end)}` : '';
-      const iss = ti(c), kw = c.keywords || [];
+      const iss = ti(c), kw = tk(c);
       $('#detail').innerHTML = `
         <div class="dhead">
           <span class="fbar" style="border-left-color:var(--gold)">${svg('flr-'+c.cc.toLowerCase(),40,40,'rflag')}</span>

@@ -49,7 +49,8 @@ _SYSTEM = (
     '{"summary_ko": "5~6문장 주간 종합", "summary_en": "5-6 sentence weekly summary", '
     '"issues_ko": ["핵심 이슈 3~4개"], "issues_en": ["3-4 key issues"], '
     '"outlook_ko": "향후 전망 1~2문장", "outlook_en": "1-2 sentence outlook", '
-    '"keywords": ["키워드 4~6개"], "key_stat": "대표 수치 1개(예: BI-Rate 5.75%)"}'
+    '"keywords_ko": ["한국어 키워드 4~6개"], "keywords_en": ["same 4-6 keywords in English"], '
+    '"key_stat": "대표 수치 1개(예: BI-Rate 5.75%)"}'
 )
 
 # 일일(daily) 브리핑 — 현지언론 화면 상단용. 전일+당일 기사를 4~5문장으로 종합(한/영 동시).
@@ -91,7 +92,7 @@ def ensure_table(conn) -> None:
     conn.execute(_CREATE)
     # 구 DB 호환: 일일 브리핑 영어본 컬럼 보강
     cols = [r[1] for r in conn.execute("PRAGMA table_info(country_briefings)")]
-    for col in ("summary_en", "issues_en", "outlook_en", "week_start", "week_end"):
+    for col in ("summary_en", "issues_en", "outlook_en", "week_start", "week_end", "keywords_en"):
         if col not in cols:
             conn.execute(f"ALTER TABLE country_briefings ADD COLUMN {col} TEXT")
     conn.commit()
@@ -203,7 +204,7 @@ def run_briefing(
         if daily:
             summary    = str(data.get("summary_ko") or data.get("summary") or "")[:2000]
             summary_en = str(data.get("summary_en") or "")[:2000]
-            issues = issues_en = outlook = outlook_en = keywords = key_stat = ""
+            issues = issues_en = outlook = outlook_en = keywords = keywords_en = key_stat = ""
         else:  # weekly — 이중언어
             summary    = str(data.get("summary_ko") or data.get("summary") or "")[:2000]
             summary_en = str(data.get("summary_en") or "")[:2000]
@@ -211,16 +212,17 @@ def run_briefing(
             issues_en  = json.dumps(data.get("issues_en") or [], ensure_ascii=False)
             outlook    = str(data.get("outlook_ko") or data.get("outlook") or "")[:1000]
             outlook_en = str(data.get("outlook_en") or "")[:1000]
-            keywords   = json.dumps(data.get("keywords", []), ensure_ascii=False)
+            keywords   = json.dumps(data.get("keywords_ko") or data.get("keywords") or [], ensure_ascii=False)
+            keywords_en = json.dumps(data.get("keywords_en") or [], ensure_ascii=False)
             key_stat   = str(data.get("key_stat", ""))[:200]
 
         cur.execute(
             """
             INSERT INTO country_briefings
                 (cc, briefing_date, briefing_type, generated_at, summary, summary_en,
-                 issues, issues_en, outlook, outlook_en, keywords, key_stat,
+                 issues, issues_en, outlook, outlook_en, keywords, keywords_en, key_stat,
                  model, article_count, source_articles, week_start, week_end)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(cc, briefing_date, briefing_type) DO UPDATE SET
                 generated_at    = CURRENT_TIMESTAMP,
                 summary         = excluded.summary,
@@ -230,6 +232,7 @@ def run_briefing(
                 outlook         = excluded.outlook,
                 outlook_en      = excluded.outlook_en,
                 keywords        = excluded.keywords,
+                keywords_en     = excluded.keywords_en,
                 key_stat        = excluded.key_stat,
                 model           = excluded.model,
                 article_count   = excluded.article_count,
@@ -239,7 +242,7 @@ def run_briefing(
             """,
             (
                 cc, bdate, briefing_type, summary, summary_en,
-                issues, issues_en, outlook, outlook_en, keywords, key_stat,
+                issues, issues_en, outlook, outlook_en, keywords, keywords_en, key_stat,
                 provider.model_id, len(arts),
                 json.dumps([a["link"] for a in arts], ensure_ascii=False),
                 week_start, week_end,
