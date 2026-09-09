@@ -300,7 +300,8 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
             ORDER BY a.ai_score DESC LIMIT ?""",
         (*all_cc, *params, limit * 3),
     ).fetchall()
-    rows = ranking.order(conn, rows)[:limit]   # 표시 정렬 = 복합 rank_score
+    cm = ranking.cluster_sizes(conn)
+    rows = ranking.order(conn, rows, cluster_map=cm)[:limit]   # 표시 정렬 = 복합 rank_score
 
     out = []
     for r in rows:
@@ -318,6 +319,7 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
             src=r["media_name"], d=(r["published_at"] or "")[:10],
             t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
             c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
+            rank_score=ranking.rank_score(r, cm.get(r["article_id"], 0)),
         ))
     return out
 
@@ -387,6 +389,7 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
             t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
             c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
             related_count=c["n"] - 1,
+            rank_score=ranking.rank_score(r, cm.get(r["article_id"], 0)),
         ))
     return out
 
@@ -1019,7 +1022,7 @@ def _event_bucket(rows: list, code: str, max_per: int, build) -> tuple[list, set
     return arts, ccs
 
 
-def _pres_topic_article(r) -> dict:
+def _pres_topic_article(r, cm: dict) -> dict:
     topic_codes = [c.strip() for c in (r["topics"] or "").split(",") if c.strip()]
     return dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""), presence="진출",
                 src=r["media_name"], d=(r["published_at"] or "")[:10],
@@ -1028,10 +1031,11 @@ def _pres_topic_article(r) -> dict:
                 k_en=r["kb_implication_en"] or "",
                 expanded_summary=r["expanded_summary"] or "",
                 expanded_summary_en=r["expanded_summary_en"] or "",
-                c=taxonomy.ui_string(topic_codes), score=r["ai_score"], u=r["link"])
+                c=taxonomy.ui_string(topic_codes), score=r["ai_score"], u=r["link"],
+                rank_score=ranking.rank_score(r, cm.get(r["article_id"], 0)))
 
 
-def _np_topic_article(r) -> dict:
+def _np_topic_article(r, cm: dict) -> dict:
     meta = config.NON_PRESENCE_COUNTRIES.get(r["cc"], {})
     topic_codes = [c.strip() for c in (r["topics"] or "").split(",") if c.strip()]
     return dict(cc=r["cc"], flag=meta.get("flag", ""),
@@ -1040,7 +1044,8 @@ def _np_topic_article(r) -> dict:
                 src=r["media_name"], d=(r["published_at"] or "")[:10],
                 t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "",
                 k="", q_en=r["summary_en"] or "", k_en="",   # KB 시사점 없음(거점 없는 시장)
-                c=taxonomy.ui_string(topic_codes), score=r["ai_score"], u=r["link"])
+                c=taxonomy.ui_string(topic_codes), score=r["ai_score"], u=r["link"],
+                rank_score=ranking.rank_score(r, cm.get(r["article_id"], 0)))
 
 
 def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[dict]:
@@ -1084,12 +1089,12 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
 
     categories = []
     for code, ui, label_ko, label_en in _EVENT_CATS:
-        arts, ccs = _event_bucket(pres_rows, code, max_per, _pres_topic_article)
+        arts, ccs = _event_bucket(pres_rows, code, max_per, lambda r: _pres_topic_article(r, cm))
         if arts:
             categories.append(dict(code=code, ui=ui, label=label_ko, label_en=label_en,
                                    presence="진출", count=len(arts), ccs=sorted(ccs),
                                    articles=arts))
-        arts_np, ccs_np = _event_bucket(np_rows, code, max_per, _np_topic_article)
+        arts_np, ccs_np = _event_bucket(np_rows, code, max_per, lambda r: _np_topic_article(r, cm))
         if arts_np:
             categories.append(dict(code=code, ui=ui, label=label_ko, label_en=label_en,
                                    presence="미진출", count=len(arts_np), ccs=sorted(ccs_np),

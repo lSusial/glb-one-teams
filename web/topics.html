@@ -83,6 +83,10 @@
     return;
   }
 
+  // ai_score는 LLM 절대채점이라 대부분 동점(양자화) — 정렬은 복합 rank_score
+  // (ranking.py, 다매체 커버리지·매체tier·최신성 등 반영) 우선, 없으면 score로 폴백.
+  const byScore = (a,b) => (b.rank_score ?? b.score ?? 0) - (a.rank_score ?? a.score ?? 0);
+
   // 백엔드 categories[]는 같은 code가 presence='진출'/'미진출' 2건으로 분리돼 있음 —
   // 목업 디자인(진출+미진출 병합, score순, 카드별 진출/미진출 칩)에 맞춰 프런트에서 병합.
   // 백엔드(export_json.py)는 그대로 둔다(HANDOFF §6.1: export 템플릿 연동만).
@@ -95,7 +99,7 @@
     if (c.presence === '진출') g.n_in += arts.length; else g.n_out += arts.length;
   }
   const TOPICS = [...byCode.values()];
-  TOPICS.forEach(t => t.arts.sort((a,b) => (b.score||0) - (a.score||0)));
+  TOPICS.forEach(t => t.arts.sort(byScore));
 
   // 한국계 금융기관·인사동향 — countries.html에서 이전(2026-09-08). 진출/미진출
   // 구분 없는 평면 리스트라 n_in/n_out 대신 flat:true로 표시.
@@ -104,9 +108,9 @@
     const kfiArts = (CTR.korean_fi && CTR.korean_fi.articles) || [];
     const personnelArts = (CTR.personnel && CTR.personnel.articles) || [];
     if (kfiArts.length) TOPICS.push({code:'KFI', label:'한국계 금융기관', label_en:'Korean FI', flat:true,
-      arts:[...kfiArts].sort((a,b) => (b.score||0) - (a.score||0))});
+      arts:[...kfiArts].sort(byScore)});
     if (personnelArts.length) TOPICS.push({code:'PERSONNEL', label:'인사동향', label_en:'Leadership Moves', flat:true,
-      arts:[...personnelArts].sort((a,b) => (b.score||0) - (a.score||0))});
+      arts:[...personnelArts].sort(byScore)});
   }
 
   function render(code){
