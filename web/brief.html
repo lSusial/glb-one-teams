@@ -311,13 +311,26 @@
   }
 
   // ── GLOBAL MARKETS: 진출국 fx/index/policy_rate 가로 마퀴 티커 ──
+  // indicators 테이블의 label은 config.py 정적 표(한국어 고정)에서 그대로 옴 —
+  // 원천에 영어 필드가 없어 값이 고정된 짧은 목록이라 프론트에서 매핑.
+  const IND_LABEL_EN = {
+    '나스닥종합':'Nasdaq Composite', '항셍지수':'Hang Seng Index', '상하이종합':'Shanghai Composite',
+    '닛케이225':'Nikkei 225', '자카르타종합':'Jakarta Composite', 'SET지수':'SET Index',
+    'BOE 기준금리':'BOE Policy Rate', 'Fed 기준금리(상단)':'Fed Funds Rate (upper)',
+    'HKMA 기준금리':'HKMA Base Rate', 'PBOC 7일 역레포':'PBOC 7-Day Reverse Repo',
+    'BOJ 정책금리':'BOJ Policy Rate', 'RBI 레포금리':'RBI Repo Rate',
+    'SBV 재할인금리':'SBV Refinancing Rate', 'BI-Rate(7일 역레포)':'BI Rate (7-Day Reverse Repo)',
+    'CBM 정책금리':'CBM Policy Rate', 'BOT 정책금리':'BOT Policy Rate',
+    '미국 10년물 국채':'US 10Y Treasury',
+  };
+  const indLabel = (l) => EN ? (IND_LABEL_EN[l] || l) : l;
   function fmtMkt(v){ return Math.abs(v)>=1000 ? Math.round(v).toLocaleString() : (Math.round(v*100)/100).toString(); }
   function mktRow(m){
-    if (m.isPol) return `<div class="mkt-r"><span class="l">${esc(m.label)}</span><span class="rgt"><span class="v pol">${fmtMkt(m.value)}%</span></span></div>`;
+    if (m.isPol) return `<div class="mkt-r"><span class="l">${esc(indLabel(m.label))}</span><span class="rgt"><span class="v pol">${fmtMkt(m.value)}%</span></span></div>`;
     const p = m.change_pct || 0, cls = Math.abs(p) < 0.005 ? 'flat' : (p > 0 ? 'up' : 'down'),
           ar = p > 0 ? '▲' : (p < 0 ? '▼' : '·'), sg = p > 0 ? '+' : (p < 0 ? '-' : '');
     const val = m.value != null ? `<span class="v">${fmtMkt(m.value)}</span>` : '';
-    return `<div class="mkt-r"><span class="l">${esc(m.label)}</span><span class="rgt">${val}<span class="c ${cls}">${ar}${sg}${Math.abs(p).toFixed(2)}%</span></span></div>`;
+    return `<div class="mkt-r"><span class="l">${esc(indLabel(m.label))}</span><span class="rgt">${val}<span class="c ${cls}">${ar}${sg}${Math.abs(p).toFixed(2)}%</span></span></div>`;
   }
   function pickMktRows(inds){
     const byKind = (k) => inds.find((i) => i.kind === k);

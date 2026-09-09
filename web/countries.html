@@ -148,16 +148,29 @@
     const col = vals[vals.length-1] >= vals[0] ? '#E0303F' : '#2563EB'; // 한국식: 상승=빨강
     return `<svg class="bn-spark" width="${w}" height="${h}"><polyline points="${pts}" fill="none" stroke="${col}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
   }
+  // indicators 테이블의 label은 config.py 정적 표(한국어 고정)에서 그대로 옴 —
+  // 원천에 영어 필드가 없어 값이 고정된 짧은 목록이라 프론트에서 매핑.
+  const IND_LABEL_EN = {
+    '나스닥종합':'Nasdaq Composite', '항셍지수':'Hang Seng Index', '상하이종합':'Shanghai Composite',
+    '닛케이225':'Nikkei 225', '자카르타종합':'Jakarta Composite', 'SET지수':'SET Index',
+    'BOE 기준금리':'BOE Policy Rate', 'Fed 기준금리(상단)':'Fed Funds Rate (upper)',
+    'HKMA 기준금리':'HKMA Base Rate', 'PBOC 7일 역레포':'PBOC 7-Day Reverse Repo',
+    'BOJ 정책금리':'BOJ Policy Rate', 'RBI 레포금리':'RBI Repo Rate',
+    'SBV 재할인금리':'SBV Refinancing Rate', 'BI-Rate(7일 역레포)':'BI Rate (7-Day Reverse Repo)',
+    'CBM 정책금리':'CBM Policy Rate', 'BOT 정책금리':'BOT Policy Rate',
+    '미국 10년물 국채':'US 10Y Treasury',
+  };
+  const indLabel = (l) => EN ? (IND_LABEL_EN[l] || l) : l;
   function bignum(ind){
     const noteEl = ind.note ? `<span title="${esc(ind.note)}" style="cursor:help;opacity:.6">ⓘ</span>` : '';
     if (ind.kind === 'policy_rate' || ind.kind === 'bond10y') {
       const sub = ind.kind === 'bond10y' ? ' bn-sub' : '';
       let cls='flat', txt=EN?'No change':'변동 없음';
       if (ind.change != null && ind.change !== 0) { const up = ind.change > 0; cls = up?'up':'down'; txt = `${up?'▲':'▼'} ${fnum(Math.abs(ind.change))}%p`; }
-      return `<div class="bn${sub}"><div class="bn-l">${esc(ind.label)}${noteEl}</div><div class="bn-v">${fnum(ind.value)}%</div><div class="bn-c ${cls}">${txt}</div></div>`;
+      return `<div class="bn${sub}"><div class="bn-l">${esc(indLabel(ind.label))}${noteEl}</div><div class="bn-v">${fnum(ind.value)}%</div><div class="bn-c ${cls}">${txt}</div></div>`;
     }
     const isFx = ind.kind === 'fx';
-    const label = isFx ? '1 USD' : (ind.label || ind.symbol);
+    const label = isFx ? '1 USD' : (indLabel(ind.label) || ind.symbol);
     const val = isFx ? `${fnum(ind.value)} ${ind.symbol}` : fnum(ind.value);
     return `<div class="bn"><div class="bn-l">${esc(label)}${noteEl}</div><div class="bn-v">${esc(val)}</div>${pctHtml(ind.change_pct)}${sparkSvg(ind.spark)}</div>`;
   }

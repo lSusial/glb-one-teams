@@ -74,6 +74,7 @@
   const to = (c) => EN ? (c.outlook_en || c.outlook) : (c.outlook || c.outlook_en);
   const ti = (c) => { const a = EN ? (c.issues_en&&c.issues_en.length?c.issues_en:c.issues) : (c.issues&&c.issues.length?c.issues:c.issues_en); return a || []; };
   const tk = (c) => { const a = EN ? (c.keywords_en&&c.keywords_en.length?c.keywords_en:c.keywords) : (c.keywords&&c.keywords.length?c.keywords:c.keywords_en); return a || []; };
+  const tks = (c) => EN ? (c.key_stat_en || c.key_stat) : (c.key_stat || c.key_stat_en);
 
   const cos = D ? (D.countries || []).filter(c => c.summary || c.summary_en) : [];
   if (!cos.length) {
@@ -97,7 +98,7 @@
             <span class="wk-range">${esc(range)}</span>
           </div>
         </div>
-        ${c.key_stat?`<div class="wk-stat">${esc(c.key_stat)}</div>`:''}
+        ${tks(c)?`<div class="wk-stat">${esc(tks(c))}</div>`:''}
         <p class="wk-sum" style="margin-top:12px">${esc(ts(c))}</p>
         ${iss.length?`<div class="dsec-t"><span class="bar"></span>${EN?'Key Issues':'핵심 이슈'}</div>
           <ul class="wk-iss">${iss.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}
