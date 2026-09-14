@@ -275,6 +275,73 @@ COUNTRY_KEYWORDS: dict[str, list[str]] = {
         "monetary authority of singapore", "mas",
         "temasek", "gic", "lawrence wong",
     ],
+    # ── 진출국 추가(TH·LA, 2026-08-28 편입) — 기존 미동기화분 보강(2026-09-11) ──
+    # ⚠ 이 사전은 라이브 필터(_score_countries)도 공유 → 부분문자열 오탐 위험이 있는
+    #    3글자 통화코드(aud/cad/kip 등, "fraud"/"decade"/"lake"에 걸림)는 넣지 않는다.
+    "TH": [
+        "thailand", "thai", "bangkok",
+        "thai baht", "thb", "bank of thailand", "set index",
+        "paetongtarn", "srettha",
+    ],
+    "LA": [
+        "laos", "lao pdr", "laotian", "vientiane",
+        "lao kip", "bank of the lao",
+    ],
+    # ── 미진출국(config.NON_PRESENCE_COUNTRIES 13개) — 통합피드 주제국가 추정용 ──
+    "PH": [
+        "philippines", "philippine", "manila",
+        "philippine peso", "bangko sentral", "psei",
+        "marcos",
+    ],
+    "MY": [
+        "malaysia", "malaysian", "kuala lumpur",
+        "ringgit", "myr", "bank negara", "klci", "bursa malaysia",
+        "anwar ibrahim",
+    ],
+    "BD": [
+        "bangladesh", "bangladeshi", "dhaka",
+        "bangladeshi taka", "bdt", "bangladesh bank",
+    ],
+    "PL": [
+        "poland", "polish", "warsaw",
+        "zloty", "national bank of poland",
+    ],
+    "DE": [
+        "germany", "german", "frankfurt",
+        "bundesbank", "dax index",
+    ],
+    "FR": [
+        "france", "french", "paris",
+        "banque de france", "cac 40",
+    ],
+    "KZ": [
+        "kazakhstan", "kazakh", "astana", "almaty",
+        "tenge", "national bank of kazakhstan", "tokayev",
+    ],
+    "UZ": [
+        "uzbekistan", "uzbek", "tashkent",
+        "uzbek som", "central bank of uzbekistan", "mirziyoyev",
+    ],
+    "AE": [
+        "united arab emirates", "abu dhabi",
+        "uae dirham", "central bank of the uae",
+    ],
+    "BR": [
+        "brazil", "brazilian", "brasilia", "sao paulo",
+        "brazilian real", "banco central do brasil", "bovespa", "lula",
+    ],
+    "MX": [
+        "mexico", "mexican", "mexico city",
+        "mexican peso", "banxico", "sheinbaum",
+    ],
+    "AU": [
+        "australia", "australian", "sydney", "canberra", "melbourne",
+        "australian dollar", "reserve bank of australia",
+    ],
+    "CA": [
+        "canada", "canadian", "ottawa", "toronto",
+        "canadian dollar", "bank of canada",
+    ],
 }
 
 # ---------------------------------------------------------------------------
@@ -685,6 +752,57 @@ def _score_countries(title_text: str, body_text: str, kw_map: dict) -> tuple[int
             if first_reason is None:
                 first_reason = f"country_body:{country}"
     return score, first_reason
+
+
+# ---------------------------------------------------------------------------
+# 주제 국가(primary_country) 보수적 추정 — 기존기사 폴백(LLM 없음).
+# country_tagging_deferred.md 설계 2겹 중 2겹째: 신규분은 llm_ranker가 직접 출력,
+# 이미 채점된 기존분은 이 규칙으로 채운다.
+# 규칙: 매체국가 키워드가 제목에 없고 && 제목에 다른 국가가 "정확히 하나만" 매치될 때만
+#       그 국가로 교체. 그 외에는 None(표시 시 매체국가 유지) — 오탐(언급≠주제)을 막기 위해
+#       일부러 보수적으로.
+# ---------------------------------------------------------------------------
+def estimate_primary_country(title: str, media_cc: str,
+                             kw_map: dict | None = None) -> str | None:
+    kw_map = kw_map or COUNTRY_KEYWORDS
+    t = _normalize(_clean_text(title or ""))
+    media_cc = (media_cc or "").upper()
+    media_in_title = False
+    others: set[str] = set()
+    for cc, kws in kw_map.items():
+        if _first_match(t, kws):
+            if cc == media_cc:
+                media_in_title = True
+            else:
+                others.add(cc)
+    if media_in_title:
+        return None
+    return next(iter(others)) if len(others) == 1 else None
+
+
+def backfill_primary_country(conn: sqlite3.Connection, recheck: bool = False) -> dict:
+    """primary_country 가 NULL 인 passed 기사에 보수적 키워드 추정을 채운다(LLM 없음).
+    ranker 가 채운 값은 건드리지 않음(NULL 만 대상). recheck=True 면 전체 재계산."""
+    db.ensure_columns(conn, "articles_raw", [
+        ("primary_country", "ALTER TABLE articles_raw ADD COLUMN primary_country TEXT"),
+    ])
+    cond = "" if recheck else "AND a.primary_country IS NULL"
+    rows = conn.execute(f"""
+        SELECT a.article_id, a.title, m.primary_country_code AS cc
+        FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
+        WHERE a.filter_decision = 'passed' {cond}
+    """).fetchall()
+    cur = conn.cursor()
+    filled = 0
+    for r in rows:
+        est = estimate_primary_country(r["title"], r["cc"])
+        if est:
+            cur.execute("UPDATE articles_raw SET primary_country = ? WHERE article_id = ?",
+                        (est, r["article_id"]))
+            filled += 1
+    conn.commit()
+    log.info("primary_country 키워드 폴백 — 대상=%d  채움=%d", len(rows), filled)
+    return {"total": len(rows), "filled": filled}
 
 
 # ---------------------------------------------------------------------------

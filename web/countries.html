@@ -11,6 +11,7 @@
 <link rel="stylesheet" href="shared-tokens.css"/>
 <!-- 데이터: export_json 이 아래 스크립트에 주입(오프라인). 없으면 countries.json fetch. -->
 <script id="countries-data" type="application/json">null</script>
+<script src="shared-glossary.js"></script>
 <script src="shared-modal.js"></script>
 <style>
 .pagettl{font-size:clamp(12.5px,1.9cqi,15px);color:var(--muted);margin:2px 2px 10px}
@@ -25,6 +26,9 @@
         font-size:clamp(11px,1.7cqi,13px);font-weight:600;color:var(--muted);background:#fff}
 .catbar .cc-chip[aria-selected="true"]{background:var(--gold-soft);color:#B67611;border-color:var(--gold)}
 .catbar .cc-chip .n{opacity:.65;margin-left:3px}
+.pk{position:relative}
+.pk .pin{position:absolute;top:-2px;right:2px;font-size:13px;line-height:1;color:var(--line-2);cursor:pointer;z-index:2;padding:2px}
+.pk .pin.on{color:var(--gold)}
 </style>
 </head>
 <body>
@@ -103,8 +107,8 @@
     ? {GB:'UK',US:'US',HK:'Hong Kong',CN:'China',JP:'Japan',SG:'Singapore',IN:'India',VN:'Vietnam',MM:'Myanmar',ID:'Indonesia',KH:'Cambodia',TH:'Thailand',LA:'Laos',GLOBAL:'Global'}
     : {GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',TH:'태국',LA:'라오스',GLOBAL:'글로벌'};
   const CATS = EN
-    ? [['','All'],['economy','Economy'],['finance','Banking'],['digital','Digital'],['esg','ESG'],['risk','Risk'],['geo','Geopolitics']]
-    : [['','전체'],['economy','경제'],['finance','금융'],['digital','디지털'],['esg','ESG'],['risk','리스크'],['geo','지정학']];
+    ? [['','All'],['economy','Economy'],['markets','Markets'],['tech','Tech'],['geopolitics','Geopolitics'],['policy','Policy'],['society','Society']]
+    : [['','전체'],['economy','경제'],['markets','금융시장'],['tech','기술'],['geopolitics','지정학'],['policy','정책'],['society','사회']];
   const tq = (a) => EN ? (a.q_en || a.q) : (a.q || a.q_en);
   // 제목도 요약과 같은 규칙 — EN 모드에서 제목만 한국어로 남던 문제(2026-09-03)
   const tt = (a) => EN ? (a.t_en || a.t) : (a.t || a.t_en);
@@ -117,13 +121,35 @@
   let fCC = P.get('cc') || '', fCat = '', flatCat = '';
 
   // ── 진출국: 국기 피커 ──
+  // 국가 우선순위(하이브리드, 2026-09-12 피드백 8): 기본은 기사수 자동정렬 +
+  // 관심국가 ★고정핀(localStorage, 브라우저별). 핀은 목록 맨 앞으로.
+  const PIN_KEY = 'glb_pinned_cc';
+  function loadPins(){ try { return new Set(JSON.parse(localStorage.getItem(PIN_KEY) || '[]')); } catch(e){ return new Set(); } }
+  function savePins(st){ try { localStorage.setItem(PIN_KEY, JSON.stringify([...st])); } catch(e){} }
+  let PINS = loadPins();
+  function orderedCountries(){
+    const cs = [...(DATA.countries || [])];
+    const cmp = (a,b) => (b.count||0) - (a.count||0);   // 기본: 기사 많은(활발한) 거점 먼저
+    const pinned = cs.filter(c => PINS.has(c.cc)).sort(cmp);
+    const rest   = cs.filter(c => !PINS.has(c.cc)).sort(cmp);
+    return [...pinned, ...rest];
+  }
   function initPicker(){
-    const cs = DATA.countries || [];
-    $('#picker').innerHTML = cs.map((c,i) => `
-      <button class="pk" data-cc="${c.cc}" aria-selected="false">
+    const cs = orderedCountries();
+    $('#picker').innerHTML = cs.map((c) => {
+      const on = PINS.has(c.cc);
+      return `<button class="pk" data-cc="${c.cc}" aria-selected="false">
+        <span class="pin${on?' on':''}" data-pin="${c.cc}" role="button" tabindex="0" title="${EN?'Pin to front':'관심국가 고정'}">${on?'★':'☆'}</span>
         ${svg('fl-'+c.cc.toLowerCase(), 44, 44)}<span>${esc(EN?(c.name_en||NAMES[c.cc]||c.cc):(c.name||NAMES[c.cc]||c.cc))}</span>
-      </button>`).join('');
+      </button>`;
+    }).join('');
     document.querySelectorAll('.pk').forEach(p => p.addEventListener('click', () => { fCC = p.dataset.cc; renderPresence(); }));
+    document.querySelectorAll('.pk .pin').forEach(el => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const cc = el.dataset.pin;
+      if (PINS.has(cc)) PINS.delete(cc); else PINS.add(cc);
+      savePins(PINS); initPicker(); renderPresence();
+    }));
     if (!fCC && cs.length) {
       const withNews = cs.filter(c => (c.count||0) > 0);
       fCC = (withNews[0] || cs[0]).cc;

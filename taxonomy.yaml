@@ -1,55 +1,66 @@
 # taxonomy.yaml — 주제 분류(축 C) + 화면 라우팅(축 D) 단일 정의
 #
-# 설계: 데이터_AI_카테고리_설계.md §3
+# 2026-09-11 재정의: 중간발표 피드백 5번 — 신 6카테고리 체계.
+#   구 6종(MARKET/BANKING/DIGITAL/ESG/RISK/GEO) → 신 6종.
+#   ESG는 독립 카테고리에서 제거하고 POLICY(정책·규제)로 흡수(green bond·지속가능금융
+#   ·공시규제 = 규제·정책 성격). 상세·매핑근거: feedback_2026-09_decisions.md(프로젝트 메모리).
+#
 # 수집기·AI·UI가 공유한다. 카테고리 추가/변경 시 이 파일만 수정.
 #
 # 사용처:
 #   - llm_ranker.py : AI가 topics 컬럼을 채울 때 허용 코드 집합 + 시드 후보
 #   - export_json.py: UI 필터(ui) 매핑
-#   - UI            : c(category) 필터 버튼과 1:1 (멀티라벨, includes 부분일치)
+#   - UI(web/countries.html): c(category) 필터 버튼과 1:1 (멀티라벨, includes 부분일치)
 
 # ── 주제 코드(축 C) ──────────────────────────────────────────────
 # code : AI topics 출력에 쓰는 표준 코드 (대문자)
-# ui   : UI 현지언론 필터 버튼 키 (economy/finance/digital/esg/risk)
+# ui   : UI 현지언론 필터 버튼 키 (economy/markets/tech/geopolitics/policy/society)
 # label: 화면 표시용 라벨 (ko/en)
-# seeds: 1차 후보 매칭용 키워드 (keyword_filter.FINANCE_KEYWORDS 그룹 재사용)
+# seeds: 1차 후보 매칭용 키워드 (LLM 비었을 때 폴백)
 topics:
-  - code: MARKET
+  - code: ECONOMY
     ui: economy
     label: { ko: "경제", en: "Economy" }
-    seeds: [interest rate, exchange rate, bond, yield, gdp, inflation,
-            monetary policy, central bank, fx, treasury, rate hike, rate cut]
-  - code: BANKING
-    ui: finance
-    label: { ko: "금융산업", en: "Banking" }
-    seeds: [bank, banking, lending, loan, deposit, npl, capital ratio,
-            basel, net interest margin, syndicated loan, microfinance]
-  - code: DIGITAL
-    ui: digital
-    label: { ko: "디지털", en: "Digital" }
-    seeds: [fintech, digital banking, payment, mobile banking, upi,
-            wallet, blockchain, ai, super app, open banking]
-  - code: ESG
-    ui: esg
-    label: { ko: "ESG", en: "ESG" }
-    seeds: [esg, sustainable finance, green bond, carbon, net zero,
-            climate, supply chain due diligence, transition finance]
-  - code: RISK
-    ui: risk
-    label: { ko: "규제·리스크", en: "Regulation·Risk" }
-    seeds: [regulation, supervision, compliance, sanction, fine, fraud,
-            default, money laundering, aml, stress test, bank failure]
+    seeds: [gdp, economic growth, growth rate, inflation, cpi, ppi, employment,
+            unemployment, jobs, industrial production, trade, exports, imports,
+            trade balance, consumption, retail sales, recession, tariff]
+  - code: MARKETS
+    ui: markets
+    label: { ko: "금융시장", en: "Financial Markets" }
+    seeds: [interest rate, exchange rate, bond, yield, stock, equity, equities,
+            fx, currency, treasury, securities, insurance, bank earnings,
+            credit spread, ipo, dividend, kospi, nikkei, index]
+  - code: TECH
+    ui: tech
+    label: { ko: "기술·디지털", en: "Technology & Digital" }
+    seeds: [ai, artificial intelligence, fintech, digital banking, payment,
+            mobile banking, wallet, blockchain, semiconductor, chip, platform,
+            super app, open banking, cloud, data center, upi]
   - code: GEO
-    ui: geo
-    label: { ko: "지정학·국가리스크", en: "Geopolitics" }
-    seeds: [political instability, coup, regime, capital control,
-            currency restriction, credit rating, sovereign risk,
-            geopolitical, expropriation, nationalization, foreign exchange control]
+    ui: geopolitics
+    label: { ko: "지정학·리스크", en: "Geopolitics & Risk" }
+    seeds: [war, conflict, coup, election, geopolitical, sanction, sanctions,
+            sovereign risk, credit rating, political instability, capital control,
+            currency restriction, trade war, default, expropriation, nationalization]
+  - code: POLICY
+    ui: policy
+    label: { ko: "정책·규제", en: "Policy & Regulation" }
+    seeds: [regulation, supervision, compliance, central bank, monetary policy,
+            rate decision, government policy, law, legislation, license, fine,
+            basel, aml, stress test, esg, green bond, sustainable finance,
+            transition finance, carbon, net zero, disclosure]
+  - code: SOCIETY
+    ui: society
+    label: { ko: "사회·문화", en: "Society & Culture" }
+    seeds: [population, demographics, labor, labour, workforce, union, society,
+            culture, consumer trend, migration, immigration, education, aging,
+            wage, housing]
 
 # ── 이벤트 유형 코드(축 E, 모니터링 전용) ──────────────────────────
 # 주제축(topics, 위)과는 별개 축 — 현지언론 필터·기사 배지는 계속 topics를 쓴다.
 # 이 축은 모니터링(TopicWatch) 화면의 탭 분류에만 쓴다: 모니터링은 "이벤트 추적"이
 # 목적이라 주제가 아니라 사건 유형(규제/거래/사고)으로 묶는다.
+# ★ 2026-09-11 주제축 재정의와 무관 — 이 축은 그대로 유지.
 event_types:
   # 시드는 "1차 후보/폴백"용 — 너무 흔한 단어(policy/deal/lawsuit 단독 등)는
   # 오탐이 심해 제외. AI가 새로 채점하는 기사는 이 시드가 아니라 프롬프트로
@@ -73,24 +84,24 @@ event_types:
 max_event_types_per_article: 3
 
 # ── 멀티라벨 규칙 ────────────────────────────────────────────────
-# 한 기사에 복수 코드 허용. UI는 c:'esg risk' 처럼 소문자 ui 키를 공백 연결해
-# includes() 부분일치로 필터링한다. (예: topics=[ESG,RISK] → c="esg risk")
+# 한 기사에 복수 코드 허용. UI는 c:'policy geo' 처럼 소문자 ui 키를 공백 연결해
+# includes() 부분일치로 필터링한다. (예: topics=[POLICY,GEO] → c="policy geopolitics")
 multilabel: true
 max_topics_per_article: 3
 
 # ── 화면 라우팅(축 D) ────────────────────────────────────────────
-# 분류·소스 메타 → 어느 화면(JSON)으로 보낼지. export_json.py가 참조.
+# ※ 현재 어떤 .py도 이 섹션을 직접 참조하지 않음(사문화). 정합성 위해 신 코드로 갱신만.
 routing:
-  regulations:                 # 규제·금융기관 화면
+  regulations:
     source_category_any: [OFFICIAL]
-    topic_any: [RISK]
-  subsidiaries:                # 국외연결자회사 화면
+    topic_any: [POLICY]
+  subsidiaries:
     country_any: [ID, KH]
     source_type: IR
-  countries:                   # 현지언론 Intelligence 화면 (기본)
+  countries:
     source_type: local_media
-    min_ai_score: 60           # config.AI_SCORE_ACTIVE_THRESHOLD 와 동일하게 유지
-  topics:                      # Topic Watch 화면
+    min_ai_score: 60
+  topics:
     min_cluster_size: 2
-  brief:                       # 글로벌 동향 화면
+  brief:
     weekly_top_cluster: true

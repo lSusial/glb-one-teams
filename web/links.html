@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>KB Global One Team — 원문 링크</title>
+<meta name="description" content="KB 글로벌 원팀 뉴스 — 국가별·언론사별 주요 기사 원문 링크"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap"/>
+<link rel="stylesheet" href="shared-tokens.css"/>
+<style>
+.pagettl{font-size:clamp(12.5px,1.9cqi,15px);color:var(--muted);margin:2px 2px 10px}
+.lkcc{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 10px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.lkcc::-webkit-scrollbar{display:none}
+.cc-pk{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:1px solid var(--line-2);border-radius:999px;background:transparent;color:var(--muted);font-size:12.5px;cursor:pointer;white-space:nowrap}
+.cc-pk[aria-selected="true"]{border-color:var(--gold);color:var(--ink,#151515);font-weight:600}
+.cc-pk .fg{font-size:14px;line-height:1}
+.lksrc{margin:14px 2px 6px;display:flex;align-items:baseline;gap:8px;border-bottom:1px solid var(--line-2);padding-bottom:5px}
+.lksrc .nm{font-size:13.5px;font-weight:600;color:var(--ink,#151515)}
+.lksrc .n{font-size:11.5px;color:var(--muted)}
+.lklist{list-style:none;margin:0 0 6px;padding:0}
+.lka{display:block;text-decoration:none;color:inherit;padding:9px 4px;border-bottom:1px solid var(--line-1,rgba(0,0,0,.05))}
+.lka:hover{background:var(--hover,rgba(0,0,0,.03))}
+.lka .t{font-size:13.5px;line-height:1.4;color:var(--ink,#151515)}
+.lka .m{margin-top:3px;font-size:11.5px;color:var(--muted);display:flex;gap:8px;align-items:center}
+.lka .ext{margin-left:auto;opacity:.5}
+</style>
+</head>
+<body>
+<script src="shared-sprite.js"></script>
+<div class="shell">
+  <header class="hd">
+    <div class="hd-brand">
+      <div class="brandline">
+        <svg class="kbmark" width="30" height="22" style="color:var(--gold-2)" aria-hidden="true"><use href="#kb-mark"/></svg>
+        <span>KB FINANCIAL GROUP</span>
+      </div>
+      <h1 class="en">GLOBAL ONE TEAM</h1>
+      <div class="hd-sub"><b data-en="Source Links">원문 링크</b></div>
+    </div>
+    <div class="hd-tools">
+      <div class="langtoggle" role="group" aria-label="언어 선택">
+        <button type="button" data-lang="ko" aria-pressed="true">KR</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </div>
+    </div>
+  </header>
+  <p class="pagettl" data-en="Original article links by country and news outlet">국가별·언론사별 주요 기사 원문 링크</p>
+  <div class="lkcc" id="lkcc"></div>
+  <div id="lkbody"></div>
+
+  <nav class="botnav" id="botnav">
+    <a href="brief.html"><svg><use href="#ico-nav-home"/></svg><span data-en="Home">홈</span></a>
+    <a href="countries.html"><svg><use href="#ico-nav-news"/></svg><span data-en="News">뉴스</span></a>
+    <a class="on" href="topics.html"><svg><use href="#ico-nav-monitor"/></svg><span data-en="Monitoring">모니터링</span></a>
+    <a href="weekly.html"><svg><use href="#ico-nav-weekly"/></svg><span data-en="Weekly">주간 브리핑</span></a>
+  </nav>
+</div>
+
+<script>
+(async function(){
+  const P = new URLSearchParams(location.search), QD = P.get('date'), EN = P.get('lang') === 'en';
+  const $ = (s)=>document.querySelector(s);
+  const esc = (s)=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+  let D = null;
+  if (QD) { try { D = await (await fetch('archive/'+QD+'/countries.json')).json(); } catch(e){} }
+  if (!D) { try { D = await (await fetch('countries.json')).json(); } catch(e){} }
+  if (!D) {
+    $('#lkbody').innerHTML = `<div class="empty-state">${EN?'countries.json not found. Run':'countries.json 이 없습니다.'} <code>python main.py export</code></div>`;
+    return;
+  }
+
+  const NAMES = EN
+    ? {GB:'UK',US:'US',HK:'Hong Kong',CN:'China',JP:'Japan',SG:'Singapore',IN:'India',VN:'Vietnam',MM:'Myanmar',ID:'Indonesia',KH:'Cambodia',TH:'Thailand',LA:'Laos',GLOBAL:'Global'}
+    : {GB:'영국',US:'미국',HK:'홍콩',CN:'중국',JP:'일본',SG:'싱가포르',IN:'인도',VN:'베트남',MM:'미얀마',ID:'인도네시아',KH:'캄보디아',TH:'태국',LA:'라오스',GLOBAL:'글로벌'};
+
+  // cc -> {flag, name, sources: Map(src -> [{t,u,d}])}
+  const G = new Map();
+  function add(cc, flag, name, art){
+    if (!cc || !art || !art.u) return;
+    if (!G.has(cc)) G.set(cc, {flag:flag||'', name:name||NAMES[cc]||cc, sources:new Map()});
+    const g = G.get(cc);
+    const src = art.src || (EN?'Other':'기타');
+    if (!g.sources.has(src)) g.sources.set(src, []);
+    g.sources.get(src).push({ t: EN?(art.t_en||art.t):(art.t||art.t_en), u: art.u, d: art.d||'' });
+  }
+  for (const c of (D.countries||[]))
+    for (const a of (c.articles||[])) add(c.cc, c.flag, EN?NAMES[c.cc]:null, a);
+  for (const a of (((D.non_presence||{}).articles)||[]))
+    add(a.cc, a.flag, EN?(a.cc_label_en||a.cc):(a.cc_label||a.cc), a);
+
+  const codes = [...G.keys()].sort((x,y)=>{
+    // 기사 많은 국가 먼저
+    const nx=[...G.get(x).sources.values()].reduce((s,v)=>s+v.length,0);
+    const ny=[...G.get(y).sources.values()].reduce((s,v)=>s+v.length,0);
+    return ny-nx;
+  });
+  if (!codes.length) { $('#lkbody').innerHTML = `<div class="empty-state">${EN?'No links available.':'표시할 링크가 없습니다.'}</div>`; return; }
+
+  let fCC = P.get('cc') && G.has(P.get('cc')) ? P.get('cc') : codes[0];
+
+  function renderChips(){
+    $('#lkcc').innerHTML = codes.map(cc=>{
+      const g=G.get(cc);
+      const n=[...g.sources.values()].reduce((s,v)=>s+v.length,0);
+      return `<button class="cc-pk" data-cc="${cc}" aria-selected="${cc===fCC}"><span class="fg">${esc(g.flag)}</span><span class="cc-nm">${esc(g.name)}</span> <span class="n">${n}</span></button>`;
+    }).join('');
+    $('#lkcc').querySelectorAll('.cc-pk').forEach(b=>b.addEventListener('click',()=>{ fCC=b.dataset.cc; renderChips(); renderBody(); }));
+  }
+
+  function renderBody(){
+    const g = G.get(fCC);
+    // 언론사: 기사 많은 순
+    const srcs = [...g.sources.entries()].sort((a,b)=>b[1].length-a[1].length);
+    $('#lkbody').innerHTML = srcs.map(([src,arts])=>`
+      <div class="lksrc"><span class="nm">${esc(src)}</span><span class="n">${arts.length}</span></div>
+      <ul class="lklist">${arts.map(a=>`
+        <li><a class="lka" href="${esc(a.u)}" target="_blank" rel="noopener noreferrer">
+          <div class="t">${esc(a.t||a.u)}</div>
+          <div class="m">${a.d?`<span>${esc(a.d)}</span>`:''}<span class="ext"><svg width="13" height="13" aria-hidden="true"><use href="#ico-chev-r"/></svg></span></div>
+        </a></li>`).join('')}</ul>`).join('');
+  }
+
+  renderChips(); renderBody();
+
+  document.querySelectorAll('.langtoggle button').forEach(b=>{
+    b.setAttribute('aria-pressed', String(b.dataset.lang===(EN?'en':'ko')));
+    b.addEventListener('click',()=>{ P.set('lang', b.dataset.lang); location.search = P.toString(); });
+  });
+  if (EN) document.querySelectorAll('[data-en]').forEach(el=>{ el.textContent = el.getAttribute('data-en'); });
+
+  const carry = new URLSearchParams(location.search); carry.delete('cc');
+  document.querySelectorAll('.botnav a').forEach(a=>{
+    const [path, own] = a.getAttribute('href').split('?');
+    const m = new URLSearchParams(own||''); for (const [k,v] of carry) m.set(k,v);
+    const qs=m.toString(); a.href = path + (qs?'?'+qs:'');
+  });
+})();
+</script>
+</body>
+</html>

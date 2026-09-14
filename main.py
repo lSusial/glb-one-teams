@@ -142,6 +142,13 @@ def cmd_personnel(args):
     print(f"[personnel] 검사={c:,}  태깅={t:,}({t/c*100:.1f}%)")
 
 
+def cmd_backfill_country(args):
+    import keyword_filter
+    conn = db.open_conn()
+    s = keyword_filter.backfill_primary_country(conn, recheck=getattr(args, "recheck", False))
+    print(f"[backfill-country] 대상={s['total']}  채움={s['filled']}")
+
+
 def cmd_run(_args):
     """fetch → filter → dedup → 한국계 금융기관·인사동향 태깅 순서 실행 (수집 전용, AI 없음)."""
     print("=" * 50)
@@ -254,8 +261,9 @@ def cmd_rank(args):
     import llm_ranker
     conn = db.open_conn()
     ub = _batch_flag(args)
-    s = _ai_guard(lambda: llm_ranker.run_rank(conn, days=getattr(args, "days", None), use_batch=ub), "rank")
-    print(f"[rank] 처리={s['ranked']}  ACTIVE={s['active']}")
+    rd = getattr(args, "redo_days", None)
+    s = _ai_guard(lambda: llm_ranker.run_rank(conn, days=getattr(args, "days", None), redo_days=rd, use_batch=ub), "rank")
+    print(f"[rank] 처리={s['ranked']}  ACTIVE={s['active']}" + (f"  (재랭킹 {rd}일창)" if rd else ""))
 
 
 def cmd_expand(args):
@@ -355,7 +363,7 @@ def cmd_export(args):
     # intro.html : 첫 진입 인트로 연출(자기완결, 데이터 주입 없음).
     # index.html : 진입 게이트(/ → intro.html). 둘 다 템플릿이 아니라 정적 파일이라
     #              _inject_html 대상이 아니고 여기서 그대로 복사한다.
-    for name in ("shared-tokens.css", "shared-sprite.js", "intro.html", "index.html"):
+    for name in ("shared-tokens.css", "shared-sprite.js", "intro.html", "index.html", "links.html", "shared-glossary.js"):
         src = config.ROOT / "web" / name
         if src.exists():
             shutil.copy2(src, config.EXPORT_DIR / name)
@@ -424,6 +432,9 @@ def main():
     pers = sub.add_parser("personnel", help="금융기관·중앙은행 인사동향(리더십 교체) 언급 태깅")
     pers.add_argument("--recheck", action="store_true", help="전체 재태깅")
 
+    bfc = sub.add_parser("backfill-country", help="기존기사 primary_country 보수적 키워드 폴백(무료, LLM 없음)")
+    bfc.add_argument("--recheck", action="store_true", help="전체 재계산")
+
     lst = sub.add_parser("list", help="최근 수집 기사 출력")
     lst.add_argument("--limit", type=int, default=20)
 
@@ -436,6 +447,8 @@ def main():
     ftx.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
     rnk = sub.add_parser("rank",      help="AI 분석[영어] (score/summary_en/topics/kb_implication_en)")
     rnk.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
+    rnk.add_argument("--redo-days", type=int, dest="redo_days",
+                     help="최근 N일 게시분의 노출(ACTIVE) 기사를 다시 채점(카테고리·주제국가 소급용, 비용 추가)")
     rnk.add_argument("--sync", action="store_true", help=_SYNC_HELP)
     exp = sub.add_parser("expand", help="모달용 긴 요약(expanded_summary, 노출 기사만·다출처 종합)")
     exp.add_argument("--redo-days", type=int, dest="redo_days",
@@ -477,6 +490,7 @@ def main():
     {
         "init": cmd_init, "fetch": cmd_fetch, "filter": cmd_filter,
         "dedup": cmd_dedup, "korean-fi": cmd_korean_fi, "personnel": cmd_personnel,
+        "backfill-country": cmd_backfill_country,
         "run": cmd_run, "report": cmd_report, "list": cmd_list,
         "indicators": cmd_indicators,
         "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "rank": cmd_rank,

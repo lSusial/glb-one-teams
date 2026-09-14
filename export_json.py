@@ -43,6 +43,26 @@ _PRESENCE_NAMES_EN = {"GB": "UK", "US": "US", "HK": "Hong Kong", "CN": "China", 
 _FX_NOTE = {"MMK": "공식", "KHR": "페그"}
 
 
+def _country_display(cc: str) -> tuple[str, str, str]:
+    """국가코드 -> (국기, 한국어명, 영어명). 진출·미진출 어느 쪽이든 해석 — 주제국가
+    표시(라벨 보정)용. 2026-09-11(피드백 7)."""
+    if cc in config.NON_PRESENCE_COUNTRIES:
+        meta = config.NON_PRESENCE_COUNTRIES[cc]
+        return meta.get("flag", ""), meta.get("name_ko", cc), meta.get("name_en", cc)
+    return _FLAGS_ALL.get(cc, ""), _PRESENCE_NAMES_KO.get(cc, cc), _PRESENCE_NAMES_EN.get(cc, cc)
+
+
+def _eff_cc(r) -> str:
+    """표시용 유효 국가 = 주제국가(primary_country) 우선, 없으면 매체 국적(cc).
+    인사동향·한국계금융·모니터링·미진출 피드에서 '기사가 다루는 국가'를 보이기 위함.
+    진출국 현지언론 피드(export_countries)는 정의상 매체국적이라 이 함수를 쓰지 않는다."""
+    try:
+        pc = r["primary_country"]
+    except (IndexError, KeyError):
+        pc = None
+    return pc or r["cc"]
+
+
 def _snapshot_date(date: str | None = None) -> str:
     """스냅샷 라벨 날짜 (기본: 오늘, 로컬)."""
     return date or datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d")
@@ -83,6 +103,7 @@ def _ensure_ai_columns(conn) -> None:
         ("kb_implication",    "ALTER TABLE articles_raw ADD COLUMN kb_implication    TEXT"),
         ("summary_en",        "ALTER TABLE articles_raw ADD COLUMN summary_en        TEXT"),
         ("kb_implication_en", "ALTER TABLE articles_raw ADD COLUMN kb_implication_en TEXT"),
+        ("primary_country",   "ALTER TABLE articles_raw ADD COLUMN primary_country   TEXT"),
     ])
 
 
@@ -216,7 +237,7 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
     rows = conn.execute(
         f"""SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en, a.topics, a.korean_fi,
                    a.event_type, a.personnel_move, m.tier,
-                   a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name
+                   a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name, a.primary_country
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score IS NOT NULL AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'
               AND m.primary_country_code IN ({ph}){dc}
@@ -229,7 +250,7 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
 
     clusters: dict[str, list[dict]] = {}   # cc -> [{"row": Row, "tk": set, "n": int}, ...]
     for r in rows:
-        bucket = clusters.setdefault(r["cc"], [])
+        bucket = clusters.setdefault(_eff_cc(r), [])
         tk = _sig_tokens(_strip_source_suffix(r["title"]))
         for c in bucket:
             if _overlap_ratio(tk, c["tk"]) >= config.NON_PRESENCE_DEDUP_SIM:
@@ -245,12 +266,12 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
     out = []
     for c in reps:
         r = c["row"]
-        cc = r["cc"]
-        meta = config.NON_PRESENCE_COUNTRIES.get(cc, {})
+        cc = _eff_cc(r)
+        flag, cc_label, cc_label_en = _country_display(cc)
         codes = [x for x in (r["topics"] or "").split(",") if x]
         out.append(dict(
-            cc=cc, flag=meta.get("flag", ""),
-            cc_label=meta.get("name_ko", cc), cc_label_en=meta.get("name_en", cc),
+            cc=cc, flag=flag,
+            cc_label=cc_label, cc_label_en=cc_label_en,
             src=r["media_name"], d=(r["published_at"] or "")[:10],
             t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
             c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
@@ -291,7 +312,7 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
     rows = conn.execute(
         f"""SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en, a.korean_fi, a.topics,
                    a.event_type, a.personnel_move, m.tier,
-                   a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name
+                   a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name, a.primary_country
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.korean_fi IS NOT NULL AND a.korean_fi != '' AND a.duplicate_of IS NULL
               AND a.link NOT LIKE '%/tag/%' AND a.link NOT LIKE '%/tags/%'
@@ -305,13 +326,8 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
 
     out = []
     for r in rows:
-        cc = r["cc"]
-        if cc in config.NON_PRESENCE_COUNTRIES:
-            meta = config.NON_PRESENCE_COUNTRIES[cc]
-            flag, label, label_en = meta.get("flag", ""), meta.get("name_ko", cc), meta.get("name_en", cc)
-        else:
-            flag = _FLAGS_ALL.get(cc, "")
-            label, label_en = _PRESENCE_NAMES_KO.get(cc, cc), _PRESENCE_NAMES_EN.get(cc, cc)
+        cc = _eff_cc(r)
+        flag, label, label_en = _country_display(cc)
         codes = [x for x in (r["topics"] or "").split(",") if x]
         out.append(dict(
             cc=cc, flag=flag, cc_label=label, cc_label_en=label_en,
@@ -347,7 +363,7 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
     rows = conn.execute(
         f"""SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en, a.topics,
                    a.korean_fi, a.event_type, a.personnel_move, m.tier,
-                   a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name
+                   a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name, a.primary_country
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.personnel_move = 1 AND a.ai_score IS NOT NULL AND a.duplicate_of IS NULL
               AND a.link NOT LIKE '%/tag/%' AND a.link NOT LIKE '%/tags/%'
@@ -375,13 +391,8 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
     out = []
     for c in bucket:
         r = c["row"]
-        cc = r["cc"]
-        if cc in config.NON_PRESENCE_COUNTRIES:
-            meta = config.NON_PRESENCE_COUNTRIES[cc]
-            flag, label, label_en = meta.get("flag", ""), meta.get("name_ko", cc), meta.get("name_en", cc)
-        else:
-            flag = _FLAGS_ALL.get(cc, "")
-            label, label_en = _PRESENCE_NAMES_KO.get(cc, cc), _PRESENCE_NAMES_EN.get(cc, cc)
+        cc = _eff_cc(r)
+        flag, label, label_en = _country_display(cc)
         codes = [x for x in (r["topics"] or "").split(",") if x]
         out.append(dict(
             cc=cc, flag=flag, cc_label=label, cc_label_en=label_en,
@@ -640,7 +651,7 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
     rows = conn.execute(
         f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en,
                    a.expanded_summary, a.expanded_summary_en, a.event_type, a.korean_fi, a.personnel_move, m.tier,
-                   a.topics, a.link, a.published_at, m.primary_country_code cc, m.media_name
+                   a.topics, a.link, a.published_at, m.primary_country_code cc, m.media_name, a.primary_country
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}{exc}
             ORDER BY a.ai_score DESC, a.published_at DESC LIMIT 60""",
@@ -1017,16 +1028,19 @@ def _event_bucket(rows: list, code: str, max_per: int, build) -> tuple[list, set
         ev_codes = [c.strip() for c in (r["event_type"] or "").split(",") if c.strip()]
         if code not in ev_codes:
             continue
-        arts.append(build(r))
-        ccs.add(r["cc"])
+        art = build(r)
+        arts.append(art)
+        ccs.add(art["cc"])
         if len(arts) >= max_per:
             break
     return arts, ccs
 
 
 def _pres_topic_article(r, cm: dict) -> dict:
+    cc = _eff_cc(r)
+    flag, _lk, _le = _country_display(cc)
     topic_codes = [c.strip() for c in (r["topics"] or "").split(",") if c.strip()]
-    return dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""), presence="진출",
+    return dict(cc=cc, flag=flag, presence="진출",
                 src=r["media_name"], d=(r["published_at"] or "")[:10],
                 t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "",
                 k=r["kb_implication"] or "", q_en=r["summary_en"] or "",
@@ -1038,10 +1052,11 @@ def _pres_topic_article(r, cm: dict) -> dict:
 
 
 def _np_topic_article(r, cm: dict) -> dict:
-    meta = config.NON_PRESENCE_COUNTRIES.get(r["cc"], {})
+    cc = _eff_cc(r)
+    flag, cc_label, cc_label_en = _country_display(cc)
     topic_codes = [c.strip() for c in (r["topics"] or "").split(",") if c.strip()]
-    return dict(cc=r["cc"], flag=meta.get("flag", ""),
-                cc_label=meta.get("name_ko", r["cc"]), cc_label_en=meta.get("name_en", r["cc"]),
+    return dict(cc=cc, flag=flag,
+                cc_label=cc_label, cc_label_en=cc_label_en,
                 presence="미진출",
                 src=r["media_name"], d=(r["published_at"] or "")[:10],
                 t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "",
@@ -1063,7 +1078,7 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
         f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.summary, a.summary_ko, a.kb_implication,
                    a.summary_en, a.kb_implication_en, a.expanded_summary, a.expanded_summary_en,
                    a.topics, a.event_type, a.link, a.korean_fi, a.personnel_move, m.tier,
-                   a.published_at, m.primary_country_code cc, m.media_name
+                   a.published_at, m.primary_country_code cc, m.media_name, a.primary_country
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'{dc}{exc}
             ORDER BY a.ai_score DESC""",
@@ -1076,7 +1091,7 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
         np_rows = conn.execute(
             f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en, a.topics,
                        a.event_type, a.link, a.published_at, a.korean_fi, a.personnel_move, m.tier,
-                       m.primary_country_code cc, m.media_name
+                       m.primary_country_code cc, m.media_name, a.primary_country
                 FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
                 WHERE a.ai_score IS NOT NULL AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'
                   AND m.primary_country_code IN ({ph}){dc}

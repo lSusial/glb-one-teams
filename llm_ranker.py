@@ -34,6 +34,39 @@ from llm_provider import LLMProvider, get_provider
 
 log = logging.getLogger("llm_ranker")
 
+# 주제 국가(primary_country) 허용 코드 = KB 진출국 + 미진출국 + KR (+ GLOBAL).
+# 그 외/불명 -> None 저장(표시 시 매체 국적으로 폴백). 2026-09-11 신설(피드백 7).
+_ALLOWED_PRIMARY = set(kb_network.KB_NETWORK.keys()) | set(config.NON_PRESENCE_CODES) | {"KR", "GLOBAL"}
+_PRIMARY_COUNTRY_CODES = ", ".join(
+    list(kb_network.KB_NETWORK.keys()) + list(config.NON_PRESENCE_CODES) + ["KR"]
+)
+
+
+def _valid_primary_country(v) -> str | None:
+    cc = str(v or "").strip().upper()
+    return cc if cc in _ALLOWED_PRIMARY else None
+
+
+# 카테고리 중복 시 우선순위 판단기준(피드백 첨부 "판단 기준" 표) — full/light 공통.
+_TOPIC_DISAMBIG_BLOCK = (
+    "\n\nWhen an article fits more than one topic (e.g. a bank building a digital platform), "
+    "pick by this priority: (1) the core event/change in the article, (2) who is primarily "
+    "affected, (3) secondary detail. Guidance: MARKETS = market-price change (rates, FX, bonds, "
+    "equities, insurance/securities); ECONOMY = real-economy change (growth, prices, jobs, trade, "
+    "consumption); POLICY = regulatory / central-bank / ESG-policy change; GEO = geopolitical or "
+    "country risk (war, coup, election, sanctions, sovereign risk); TECH = technology/digital "
+    "change (AI, fintech, platforms, semiconductors); SOCIETY = social/cultural change "
+    "(population, labor, culture, consumer trends)."
+)
+# 주제 국가 지시 — full/light 공통.
+_PRIMARY_COUNTRY_BLOCK = (
+    "\n\nprimary_country — the ISO-3166 alpha-2 code of the country the article is chiefly ABOUT "
+    "(its subject), which may differ from the outlet's home country. Example: a Xinhua (Chinese "
+    "outlet) story about Indonesia's central bank -> \"ID\". Choose ONE from: "
+    + _PRIMARY_COUNTRY_CODES
+    + ". If the article is genuinely global or about a country not in this list, output \"GLOBAL\"."
+)
+
 
 def ensure_columns(conn) -> None:
     db.ensure_columns(conn, "articles_raw", [
@@ -57,6 +90,9 @@ def ensure_columns(conn) -> None:
         # 다출처 종합에 실제로 쓰인 소스 목록(JSON [{"t":제목,"u":URL,"src":매체명}, ...]).
         # 클러스터가 SYNTH_MIN_SOURCES 미만이면 NULL(단일 기사, 기존 방식).
         ("source_links",      "ALTER TABLE articles_raw ADD COLUMN source_links      TEXT"),
+        # 주제 국가(기사가 '다루는' 국가, ISO2) — 매체 국적(m.primary_country_code)과 구분.
+        # 신화통신의 인니 기사: media=CN, primary_country=ID. 2026-09-11 신설(피드백 7).
+        ("primary_country",   "ALTER TABLE articles_raw ADD COLUMN primary_country   TEXT"),
     ])
 
 
@@ -90,12 +126,15 @@ def _system_prompt() -> str:
         '"summary_en": "2-4 sentence English summary", '
         '"topics": ["TOPIC_CODE", ...], '
         '"event_type": ["EVENT_CODE", ...] (0-3, empty list if none apply), '
+        '"primary_country": "ISO2 code of the country the article is ABOUT, or GLOBAL", '
         '"kb_implication_en": "1-2 sentence KB-perspective implication/action, in English"}\n\n'
         "Choose topics ONLY from these codes (multiple allowed, max 3):\n"
         + taxonomy.prompt_reference()
         + "\n\nChoose event_type ONLY from these codes (multiple allowed, max 3; empty if the "
         "article is not about a specific regulatory/deal/incident event):\n"
         + taxonomy.event_prompt_reference()
+        + _TOPIC_DISAMBIG_BLOCK
+        + _PRIMARY_COUNTRY_BLOCK
         + "\n\nai_score rubric — assign the highest tier that applies:\n"
         "75-100  DIRECT · IMMEDIATE: KB branch/subsidiary directly affected today.\n"
         "  Examples: host-country central bank rate decision, capital controls imposed,\n"
@@ -128,12 +167,15 @@ def _system_prompt_light() -> str:
         '"title_en": "one-line dry English newspaper headline (max ~70 chars)", '
         '"summary_en": "2-4 sentence English summary", '
         '"topics": ["TOPIC_CODE", ...], '
-        '"event_type": ["EVENT_CODE", ...] (0-3, empty list if none apply)}\n\n'
+        '"event_type": ["EVENT_CODE", ...] (0-3, empty list if none apply), '
+        '"primary_country": "ISO2 code of the country the article is ABOUT, or GLOBAL"}\n\n'
         "Choose topics ONLY from these codes (multiple allowed, max 3):\n"
         + taxonomy.prompt_reference()
         + "\n\nChoose event_type ONLY from these codes (multiple allowed, max 3; empty if the "
         "article is not about a specific regulatory/deal/incident event):\n"
         + taxonomy.event_prompt_reference()
+        + _TOPIC_DISAMBIG_BLOCK
+        + _PRIMARY_COUNTRY_BLOCK
         + "\n\nai_score rubric — score general macro/financial materiality for a market with "
         "no KB entity (assign the highest tier that applies):\n"
         "75-100  Major sovereign/macro event: central bank decision, currency crisis, "
@@ -182,7 +224,7 @@ def _source_snippet(row) -> str:
 
 def run_rank(conn, provider: LLMProvider | None = None,
              limit: int | None = None, days: int | None = None,
-             use_batch: bool | None = None) -> dict:
+             use_batch: bool | None = None, redo_days: int | None = None) -> dict:
     """prefilter keep·미분석 기사를 LLM으로 분석.
 
     days: 지정 시 최근 N일 게시 기사만 처리(전체 백로그 대신 최신치만 — 비용 절감).
@@ -198,7 +240,16 @@ def run_rank(conn, provider: LLMProvider | None = None,
     system_full = _system_prompt()
     system_light = _system_prompt_light()
 
-    date_clause, params = db.days_clause_now(days)
+    if redo_days:
+        # 재랭킹(소급): 창 안의 노출(ACTIVE, ai_score>=임계) 기사만 다시 채점한다.
+        # 카테고리 재정의(5)·primary_country 신설(7)을 기존분에 반영할 때만 사용.
+        # 미채점 백로그(ai_score IS NULL)는 제외되어 대상이 ACTIVE로 한정된다(비용 통제).
+        date_clause, params = db.days_clause_now(redo_days)
+        rank_cond = (f"a.ai_score >= {int(config.AI_SCORE_ACTIVE_THRESHOLD)} "
+                     "AND a.duplicate_of IS NULL")
+    else:
+        date_clause, params = db.days_clause_now(days)
+        rank_cond = "a.ai_score IS NULL"
 
     rows = conn.execute(
         f"""
@@ -207,7 +258,7 @@ def run_rank(conn, provider: LLMProvider | None = None,
         FROM articles_raw a
         JOIN media_sources m ON m.source_id = a.source_id
         WHERE a.llm_prefilter = 'keep'
-          AND a.ai_score IS NULL{date_clause}
+          AND {rank_cond}{date_clause}
         ORDER BY a.filter_score DESC
         LIMIT ?
         """,
@@ -271,6 +322,7 @@ def run_rank(conn, provider: LLMProvider | None = None,
         if not event_types:
             event_types = taxonomy.event_seed_candidates(f"{r['title']} {r['summary'] or ''}")
         kb_impl_en = str(data.get("kb_implication_en") or "")[:1000]
+        primary_country = _valid_primary_country(data.get("primary_country"))
         links = source_links_by_id.get(cid)
         source_links = json.dumps(links, ensure_ascii=False) if links else None
 
@@ -279,11 +331,19 @@ def run_rank(conn, provider: LLMProvider | None = None,
         cur.execute(
             """UPDATE articles_raw
                SET ai_score = ?, title_ko = ?, title_en = ?, summary_en = ?, topics = ?,
-                   event_type = ?, kb_implication_en = ?, source_links = ?, ai_model = ?
+                   event_type = ?, kb_implication_en = ?, source_links = ?,
+                   primary_country = ?, ai_model = ?
                WHERE article_id = ?""",
             (score, title_ko, title_en, summary_en, ",".join(topics), ",".join(event_types),
-             kb_impl_en, source_links, provider.model_id, r["article_id"]),
+             kb_impl_en, source_links, primary_country, provider.model_id, r["article_id"]),
         )
+        if redo_days:
+            # 영어 기준본이 바뀌었으므로 한국어 번역·모달요약을 무효화 → translate/expand 재생성
+            cur.execute(
+                "UPDATE articles_raw SET summary_ko = NULL, kb_implication = NULL, "
+                "expanded_summary = NULL, expanded_summary_en = NULL WHERE article_id = ?",
+                (r["article_id"],),
+            )
         stats["ranked"] += 1
         if score >= config.AI_SCORE_ACTIVE_THRESHOLD:
             stats["active"] += 1

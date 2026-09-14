@@ -39,8 +39,9 @@ _SYS = (
     "text is provided, and let the LENGTH instruction below (not this note) decide how long that is. "
     "Output ONLY this JSON, nothing else:\n"
     '{"expanded_summary_en": "...", "expanded_summary_ko": "..."}\n\n'
-    "Length: aim for about 4-5 short paragraphs (roughly 12-20 lines when displayed, ~600-700 "
-    "Korean characters). This is a modal the reader opens for a bit more depth than the card — "
+    "Length: aim for a CONSISTENT 3-4 short paragraphs (roughly 10-16 lines when displayed, "
+    "~500-700 Korean characters) — keep the length steady across articles so summaries do not "
+    "vary wildly in size. This is a modal the reader opens for a bit more depth than the card — "
     "not a full article. Separate paragraphs with "
     "a blank line (\\n\\n). Before writing, mine the source text(s) for everything usable: exact "
     "figures and dates, named people/institutions and their stated positions, direct or paraphrased "

@@ -11,9 +11,17 @@
 <link rel="stylesheet" href="shared-tokens.css"/>
 <!-- 데이터: export_json 이 아래 스크립트에 주입(오프라인). 없으면 topics.json fetch. -->
 <script id="topics-data" type="application/json">null</script>
+<script src="shared-glossary.js"></script>
 <script src="shared-modal.js"></script>
 <style>
 .pagettl{font-size:clamp(12.5px,1.9cqi,15px);color:var(--muted);margin:2px 2px 10px}
+.twcc{display:flex;gap:6px;overflow-x:auto;padding:2px 2px 10px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.twcc::-webkit-scrollbar{display:none}
+.cc-pk{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:1px solid var(--line-2);border-radius:999px;background:transparent;color:var(--muted);font-size:12.5px;cursor:pointer;white-space:nowrap}
+.cc-pk[aria-selected="true"]{border-color:var(--gold);color:var(--ink,#151515);font-weight:600}
+.cc-pk .fg{font-size:14px;line-height:1}
+.lk-entry{display:inline-block;font-size:12px;color:var(--muted);text-decoration:none;border:1px solid var(--line-2);border-radius:999px;padding:4px 10px;margin-right:6px;white-space:nowrap}
+.lk-entry:hover{border-color:var(--gold);color:var(--ink,#151515)}
 </style>
 </head>
 <body>
@@ -29,6 +37,7 @@
       <div class="hd-sub"><b data-en="Monitoring">모니터링 · TopicWatch</b><i class="dot-live"></i></div>
     </div>
     <div class="hd-tools">
+      <a class="lk-entry" href="links.html" data-en="Links">원문 링크</a>
       <div class="langtoggle" role="group" aria-label="언어 선택">
         <button type="button" data-lang="ko" aria-pressed="true">KR</button>
         <button type="button" data-lang="en" aria-pressed="false">EN</button>
@@ -36,6 +45,7 @@
     </div>
   </header>
   <div class="twtabs" id="twtabs"></div>
+  <div class="twcc" id="twcc"></div>
   <div class="twhead" id="twhead"></div>
   <ul class="twfeed" id="twfeed"></ul>
 
@@ -113,19 +123,24 @@
       arts:[...personnelArts].sort(byScore)});
   }
 
+  let curCode = null, fCC = P.get('cc') || '';
   function render(code){
     const t = TOPICS.find(x => x.code === code) || TOPICS[0];
+    curCode = t.code;
     document.querySelectorAll('.tw-tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.code === t.code)));
+    const arts = fCC ? t.arts.filter(a => a.cc === fCC) : t.arts;
     $('#twhead').innerHTML = `<span class="tt">${esc(EN ? (t.label_en||t.label) : t.label)}</span>`+
-      (t.flat
-        ? `<span class="sub">${EN?'Total':'전체'} <b>${t.arts.length}</b></span>`
-        : `<span class="sub">${EN?'Presence':'진출'} <b>${t.n_in}</b> · ${EN?'Non-presence':'미진출'} <b>${t.n_out}</b></span>`);
-    if (!t.arts.length) {
+      (fCC
+        ? `<span class="sub">${esc(fccName())} <b>${arts.length}</b></span>`
+        : (t.flat
+          ? `<span class="sub">${EN?'Total':'전체'} <b>${t.arts.length}</b></span>`
+          : `<span class="sub">${EN?'Presence':'진출'} <b>${t.n_in}</b> · ${EN?'Non-presence':'미진출'} <b>${t.n_out}</b></span>`));
+    if (!arts.length) {
       $('#twfeed').innerHTML = `<div class="empty-state">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;
       $('#twfeed')._rows = [];
       return;
     }
-    $('#twfeed').innerHTML = t.arts.map((a,i) => {
+    $('#twfeed').innerHTML = arts.map((a,i) => {
       const isPresence = t.flat ? PRESENCE_CODES.has(a.cc) : a.presence === '진출';
       const pres = isPresence
         ? `<span class="tw-pres in">${EN?'Presence':'진출'}</span>` : `<span class="tw-pres">${EN?'Non-presence':'미진출'}</span>`;
@@ -136,8 +151,19 @@
         <div class="tw-m"><span class="src">${esc(a.src||'')}</span>${a.d?`<span>${esc(a.d)}</span>`:''}${chev()}</div>
       </li>`;
     }).join('');
-    $('#twfeed')._rows = t.arts;
+    $('#twfeed')._rows = arts;
   }
+
+  const _CCFLAG = new Map();
+  for (const t of TOPICS) for (const a of t.arts) if (a.cc && !_CCFLAG.has(a.cc)) _CCFLAG.set(a.cc, {flag:a.flag||'', label:ccName(a)});
+  function fccName(){ const m=_CCFLAG.get(fCC); return m?m.label:fCC; }
+  function renderCC(){
+    const chip=(cc,flag,label,sel)=>`<button class="cc-pk" data-cc="${cc}" aria-selected="${sel}">${flag?`<span class="fg">${esc(flag)}</span>`:''}${label?`<span class="cc-nm">${esc(label)}</span>`:''}</button>`;
+    const codes=[..._CCFLAG.keys()].sort();
+    $('#twcc').innerHTML = chip('','',EN?'All':'전체',fCC==='') + codes.map(cc=>chip(cc,_CCFLAG.get(cc).flag,'',fCC===cc)).join('');
+    $('#twcc').querySelectorAll('.cc-pk').forEach(b=>b.addEventListener('click',()=>{ fCC=b.dataset.cc; renderCC(); render(curCode||TOPICS[0].code); }));
+  }
+  renderCC();
 
   $('#twtabs').innerHTML = TOPICS.map((t,i) => `
     <button class="tw-tab" data-code="${t.code}" aria-selected="${i===0}">${esc(EN?(t.label_en||t.label):t.label)} <span class="n">${t.arts.length}</span></button>`).join('');

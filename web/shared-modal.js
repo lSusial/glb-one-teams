@@ -11,17 +11,17 @@
 //   expanded_summary / _en    있으면 q보다 우선 사용(10~20줄 다출처 종합, llm_expand.py — 노출 기사만 생성)
 //   rl / source_links         관련 기사 배열 [{t,u,src}] — 없으면 u 1건으로 폴백
 //   u, src, d                 원문 링크·출처·날짜
-//   c                         주제 배지(공백구분 ui키: economy/finance/digital/esg/risk/geo/reg/deal/incident)
+//   c                         주제 배지(공백구분 ui키: economy/markets/tech/geopolitics/policy/society/reg/deal/incident)
 //   category                  단일 카테고리 라벨(c가 없을 때, 브리프 핵심용)
 (function () {
   const EN = new URLSearchParams(location.search).get('lang') === 'en';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-  const TAG_KO = { economy: '경제', finance: '금융', digital: '디지털', esg: 'ESG', risk: '리스크', geo: '지정학',
+  const TAG_KO = { economy: '경제', markets: '금융시장', tech: '기술·디지털', geopolitics: '지정학', policy: '정책·규제', society: '사회·문화',
                     reg: '규제', deal: '거래·투자', incident: '사건사고' };
-  const TAG_EN = { economy: 'Economy', finance: 'Banking', digital: 'Digital', esg: 'ESG', risk: 'Risk', geo: 'Geopolitics',
+  const TAG_EN = { economy: 'Economy', markets: 'Financial Markets', tech: 'Technology', geopolitics: 'Geopolitics', policy: 'Policy', society: 'Society',
                     reg: 'Regulation', deal: 'Deals', incident: 'Incidents' };
-  const TAG_COLOR = { economy: '#2b5f9e', finance: '#2f7d4f', digital: '#6a3fb5', esg: '#3a8a6a', risk: '#b23b3b', geo: '#7a5230',
+  const TAG_COLOR = { economy: '#2b5f9e', markets: '#2f7d4f', tech: '#6a3fb5', geopolitics: '#7a5230', policy: '#b23b3b', society: '#4a5568',
                        reg: '#b23b3b', deal: '#2f7d4f', incident: '#7a5230',
                        // 브리프 "오늘의 글로벌 핵심"(daily_highlights.category, 단일값·한/영 라벨 그대로 표시)용
                        '금리': '#2b5f9e', 'FX': '#1f7a6c', '규제': '#b23b3b', '시장': '#2f7d4f', '디지털': '#6a3fb5', '지정학': '#7a5230',
@@ -90,7 +90,7 @@
       <h2>${esc((EN ? (a.t_en || a.t) : (a.t || a.t_en)) || '')}</h2>
       ${kb ? `<div class="sh-imp">💡 ${esc(kb)}</div>` : ''}
       <div class="sh-lb">${EN ? 'Summary' : '요약'}</div>
-      <div class="sh-sum">${summary ? esc(summary) : `<span class="sh-empty">${EN ? '(No summary available.)' : '(요약 정보가 없습니다.)'}</span>`}</div>
+      <div class="sh-sum">${summary ? (window.glossarize ? window.glossarize(esc(summary)) : esc(summary)) : `<span class="sh-empty">${EN ? '(No summary available.)' : '(요약 정보가 없습니다.)'}</span>`}</div>
       <div class="sh-lb">${EN ? 'Related Articles' : '관련 기사 링크'}</div>
       ${links || `<div class="sh-empty">${EN ? 'No related articles.' : '관련 기사가 없습니다.'}</div>`}
     `;
