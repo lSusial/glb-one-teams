@@ -26,8 +26,23 @@
         font-size:clamp(11px,1.7cqi,13px);font-weight:600;color:var(--muted);background:#fff}
 .catbar .cc-chip[aria-selected="true"]{background:var(--gold-soft);color:#B67611;border-color:var(--gold)}
 .catbar .cc-chip .n{opacity:.65;margin-left:3px}
-.catbar .lk-entry{flex:none;display:inline-flex;align-items:center;font-size:clamp(11px,1.7cqi,13px);color:var(--muted);text-decoration:none;border:1px dashed var(--line-2);border-radius:999px;padding:6px 12px}
-.catbar .lk-entry:hover{border-color:var(--gold);color:var(--ink,#151515)}
+.catbar .cc-chip.lk-chip{cursor:pointer}
+.catbar .cc-chip.lk-chip:hover{border-color:var(--gold);color:var(--ink,#151515)}
+#lkOv{position:fixed;inset:0;background:rgba(20,18,15,.55);display:none;align-items:center;justify-content:center;padding:28px 20px;z-index:9999}
+#lkOv.on{display:flex}
+.lk-modal{background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:78vh;max-height:78dvh;overflow:auto;padding:22px 24px;position:relative;font-size:14px}
+.lk-modal .lk-x{position:sticky;top:-4px;float:right;z-index:2;width:40px;height:40px;margin:-8px -12px 0 0;display:grid;place-items:center;cursor:pointer;color:#8a857e;font-size:24px;line-height:1;border:none;background:rgba(255,255,255,.92);border-radius:50%;box-shadow:0 1px 6px rgba(20,18,15,.10)}
+.lk-modal h2{font-size:16px;margin:4px 0 14px;line-height:1.4}
+.lksrc{margin:14px 0 6px;display:flex;align-items:baseline;gap:8px;border-bottom:1px solid var(--line-2);padding-bottom:5px}
+.lksrc:first-of-type{margin-top:0}
+.lksrc .nm{font-size:13.5px;font-weight:600;color:var(--ink,#151515)}
+.lksrc .n{font-size:11.5px;color:var(--muted)}
+.lklist{list-style:none;margin:0 0 6px;padding:0}
+.lka{display:block;text-decoration:none;color:inherit;padding:9px 4px;border-bottom:1px solid var(--line-1,rgba(0,0,0,.05))}
+.lka:hover{background:var(--hover,rgba(0,0,0,.03))}
+.lka .t{font-size:13.5px;line-height:1.4;color:var(--ink,#151515)}
+.lka .m{margin-top:3px;font-size:11.5px;color:var(--muted)}
+@media(max-width:520px){ .lk-modal{padding:16px} }
 .pk{position:relative}
 .pk .pin{position:absolute;top:-2px;right:2px;font-size:13px;line-height:1;color:var(--line-2);cursor:pointer;z-index:2;padding:2px}
 .pk .pin.on{color:var(--gold)}
@@ -86,6 +101,14 @@
     <a href="topics.html"><svg><use href="#ico-nav-monitor"/></svg><span data-en="Monitoring">모니터링</span></a>
     <a href="weekly.html"><svg><use href="#ico-nav-weekly"/></svg><span data-en="Weekly">주간 브리핑</span></a>
   </nav>
+
+  <div id="lkOv">
+    <div class="lk-modal">
+      <button class="lk-x" id="lkClose" aria-label="close" type="button">&times;</button>
+      <h2 id="lkTitle"></h2>
+      <div id="lkBody"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -104,6 +127,29 @@
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
   const md = (s) => String(s || '').slice(5);
   const svg = (id, w, h, cls) => `<svg ${cls?`class="${cls}" `:''}width="${w}" height="${h}" aria-hidden="true"><use href="#${id}"/></svg>`;
+
+  function openLinksPanel(articles, titleText){
+    const bySrc = new Map();
+    for (const a of (articles||[])) {
+      if (!a.u) continue;
+      const src = a.src || (EN?'Other':'기타');
+      if (!bySrc.has(src)) bySrc.set(src, []);
+      bySrc.get(src).push(a);
+    }
+    const srcs = [...bySrc.entries()].sort((x,y) => y[1].length - x[1].length);
+    $('#lkTitle').textContent = titleText || (EN?'Links':'원문 링크');
+    $('#lkBody').innerHTML = srcs.length ? srcs.map(([src,arts]) => `
+      <div class="lksrc"><span class="nm">${esc(src)}</span><span class="n">${arts.length}</span></div>
+      <ul class="lklist">${arts.map(a => `
+        <li><a class="lka" href="${esc(a.u)}" target="_blank" rel="noopener noreferrer">
+          <div class="t">${esc(EN?(a.t_en||a.t):(a.t||a.t_en))}</div>
+          <div class="m">${a.d?esc(md(a.d)):''}</div>
+        </a></li>`).join('')}</ul>`).join('') : `<div class="empty-state">${EN?'No links available.':'표시할 링크가 없습니다.'}</div>`;
+    $('#lkOv').classList.add('on');
+  }
+  $('#lkClose').onclick = () => $('#lkOv').classList.remove('on');
+  $('#lkOv').addEventListener('click', (e) => { if (e.target.id === 'lkOv') $('#lkOv').classList.remove('on'); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') $('#lkOv').classList.remove('on'); });
   const fnum = (v) => v == null ? '-' : (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString() : (Math.round(v*100)/100).toString());
   const NAMES = EN
     ? {GB:'UK',US:'US',HK:'Hong Kong',CN:'China',JP:'Japan',SG:'Singapore',IN:'India',VN:'Vietnam',MM:'Myanmar',ID:'Indonesia',KH:'Cambodia',TH:'Thailand',LA:'Laos',GLOBAL:'Global'}
@@ -210,8 +256,11 @@
 
     const catCount = (k) => { const rows = (co.articles||[]); return k ? rows.filter(a => (a.c||'').includes(k)).length : rows.length; };
     $('#presCats').innerHTML = CATS.map(([k,l]) => `<span class="cc-chip" data-k="${k}" aria-selected="${k===fCat}">${l}<span class="n">${catCount(k)}</span></span>`).join('')
-      + `<a class="lk-entry" href="links.html" data-en="Links">${EN?'Links':'원문 링크'}</a>`;
-    $('#presCats').onclick = (e) => { const c = e.target.closest('.cc-chip'); if (!c) return; fCat = c.dataset.k; renderPresence(); };
+      + `<span class="cc-chip lk-chip" data-lk="1">🔗 ${EN?'Links':'원문 링크'}</span>`;
+    $('#presCats').onclick = (e) => {
+      const lk = e.target.closest('.lk-chip'); if (lk) { openLinksPanel(co.articles||[], EN?(co.name_en||NAMES[co.cc]||co.cc):(co.name||NAMES[co.cc]||co.cc)); return; }
+      const c = e.target.closest('.cc-chip'); if (!c) return; fCat = c.dataset.k; renderPresence();
+    };
 
     const active = (co.count || 0) > 0;
     const st = active ? `<span class="dstatus on">${EN?'News':'뉴스'} ${co.count}${EN?'':'건'}</span>` : `<span class="dstatus off">${EN?'Watch':'관찰'}</span>`;
@@ -266,12 +315,16 @@
       $('#flatCats').style.display = '';
       const catCount = (k) => k ? rows.filter(a => (a.c||'').includes(k)).length : rows.length;
       $('#flatCats').innerHTML = CATS.map(([k,l]) => `<span class="cc-chip" data-k="${k}" aria-selected="${k===flatCat}">${l}<span class="n">${catCount(k)}</span></span>`).join('')
-        + `<a class="lk-entry" href="links.html" data-en="Links">${EN?'Links':'원문 링크'}</a>`;
-      $('#flatCats').onclick = (e) => { const c = e.target.closest('.cc-chip'); if (!c) return; flatCat = c.dataset.k; renderFlat(); };
+        + `<span class="cc-chip lk-chip" data-lk="1">🔗 ${EN?'Links':'원문 링크'}</span>`;
+      $('#flatCats').onclick = (e) => {
+        const lk = e.target.closest('.lk-chip'); if (lk) { openLinksPanel(cfg.src(), cfg.h); return; }
+        const c = e.target.closest('.cc-chip'); if (!c) return; flatCat = c.dataset.k; renderFlat();
+      };
       rows = rows.filter(a => !flatCat || (a.c||'').includes(flatCat));
     } else {
       $('#flatCats').style.display = '';
-      $('#flatCats').innerHTML = `<a class="lk-entry" href="links.html" data-en="Links">${EN?'Links':'원문 링크'}</a>`;
+      $('#flatCats').innerHTML = `<span class="cc-chip lk-chip" data-lk="1">🔗 ${EN?'Links':'원문 링크'}</span>`;
+      $('#flatCats').onclick = (e) => { if (e.target.closest('.lk-chip')) openLinksPanel(cfg.src(), cfg.h); };
     }
     if (!rows.length) {
       $('#flatFeed').innerHTML = `<div class="empty-state">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;
