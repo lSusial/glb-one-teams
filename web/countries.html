@@ -26,6 +26,8 @@
         font-size:clamp(11px,1.7cqi,13px);font-weight:600;color:var(--muted);background:#fff}
 .catbar .cc-chip[aria-selected="true"]{background:var(--gold-soft);color:#B67611;border-color:var(--gold)}
 .catbar .cc-chip .n{opacity:.65;margin-left:3px}
+.catbar .lk-entry{flex:none;display:inline-flex;align-items:center;font-size:clamp(11px,1.7cqi,13px);color:var(--muted);text-decoration:none;border:1px dashed var(--line-2);border-radius:999px;padding:6px 12px}
+.catbar .lk-entry:hover{border-color:var(--gold);color:var(--ink,#151515)}
 .pk{position:relative}
 .pk .pin{position:absolute;top:-2px;right:2px;font-size:13px;line-height:1;color:var(--line-2);cursor:pointer;z-index:2;padding:2px}
 .pk .pin.on{color:var(--gold)}
@@ -207,7 +209,8 @@
     if (!co) { $('#detail').innerHTML = `<div class="empty-state">${EN?'Select a hub above.':'위에서 거점을 선택하세요.'}</div>`; return; }
 
     const catCount = (k) => { const rows = (co.articles||[]); return k ? rows.filter(a => (a.c||'').includes(k)).length : rows.length; };
-    $('#presCats').innerHTML = CATS.map(([k,l]) => `<span class="cc-chip" data-k="${k}" aria-selected="${k===fCat}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
+    $('#presCats').innerHTML = CATS.map(([k,l]) => `<span class="cc-chip" data-k="${k}" aria-selected="${k===fCat}">${l}<span class="n">${catCount(k)}</span></span>`).join('')
+      + `<a class="lk-entry" href="links.html" data-en="Links">${EN?'Links':'원문 링크'}</a>`;
     $('#presCats').onclick = (e) => { const c = e.target.closest('.cc-chip'); if (!c) return; fCat = c.dataset.k; renderPresence(); };
 
     const active = (co.count || 0) > 0;
@@ -262,11 +265,13 @@
     if (cfg.cats) {
       $('#flatCats').style.display = '';
       const catCount = (k) => k ? rows.filter(a => (a.c||'').includes(k)).length : rows.length;
-      $('#flatCats').innerHTML = CATS.map(([k,l]) => `<span class="cc-chip" data-k="${k}" aria-selected="${k===flatCat}">${l}<span class="n">${catCount(k)}</span></span>`).join('');
+      $('#flatCats').innerHTML = CATS.map(([k,l]) => `<span class="cc-chip" data-k="${k}" aria-selected="${k===flatCat}">${l}<span class="n">${catCount(k)}</span></span>`).join('')
+        + `<a class="lk-entry" href="links.html" data-en="Links">${EN?'Links':'원문 링크'}</a>`;
       $('#flatCats').onclick = (e) => { const c = e.target.closest('.cc-chip'); if (!c) return; flatCat = c.dataset.k; renderFlat(); };
       rows = rows.filter(a => !flatCat || (a.c||'').includes(flatCat));
     } else {
-      $('#flatCats').style.display = 'none';
+      $('#flatCats').style.display = '';
+      $('#flatCats').innerHTML = `<a class="lk-entry" href="links.html" data-en="Links">${EN?'Links':'원문 링크'}</a>`;
     }
     if (!rows.length) {
       $('#flatFeed').innerHTML = `<div class="empty-state">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;
