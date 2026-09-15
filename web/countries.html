@@ -30,6 +30,7 @@
 .catbar .cc-chip.lk-chip:hover{border-color:var(--gold);color:var(--ink,#151515)}
 .catbar .cc-chip.lk-chip[aria-selected="true"]{background:var(--gold-soft);color:#B67611;border-color:var(--gold)}
 .lk-panel{background:#fff;border:1px solid var(--line-2);border-radius:12px;padding:4px 14px 6px;margin:0 2px 12px}
+.lk-hdr{margin:18px 2px 10px;padding-bottom:9px;border-bottom:1px solid var(--line-2);font-weight:700;color:var(--navy);font-size:clamp(13.5px,2.1cqi,16px)}
 .lksrc{margin:16px 0 4px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line-2);padding-bottom:7px}
 .lksrc:first-of-type{margin-top:12px}
 .lksrc .nm{font-size:11px;font-weight:700;color:#B67611;background:var(--gold-soft);border-radius:999px;padding:3px 10px;letter-spacing:.2px}
@@ -134,7 +135,7 @@
         <li><a class="lka" href="${esc(a.u)}" target="_blank" rel="noopener noreferrer">
           <div class="lka-row"><span class="t">${esc(EN?(a.t_en||a.t):(a.t||a.t_en))}</span>${a.d?`<span class="d">${esc(md(a.d))}</span>`:''}</div>
         </a></li>`).join('')}</ul>`).join('') : `<div class="empty-state">${EN?'No links available.':'표시할 링크가 없습니다.'}</div>`;
-    return `<div class="dsec-t"><span class="bar"></span>${EN?'Source Links':'원문 링크'}</div>${body}`;
+    return `<div class="lk-hdr">${EN?'Source Links':'원문 링크'}</div>${body}`;
   }
   const fnum = (v) => v == null ? '-' : (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString() : (Math.round(v*100)/100).toString());
   const NAMES = EN
