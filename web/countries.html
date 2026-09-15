@@ -75,7 +75,6 @@
     <p class="pagettl" data-en="Pick a flag to see the country's briefing and local press">국기를 선택해 국가별 브리핑과 현지 뉴스를 확인하세요</p>
     <div class="picker" id="picker"></div>
     <div class="catbar" id="presCats"></div>
-    <div class="lk-panel" id="lkPanelPres" hidden></div>
     <section class="card" id="detail" style="padding:14px 13px"></section>
   </div>
 
@@ -119,10 +118,7 @@
   const md = (s) => String(s || '').slice(5);
   const svg = (id, w, h, cls) => `<svg ${cls?`class="${cls}" `:''}width="${w}" height="${h}" aria-hidden="true"><use href="#${id}"/></svg>`;
 
-  function renderLinksPanel(panelSel, articles, open){
-    const panel = $(panelSel);
-    panel.hidden = !open;
-    if (!open) { panel.innerHTML = ''; return; }
+  function linksPanelHtml(articles){
     const bySrc = new Map();
     for (const a of (articles||[])) {
       if (!a.u) continue;
@@ -131,12 +127,13 @@
       bySrc.get(src).push(a);
     }
     const srcs = [...bySrc.entries()].sort((x,y) => y[1].length - x[1].length);
-    panel.innerHTML = srcs.length ? srcs.map(([src,arts]) => `
+    const body = srcs.length ? srcs.map(([src,arts]) => `
       <div class="lksrc"><span class="nm">${esc(src)}</span><span class="n">${arts.length}</span></div>
       <ul class="lklist">${arts.map(a => `
         <li><a class="lka" href="${esc(a.u)}" target="_blank" rel="noopener noreferrer">
           <div class="lka-row"><span class="t">${esc(EN?(a.t_en||a.t):(a.t||a.t_en))}</span>${a.d?`<span class="d">${esc(md(a.d))}</span>`:''}</div>
         </a></li>`).join('')}</ul>`).join('') : `<div class="empty-state">${EN?'No links available.':'표시할 링크가 없습니다.'}</div>`;
+    return `<div class="dsec-t"><span class="bar"></span>${EN?'Source Links':'원문 링크'}</div>${body}`;
   }
   const fnum = (v) => v == null ? '-' : (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString() : (Math.round(v*100)/100).toString());
   const NAMES = EN
@@ -240,12 +237,11 @@
   function renderPresence(){
     const co = (DATA.countries || []).find(c => c.cc === fCC);
     document.querySelectorAll('.pk').forEach(p => p.setAttribute('aria-selected', String(p.dataset.cc === fCC)));
-    if (!co) { $('#detail').innerHTML = `<div class="empty-state">${EN?'Select a hub above.':'위에서 거점을 선택하세요.'}</div>`; renderLinksPanel('#lkPanelPres', [], false); return; }
+    if (!co) { $('#detail').innerHTML = `<div class="empty-state">${EN?'Select a hub above.':'위에서 거점을 선택하세요.'}</div>`; return; }
 
     const catCount = (k) => { const rows = (co.articles||[]); return k ? rows.filter(a => (a.c||'').includes(k)).length : rows.length; };
     $('#presCats').innerHTML = CATS.map(([k,l]) => `<span class="cc-chip" data-k="${k}" aria-selected="${k===fCat}">${l}<span class="n">${catCount(k)}</span></span>`).join('')
       + `<span class="cc-chip lk-chip" data-lk="1" aria-selected="${lkPresOpen}">🔗 ${EN?'Links':'원문 링크'}</span>`;
-    renderLinksPanel('#lkPanelPres', co.articles||[], lkPresOpen);
     $('#presCats').onclick = (e) => {
       const lk = e.target.closest('.lk-chip'); if (lk) { lkPresOpen = !lkPresOpen; renderPresence(); return; }
       const c = e.target.closest('.cc-chip'); if (!c) return; fCat = c.dataset.k; renderPresence();
@@ -253,6 +249,21 @@
 
     const active = (co.count || 0) > 0;
     const st = active ? `<span class="dstatus on">${EN?'News':'뉴스'} ${co.count}${EN?'':'건'}</span>` : `<span class="dstatus off">${EN?'Watch':'관찰'}</span>`;
+    const dhead = `
+      <div class="dhead">
+        <span class="fbar" style="border-left-color:${active?'var(--gold)':'var(--line-2)'}">${svg('flr-'+co.cc.toLowerCase(),40,40,'rflag')}</span>
+        <div style="min-width:0">
+          <div class="dname">${esc(EN?(co.name_en||NAMES[co.cc]||co.cc):(co.name||NAMES[co.cc]||co.cc))} <span class="cc">${esc(co.cc)}</span></div>
+          <div class="dmeta">KB ${EN?'Presence':'진출'}${st}</div>
+        </div>
+      </div>`;
+
+    if (lkPresOpen) {
+      $('#detail').innerHTML = dhead + linksPanelHtml(co.articles||[]);
+      $('#detail').onclick = null;
+      return;
+    }
+
     const bns = (co.indicators || []).map(bignum).join('');
     const brief = co.brief || {};
     const briefTxt = EN ? (brief.en || brief.ko) : (brief.ko || brief.en);
@@ -269,14 +280,7 @@
     } else {
       feed = `<div class="dnote">${EN?'No local press articles collected recently · monitoring':'최근 수집된 현지 언론 기사가 없습니다 · 모니터링 중'}</div>`;
     }
-    $('#detail').innerHTML = `
-      <div class="dhead">
-        <span class="fbar" style="border-left-color:${active?'var(--gold)':'var(--line-2)'}">${svg('flr-'+co.cc.toLowerCase(),40,40,'rflag')}</span>
-        <div style="min-width:0">
-          <div class="dname">${esc(EN?(co.name_en||NAMES[co.cc]||co.cc):(co.name||NAMES[co.cc]||co.cc))} <span class="cc">${esc(co.cc)}</span></div>
-          <div class="dmeta">KB ${EN?'Presence':'진출'}${st}</div>
-        </div>
-      </div>
+    $('#detail').innerHTML = dhead + `
       <div class="bignums">${bns}</div>
       ${briefTxt ? `<div class="dsec-t"><span class="bar"></span>${EN?'Daily Briefing':'국가 일일 브리핑'}</div><p class="dbrief">${esc(briefTxt)}</p>` : ''}
       <div class="dsec-t"><span class="bar"></span>${EN?'Local Press':'현지언론 피드'}</div>
@@ -305,7 +309,6 @@
       const catCount = (k) => k ? rows.filter(a => (a.c||'').includes(k)).length : rows.length;
       $('#flatCats').innerHTML = CATS.map(([k,l]) => `<span class="cc-chip" data-k="${k}" aria-selected="${k===flatCat}">${l}<span class="n">${catCount(k)}</span></span>`).join('')
         + `<span class="cc-chip lk-chip" data-lk="1" aria-selected="${lkFlatOpen}">🔗 ${EN?'Links':'원문 링크'}</span>`;
-      renderLinksPanel('#lkPanelFlat', cfg.src(), lkFlatOpen);
       $('#flatCats').onclick = (e) => {
         const lk = e.target.closest('.lk-chip'); if (lk) { lkFlatOpen = !lkFlatOpen; renderFlat(); return; }
         const c = e.target.closest('.cc-chip'); if (!c) return; flatCat = c.dataset.k; renderFlat();
@@ -314,9 +317,13 @@
     } else {
       $('#flatCats').style.display = '';
       $('#flatCats').innerHTML = `<span class="cc-chip lk-chip" data-lk="1" aria-selected="${lkFlatOpen}">🔗 ${EN?'Links':'원문 링크'}</span>`;
-      renderLinksPanel('#lkPanelFlat', cfg.src(), lkFlatOpen);
       $('#flatCats').onclick = (e) => { if (e.target.closest('.lk-chip')) { lkFlatOpen = !lkFlatOpen; renderFlat(); } };
     }
+
+    $('#lkPanelFlat').hidden = !lkFlatOpen;
+    $('#flatFeed').hidden = lkFlatOpen;
+    if (lkFlatOpen) { $('#lkPanelFlat').innerHTML = linksPanelHtml(cfg.src()); return; }
+
     if (!rows.length) {
       $('#flatFeed').innerHTML = `<div class="empty-state">${EN?'No articles for this filter.':'해당 조건의 기사가 없습니다.'}</div>`;
       $('#flatFeed')._rows = [];
