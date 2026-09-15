@@ -30,15 +30,16 @@
 .catbar .cc-chip.lk-chip:hover{border-color:var(--gold);color:var(--ink,#151515)}
 .catbar .cc-chip.lk-chip[aria-selected="true"]{background:var(--gold-soft);color:#B67611;border-color:var(--gold)}
 .lk-panel{background:#fff;border:1px solid var(--line-2);border-radius:12px;padding:4px 14px 6px;margin:0 2px 12px}
-.lksrc{margin:14px 0 6px;display:flex;align-items:baseline;gap:8px;border-bottom:1px solid var(--line-2);padding-bottom:5px}
+.lksrc{margin:16px 0 4px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--line-2);padding-bottom:7px}
 .lksrc:first-of-type{margin-top:12px}
-.lksrc .nm{font-size:13.5px;font-weight:600;color:var(--ink,#151515)}
+.lksrc .nm{font-size:11px;font-weight:700;color:#B67611;background:var(--gold-soft);border-radius:999px;padding:3px 10px;letter-spacing:.2px}
 .lksrc .n{font-size:11.5px;color:var(--muted)}
 .lklist{list-style:none;margin:0 0 6px;padding:0}
 .lka{display:block;text-decoration:none;color:inherit;padding:9px 4px;border-bottom:1px solid var(--line-1,rgba(0,0,0,.05))}
 .lka:hover{background:var(--hover,rgba(0,0,0,.03))}
-.lka .t{font-size:13.5px;line-height:1.4;color:var(--ink,#151515)}
-.lka .m{margin-top:3px;font-size:11.5px;color:var(--muted)}
+.lka-row{display:flex;align-items:flex-start;gap:10px}
+.lka .t{font-size:13.5px;line-height:1.4;color:var(--ink,#151515);flex:1 1 auto}
+.lka .d{font-size:11px;color:var(--muted);white-space:nowrap;flex:0 0 auto;padding-top:2px}
 .pk{position:relative}
 .pk .pin{position:absolute;top:-2px;right:2px;font-size:13px;line-height:1;color:var(--line-2);cursor:pointer;z-index:2;padding:2px}
 .pk .pin.on{color:var(--gold)}
@@ -134,8 +135,7 @@
       <div class="lksrc"><span class="nm">${esc(src)}</span><span class="n">${arts.length}</span></div>
       <ul class="lklist">${arts.map(a => `
         <li><a class="lka" href="${esc(a.u)}" target="_blank" rel="noopener noreferrer">
-          <div class="t">${esc(EN?(a.t_en||a.t):(a.t||a.t_en))}</div>
-          <div class="m">${a.d?esc(md(a.d)):''}</div>
+          <div class="lka-row"><span class="t">${esc(EN?(a.t_en||a.t):(a.t||a.t_en))}</span>${a.d?`<span class="d">${esc(md(a.d))}</span>`:''}</div>
         </a></li>`).join('')}</ul>`).join('') : `<div class="empty-state">${EN?'No links available.':'표시할 링크가 없습니다.'}</div>`;
   }
   const fnum = (v) => v == null ? '-' : (Math.abs(v) >= 1000 ? Math.round(v).toLocaleString() : (Math.round(v*100)/100).toString());
