@@ -338,9 +338,9 @@ ul{margin:0;padding:0;list-style:none}
 /* ── 모니터링(topics) ───────────────────────────────── */
 .twtabs{display:flex;gap:8px;padding:2px var(--pad) 10px;overflow-x:auto;scrollbar-width:none}
 .twtabs::-webkit-scrollbar{display:none}
-.tw-tab{flex:none;display:flex;align-items:center;gap:6px;border-radius:999px;border:1px solid var(--line-2);
-        padding:7px 14px;font-weight:600;font-size:clamp(12px,1.8cqi,14.5px);color:var(--ink-2);background:#fff}
-.tw-tab[aria-selected="true"]{background:var(--navy);color:#fff;border-color:var(--navy)}
+.tw-tab{flex:none;display:flex;align-items:center;gap:6px;border-radius:999px;border:none;
+        padding:8px 15px;font-weight:700;font-size:clamp(12.5px,1.9cqi,15px);color:var(--ink-2);background:var(--line)}
+.tw-tab[aria-selected="true"]{background:var(--navy);color:#fff}
 .tw-tab .n{opacity:.6;font-family:var(--f-en)}
 .twhead{display:flex;align-items:baseline;gap:8px;padding:6px var(--pad) 8px;border-top:1px solid var(--line)}
 .twhead .tt{font-weight:700;color:var(--navy);font-size:clamp(14px,2.2cqi,17px)}
