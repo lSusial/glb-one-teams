@@ -122,7 +122,8 @@
     const bySrc = new Map();
     for (const a of (articles||[])) {
       if (!a.u) continue;
-      const src = a.src || (EN?'Other':'기타');
+      let src = a.src || (EN?'Other':'기타');
+      if (/^GNews\b/i.test(src)) src = 'GNews';
       if (!bySrc.has(src)) bySrc.set(src, []);
       bySrc.get(src).push(a);
     }
