@@ -1195,3 +1195,40 @@ sources:
         url: https://news.google.com/rss/search?q=sanctions%20%28Vietnam%20OR%20Indonesia%20OR%20Cambodia%20OR%20Myanmar%20OR%20India%20OR%20%22Hong%20Kong%22%29%20when%3A3d&hl=en-US&gl=US&ceid=US:en
       - section: sanctions-kr
         url: https://news.google.com/rss/search?q=%EC%A0%9C%EC%9E%AC%20%28%EA%B8%88%EC%9C%B5%20OR%20%EC%9D%80%ED%96%89%20OR%20%EC%88%98%EC%B6%9C%ED%86%B5%EC%A0%9C%20OR%20%EC%9E%90%EC%82%B0%EB%8F%99%EA%B2%B0%29%20when%3A3d&hl=ko&gl=KR&ceid=KR:ko
+
+  # ============================================================
+  # 거점국 주제확장 — 사회·산업·정치·기술 축 보강 (피드백4 2단계, 2026-09-15)
+  #   경제·시장·지정학은 기존 소스가 커버 → 여기선 그동안 얇던 축만 겨냥.
+  # ============================================================
+  - media_name: 거점국 주제확장
+    country: GLOBAL
+    language: en
+    tier: 2
+    categories: [GLOBAL_GENERAL]
+    feeds:
+      - section: expand-gb
+        url: https://news.google.com/rss/search?q=%22United%20Kingdom%22%20%28society%20OR%20labor%20OR%20demographics%20OR%20education%20OR%20housing%20OR%20technology%20OR%20startup%20OR%20industry%20OR%20manufacturing%20OR%20policy%20OR%20trade%29%20when%3A2d&hl=en-US&gl=US&ceid=US:en
+      - section: expand-us
+        url: https://news.google.com/rss/search?q=%22United%20States%22%20%28society%20OR%20labor%20OR%20demographics%20OR%20education%20OR%20housing%20OR%20technology%20OR%20startup%20OR%20industry%20OR%20manufacturing%20OR%20policy%20OR%20trade%29%20when%3A2d&hl=en-US&gl=US&ceid=US:en
+      - section: expand-jp
+        url: https://news.google.com/rss/search?q=%22Japan%22%20%28society%20OR%20labor%20OR%20demographics%20OR%20education%20OR%20housing%20OR%20technology%20OR%20startup%20OR%20industry%20OR%20manufacturing%20OR%20policy%20OR%20trade%29%20when%3A2d&hl=en-US&gl=US&ceid=US:en
+      - section: expand-hk
+        url: https://news.google.com/rss/search?q=%22Hong%20Kong%22%20%28society%20OR%20labor%20OR%20demographics%20OR%20education%20OR%20housing%20OR%20technology%20OR%20startup%20OR%20industry%20OR%20manufacturing%20OR%20policy%20OR%20trade%29%20when%3A2d&hl=en-US&gl=US&ceid=US:en
+      - section: expand-sg
+        url: https://news.google.com/rss/search?q=%22Singapore%22%20%28society%20OR%20labor%20OR%20demographics%20OR%20education%20OR%20housing%20OR%20technology%20OR%20startup%20OR%20industry%20OR%20manufacturing%20OR%20policy%20OR%20trade%29%20when%3A2d&hl=en-US&gl=US&ceid=US:en
+      - section: expand-cn
+        url: https://news.google.com/rss/search?q=%22China%22%20%28society%20OR%20labor%20OR%20demographics%20OR%20education%20OR%20housing%20OR%20technology%20OR%20startup%20OR%20industry%20OR%20manufacturing%20OR%20policy%20OR%20trade%29%20when%3A2d&hl=en-US&gl=US&ceid=US:en
+      - section: expand-vn
+        url: https://news.google.com/rss/search?q=%22Vietnam%22%20%28society%20OR%20labor%20OR%20demographics%20OR%20education%20OR%20housing%20OR%20technology%20OR%20startup%20OR%20industry%20OR%20manufacturing%20OR%20policy%20OR%20trade%29%20when%3A2d&hl=en-US&gl=US&ceid=US:en
+      - section: expand-in
+        url: https://news.google.com/rss/search?q=%22India%22%20%28society%20OR%20labor%20OR%20demographics%20OR%20education%20OR%20housing%20OR%20technology%20OR%20startup%20OR%20industry%20OR%20manufacturing%20OR%20policy%20OR%20trade%29%20when%3A2d&hl=en-US&gl=US&ceid=US:en
+      - section: expand-mm
+        url: https://news.google.com/rss/search?q=%22Myanmar%22%20%28society%20OR%20labor%20OR%20demographics%20OR%20education%20OR%20housing%20OR%20technology%20OR%20startup%20OR%20industry%20OR%20manufacturing%20OR%20policy%20OR%20trade%29%20when%3A2d&hl=en-US&gl=US&ceid=US:en
+      - section: expand-id
+        url: https://news.google.com/rss/search?q=%22Indonesia%22%20%28society%20OR%20labor%20OR%20demographics%20OR%20education%20OR%20housing%20OR%20technology%20OR%20startup%20OR%20industry%20OR%20manufacturing%20OR%20policy%20OR%20trade%29%20when%3A2d&hl=en-US&gl=US&ceid=US:en
+      - section: expand-kh
+        url: https://news.google.com/rss/search?q=%22Cambodia%22%20%28society%20OR%20labor%20OR%20demographics%20OR%20education%20OR%20housing%20OR%20technology%20OR%20startup%20OR%20industry%20OR%20manufacturing%20OR%20policy%20OR%20trade%29%20when%3A2d&hl=en-US&gl=US&ceid=US:en
+      - section: expand-th
+        url: https://news.google.com/rss/search?q=%22Thailand%22%20%28society%20OR%20labor%20OR%20demographics%20OR%20education%20OR%20housing%20OR%20technology%20OR%20startup%20OR%20industry%20OR%20manufacturing%20OR%20policy%20OR%20trade%29%20when%3A2d&hl=en-US&gl=US&ceid=US:en
+      - section: expand-la
+        url: https://news.google.com/rss/search?q=%22Laos%22%20%28society%20OR%20labor%20OR%20demographics%20OR%20education%20OR%20housing%20OR%20technology%20OR%20startup%20OR%20industry%20OR%20manufacturing%20OR%20policy%20OR%20trade%29%20when%3A2d&hl=en-US&gl=US&ceid=US:en
