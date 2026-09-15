@@ -305,10 +305,16 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
     사례를 테스트 중 실제로 발견함(예: vietnamnews.vn/tags/.../industrial-bank-
     of-korea-ibk-vietnam.html → 본문이 엉뚱한 홍콩 기업 실적 기사로 채워짐,
     title_ko도 그 무관한 내용으로 잘못 생성됨). korean_fi 키워드 매치 자체는
-    맞지만 "현지 동향" 기사로 보여줄 내용이 아니므로 링크 패턴으로 걸러낸다."""
+    맞지만 "현지 동향" 기사로 보여줄 내용이 아니므로 링크 패턴으로 걸러낸다.
+
+    근접중복 클러스터링(2026-09-15, _compute_personnel과 동일 원칙 이식): 같은
+    사건이 여러 매체·며칠에 걸쳐 재탕되거나 GNews 광역검색 특성상 엉뚱한
+    국가코드로 잡히는 경우가 있어, 국가 구분 없이 전체를 한 풀로 묶어 제목
+    토큰 겹침(NON_PRESENCE_DEDUP_SIM) 기준으로 중복을 접는다."""
     dc, params = _date_clause(days)
     all_cc = list(_FLAGS.keys()) + list(config.NON_PRESENCE_CODES)
     ph = ",".join("?" * len(all_cc))
+    fetch_limit = limit * 5   # 클러스터링으로 줄어들 것을 감안해 후보를 넉넉히 뽑음
     rows = conn.execute(
         f"""SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en, a.korean_fi, a.topics,
                    a.event_type, a.personnel_move, m.tier,
@@ -319,13 +325,27 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
               AND a.link NOT LIKE '%/topic/%' AND a.link NOT LIKE '%/topics/%'
               AND m.primary_country_code IN ({ph}){dc}
             ORDER BY a.ai_score DESC LIMIT ?""",
-        (*all_cc, *params, limit * 3),
+        (*all_cc, *params, fetch_limit),
     ).fetchall()
     cm = ranking.cluster_sizes(conn)
-    rows = ranking.order(conn, rows, cluster_map=cm)[:limit]   # 표시 정렬 = 복합 rank_score
+    rows = ranking.order(conn, rows, cluster_map=cm)   # 표시 정렬 = 복합 rank_score
+
+    bucket: list[dict] = []   # 국가 구분 없는 단일 풀 — cc 오분류 케이스까지 잡기 위함
+    for r in rows:
+        tk = _sig_tokens(_strip_source_suffix(r["title"]))
+        for c in bucket:
+            if _overlap_ratio(tk, c["tk"]) >= config.NON_PRESENCE_DEDUP_SIM:
+                c["n"] += 1
+                break
+        else:
+            bucket.append({"row": r, "tk": tk, "n": 1})
+
+    bucket.sort(key=lambda c: ranking.rank_score(c["row"], cm.get(c["row"]["article_id"], 0)), reverse=True)
+    bucket = bucket[:limit]
 
     out = []
-    for r in rows:
+    for c in bucket:
+        r = c["row"]
         cc = _eff_cc(r)
         flag, label, label_en = _country_display(cc)
         codes = [x for x in (r["topics"] or "").split(",") if x]
@@ -335,6 +355,7 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
             src=r["media_name"], d=(r["published_at"] or "")[:10],
             t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
             c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
+            related_count=c["n"] - 1,
             rank_score=ranking.rank_score(r, cm.get(r["article_id"], 0)),
         ))
     return out
