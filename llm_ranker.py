@@ -131,7 +131,7 @@ def _system_prompt() -> str:
         "Choose topics ONLY from these codes (multiple allowed, max 3):\n"
         + taxonomy.prompt_reference()
         + "\n\nChoose event_type ONLY from these codes (multiple allowed, max 3; empty if the "
-        "article is not about a specific regulatory/deal/incident event):\n"
+        "article is not about a specific regulatory/sanctions/deal/incident event; use SANCTION for new or expanded sanctions designations, OFAC/EU/UN actions, embargoes, asset freezes, export controls):\n"
         + taxonomy.event_prompt_reference()
         + _TOPIC_DISAMBIG_BLOCK
         + _PRIMARY_COUNTRY_BLOCK
@@ -172,7 +172,7 @@ def _system_prompt_light() -> str:
         "Choose topics ONLY from these codes (multiple allowed, max 3):\n"
         + taxonomy.prompt_reference()
         + "\n\nChoose event_type ONLY from these codes (multiple allowed, max 3; empty if the "
-        "article is not about a specific regulatory/deal/incident event):\n"
+        "article is not about a specific regulatory/sanctions/deal/incident event; use SANCTION for new or expanded sanctions designations, OFAC/EU/UN actions, embargoes, asset freezes, export controls):\n"
         + taxonomy.event_prompt_reference()
         + _TOPIC_DISAMBIG_BLOCK
         + _PRIMARY_COUNTRY_BLOCK

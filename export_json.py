@@ -1037,6 +1037,7 @@ _EVENT_CATS = [
     ("REG",      "reg",      "규제",     "Regulation"),
     ("DEAL",     "deal",     "거래·투자", "Deals·Investment"),
     ("INCIDENT", "incident", "사건사고", "Incidents"),
+    ("SANCTION", "sanction", "제재",     "Sanctions"),
 ]
 
 

@@ -1179,3 +1179,19 @@ sources:
     feeds:
       - section: top
         url: https://news.google.com/rss/search?q=Canada+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  # ============================================================
+  # 제재(SANCTION) 모니터링 — Google News 검색 RSS (피드백 3, A안)
+  # ============================================================
+  - media_name: 제재 모니터
+    country: GLOBAL
+    language: en
+    tier: 1
+    categories: [GLOBAL_GENERAL]
+    feeds:
+      - section: sanctions-global
+        url: https://news.google.com/rss/search?q=%28OFAC%20OR%20%22EU%20sanctions%22%20OR%20%22UN%20sanctions%22%20OR%20embargo%20OR%20%22asset%20freeze%22%29%20when%3A3d&hl=en-US&gl=US&ceid=US:en
+      - section: sanctions-kb-countries
+        url: https://news.google.com/rss/search?q=sanctions%20%28Vietnam%20OR%20Indonesia%20OR%20Cambodia%20OR%20Myanmar%20OR%20India%20OR%20%22Hong%20Kong%22%29%20when%3A3d&hl=en-US&gl=US&ceid=US:en
+      - section: sanctions-kr
+        url: https://news.google.com/rss/search?q=%EC%A0%9C%EC%9E%AC%20%28%EA%B8%88%EC%9C%B5%20OR%20%EC%9D%80%ED%96%89%20OR%20%EC%88%98%EC%B6%9C%ED%86%B5%EC%A0%9C%20OR%20%EC%9E%90%EC%82%B0%EB%8F%99%EA%B2%B0%29%20when%3A3d&hl=ko&gl=KR&ceid=KR:ko

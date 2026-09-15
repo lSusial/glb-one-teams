@@ -67,9 +67,14 @@ event_types:
   # 정확히 분류하므로, 여기 목록은 백필(무료 키워드 매칭)의 정밀도용.
   - code: REG
     label: { ko: "규제", en: "Regulation" }
-    seeds: [regulation, regulatory, supervision, regulator, sanction, license,
+    seeds: [regulation, regulatory, supervision, regulator, license,
             licensing, fine, penalty, compliance, capital requirement,
             regulatory approval, antitrust, crackdown, moratorium]
+  - code: SANCTION
+    label: { ko: "제재", en: "Sanctions" }
+    seeds: [sanction, sanctions, sanctioned, ofac, sdn, embargo, "asset freeze",
+            "export control", "restrictive measures", designation, designated,
+            blacklist, "자산동결", "수출통제", "금수", "제재"]
   - code: DEAL
     label: { ko: "거래·투자", en: "Deals·Investment" }
     seeds: [acquisition, merger, "m&a", acquire, acquires, stake, divestiture,
