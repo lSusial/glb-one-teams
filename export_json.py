@@ -361,6 +361,9 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
     return out
 
 
+_PERSONNEL_DEDUP_SIM = 0.30   # 인사동향 근접중복 임계(제목+summary_en, 2026-09-15 튜닝)
+
+
 def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dict]:
     """금융기관·중앙은행·감독당국 인사동향(리더십 교체) 모아보기 (2026-08-28).
     keyword_filter.run_personnel_tag()가 키워드로 태깅한 personnel_move 컬럼을
@@ -398,15 +401,21 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
 
     bucket: list[dict] = []   # 국가 구분 없는 단일 풀 — cc 오분류 케이스까지 잡기 위함
     for r in rows:
-        tk = _sig_tokens(_strip_source_suffix(r["title"]))
+        tk = _sig_tokens(_strip_source_suffix(r["title"]) + " " + (r["summary_en"] or ""))
         for c in bucket:
-            if _overlap_ratio(tk, c["tk"]) >= config.NON_PRESENCE_DEDUP_SIM:
-                c["n"] += 1
+            if _overlap_ratio(tk, c["tk"]) >= _PERSONNEL_DEDUP_SIM:
+                c["mem"].append(r)
                 break
         else:
-            bucket.append({"row": r, "tk": tk, "n": 1})
+            bucket.append({"tk": tk, "mem": [r]})
 
-    bucket.sort(key=lambda c: ranking.rank_score(c["row"], cm.get(c["row"]["article_id"], 0)), reverse=True)
+    # 대표 = 클러스터 내 가장 최근 보도(인사 arc의 최종 단계=취임/임명이 헤드라인).
+    # 정렬은 멤버 중 최고 rank_score 기준(대표가 최신이어도 중요 클러스터가 위로).
+    for c in bucket:
+        c["mem"].sort(key=lambda x: (x["published_at"] or ""), reverse=True)
+        c["row"] = c["mem"][0]
+        c["n"] = len(c["mem"])
+    bucket.sort(key=lambda c: max(ranking.rank_score(m, cm.get(m["article_id"], 0)) for m in c["mem"]), reverse=True)
     bucket = bucket[:limit]
 
     out = []

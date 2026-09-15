@@ -45,7 +45,7 @@ FINANCE_SCORE_BODY   =  3   # 금융·ESG 키워드가 본문에서 히트
 COUNTRY_SCORE_TITLE  =  2   # 국가 키워드가 제목에서 히트 (국가당 1회)
 COUNTRY_SCORE_BODY   =  1   # 국가 키워드가 본문에서 히트 (국가당 1회)
 EXCLUSION_SCORE      = -4   # 스포츠·연예 제외 키워드 히트당
-PASS_THRESHOLD       =  3   # ≥3 이면 passed (제목 금융 히트 단독으로 통과)
+PASS_THRESHOLD       =  2   # ≥2 이면 passed — 국가 관련 일반뉴스(정치·사회·산업)도 수집 확장(피드백4, 2026-09-15). 노이즈는 LLM 프리필터+랭킹이 뒤로 밀어냄
 BODY_ONLY_THRESHOLD  =  5   # 제목 금융 키워드 없이 본문만 히트 시 더 높은 기준
 
 # 중복 탐지
