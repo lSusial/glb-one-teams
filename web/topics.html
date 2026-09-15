@@ -20,6 +20,7 @@
 .cc-pk{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border:1px solid var(--line-2);border-radius:999px;background:transparent;color:var(--muted);font-size:12.5px;cursor:pointer;white-space:nowrap}
 .cc-pk[aria-selected="true"]{border-color:var(--gold);color:var(--ink,#151515);font-weight:600}
 .cc-pk .fg{font-size:14px;line-height:1}
+.cc-pk .n{opacity:.65;margin-left:2px}
 .lk-entry{display:inline-block;font-size:12px;color:var(--muted);text-decoration:none;border:1px solid var(--line-2);border-radius:999px;padding:4px 10px;margin-right:6px;white-space:nowrap}
 .lk-entry:hover{border-color:var(--gold);color:var(--ink,#151515)}
 </style>
@@ -124,14 +125,36 @@
   }
 
   let curCode = null, fCC = P.get('cc') || '';
+
+  // 국가 칩 = 현재 탭(카테고리)에 실제로 기사가 있는 국가만, 건수 포함해 표시.
+  function ccCounts(t){
+    const m = new Map();
+    for (const a of t.arts) {
+      if (!a.cc) continue;
+      if (!m.has(a.cc)) m.set(a.cc, {flag:a.flag||'', label:ccName(a), n:0});
+      m.get(a.cc).n++;
+    }
+    return m;
+  }
+  function renderCC(t){
+    const ccm = ccCounts(t);
+    if (fCC && !ccm.has(fCC)) fCC = '';
+    const chip=(cc,flag,label,n,sel)=>`<button class="cc-pk" data-cc="${cc}" aria-selected="${sel}">${flag?`<span class="fg">${esc(flag)}</span>`:''}${label?`<span class="cc-nm">${esc(label)}</span>`:''}<span class="n">${n}</span></button>`;
+    const codes=[...ccm.keys()].sort((x,y)=>ccm.get(y).n-ccm.get(x).n);
+    $('#twcc').innerHTML = chip('','',EN?'All':'전체',t.arts.length,fCC==='') + codes.map(cc=>chip(cc,ccm.get(cc).flag,ccm.get(cc).label,ccm.get(cc).n,fCC===cc)).join('');
+    $('#twcc').querySelectorAll('.cc-pk').forEach(b=>b.addEventListener('click',()=>{ fCC=b.dataset.cc; render(curCode); }));
+    return ccm;
+  }
+
   function render(code){
     const t = TOPICS.find(x => x.code === code) || TOPICS[0];
     curCode = t.code;
+    const ccm = renderCC(t);
     document.querySelectorAll('.tw-tab').forEach(b => b.setAttribute('aria-selected', String(b.dataset.code === t.code)));
     const arts = fCC ? t.arts.filter(a => a.cc === fCC) : t.arts;
     $('#twhead').innerHTML = `<span class="tt">${esc(EN ? (t.label_en||t.label) : t.label)}</span>`+
       (fCC
-        ? `<span class="sub">${esc(fccName())} <b>${arts.length}</b></span>`
+        ? `<span class="sub">${esc((ccm.get(fCC)||{}).label || fCC)} <b>${arts.length}</b></span>`
         : (t.flat
           ? `<span class="sub">${EN?'Total':'전체'} <b>${t.arts.length}</b></span>`
           : `<span class="sub">${EN?'Presence':'진출'} <b>${t.n_in}</b> · ${EN?'Non-presence':'미진출'} <b>${t.n_out}</b></span>`));
@@ -153,17 +176,6 @@
     }).join('');
     $('#twfeed')._rows = arts;
   }
-
-  const _CCFLAG = new Map();
-  for (const t of TOPICS) for (const a of t.arts) if (a.cc && !_CCFLAG.has(a.cc)) _CCFLAG.set(a.cc, {flag:a.flag||'', label:ccName(a)});
-  function fccName(){ const m=_CCFLAG.get(fCC); return m?m.label:fCC; }
-  function renderCC(){
-    const chip=(cc,flag,label,sel)=>`<button class="cc-pk" data-cc="${cc}" aria-selected="${sel}">${flag?`<span class="fg">${esc(flag)}</span>`:''}${label?`<span class="cc-nm">${esc(label)}</span>`:''}</button>`;
-    const codes=[..._CCFLAG.keys()].sort();
-    $('#twcc').innerHTML = chip('','',EN?'All':'전체',fCC==='') + codes.map(cc=>chip(cc,_CCFLAG.get(cc).flag,'',fCC===cc)).join('');
-    $('#twcc').querySelectorAll('.cc-pk').forEach(b=>b.addEventListener('click',()=>{ fCC=b.dataset.cc; renderCC(); render(curCode||TOPICS[0].code); }));
-  }
-  renderCC();
 
   $('#twtabs').innerHTML = TOPICS.map((t,i) => `
     <button class="tw-tab" data-code="${t.code}" aria-selected="${i===0}">${esc(EN?(t.label_en||t.label):t.label)} <span class="n">${t.arts.length}</span></button>`).join('');
