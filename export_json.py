@@ -282,6 +282,35 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
     return out
 
 
+def _cluster_dedup(rows, cm, sig, threshold, rep="rank"):
+    """근접중복 클러스터링 공통 로직 (korean_fi·personnel 공유, 2026-09-15 추출).
+    rows는 rank_score 내림차순 정렬 가정. sig(r)=시그니처 토큰, threshold=병합 임계.
+    rep='rank'  → 대표=최고 rank_score 멤버(입력 순서상 첫).
+    rep='latest'→ 대표=가장 최근 보도(인사 arc의 최종 단계).
+    반환: [(대표 row, 클러스터 크기)], 대표(=멤버 최고) rank_score 내림차순."""
+    buckets: list[dict] = []   # 국가 구분 없는 단일 풀 — cc 오분류 케이스까지 잡기 위함
+    for r in rows:
+        tk = sig(r)
+        for b in buckets:
+            if _overlap_ratio(tk, b["tk"]) >= threshold:
+                b["mem"].append(r)
+                break
+        else:
+            buckets.append({"tk": tk, "mem": [r]})
+
+    def _rk(m):
+        return ranking.rank_score(m, cm.get(m["article_id"], 0))
+    for b in buckets:
+        if rep == "latest":
+            b["mem"].sort(key=lambda x: (x["published_at"] or ""), reverse=True)
+            b["row"] = b["mem"][0]
+        else:
+            b["row"] = max(b["mem"], key=_rk)
+        b["n"] = len(b["mem"])
+    buckets.sort(key=lambda b: max(_rk(m) for m in b["mem"]), reverse=True)
+    return [(b["row"], b["n"]) for b in buckets]
+
+
 def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dict]:
     """한국계 금융기관(신한·하나·우리·IBK·KDB·NH농협·수출입) 언급 기사 모아보기
     (2026-08-26 회의 결정) — keyword_filter.run_korean_fi_tag()가 키워드로 태깅한
@@ -330,22 +359,14 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
     cm = ranking.cluster_sizes(conn)
     rows = ranking.order(conn, rows, cluster_map=cm)   # 표시 정렬 = 복합 rank_score
 
-    bucket: list[dict] = []   # 국가 구분 없는 단일 풀 — cc 오분류 케이스까지 잡기 위함
-    for r in rows:
-        tk = _sig_tokens(_strip_source_suffix(r["title"]))
-        for c in bucket:
-            if _overlap_ratio(tk, c["tk"]) >= config.NON_PRESENCE_DEDUP_SIM:
-                c["n"] += 1
-                break
-        else:
-            bucket.append({"row": r, "tk": tk, "n": 1})
-
-    bucket.sort(key=lambda c: ranking.rank_score(c["row"], cm.get(c["row"]["article_id"], 0)), reverse=True)
-    bucket = bucket[:limit]
+    clusters = _cluster_dedup(
+        rows, cm,
+        sig=lambda r: _sig_tokens(_strip_source_suffix(r["title"])),
+        threshold=config.NON_PRESENCE_DEDUP_SIM, rep="rank",
+    )[:limit]
 
     out = []
-    for c in bucket:
-        r = c["row"]
+    for r, n in clusters:
         cc = _eff_cc(r)
         flag, label, label_en = _country_display(cc)
         codes = [x for x in (r["topics"] or "").split(",") if x]
@@ -355,7 +376,7 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
             src=r["media_name"], d=(r["published_at"] or "")[:10],
             t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
             c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
-            related_count=c["n"] - 1,
+            related_count=n - 1,
             rank_score=ranking.rank_score(r, cm.get(r["article_id"], 0)),
         ))
     return out
@@ -399,28 +420,14 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
     cm = ranking.cluster_sizes(conn)
     rows = ranking.order(conn, rows, cluster_map=cm)
 
-    bucket: list[dict] = []   # 국가 구분 없는 단일 풀 — cc 오분류 케이스까지 잡기 위함
-    for r in rows:
-        tk = _sig_tokens(_strip_source_suffix(r["title"]) + " " + (r["summary_en"] or ""))
-        for c in bucket:
-            if _overlap_ratio(tk, c["tk"]) >= _PERSONNEL_DEDUP_SIM:
-                c["mem"].append(r)
-                break
-        else:
-            bucket.append({"tk": tk, "mem": [r]})
-
-    # 대표 = 클러스터 내 가장 최근 보도(인사 arc의 최종 단계=취임/임명이 헤드라인).
-    # 정렬은 멤버 중 최고 rank_score 기준(대표가 최신이어도 중요 클러스터가 위로).
-    for c in bucket:
-        c["mem"].sort(key=lambda x: (x["published_at"] or ""), reverse=True)
-        c["row"] = c["mem"][0]
-        c["n"] = len(c["mem"])
-    bucket.sort(key=lambda c: max(ranking.rank_score(m, cm.get(m["article_id"], 0)) for m in c["mem"]), reverse=True)
-    bucket = bucket[:limit]
+    clusters = _cluster_dedup(
+        rows, cm,
+        sig=lambda r: _sig_tokens(_strip_source_suffix(r["title"]) + " " + (r["summary_en"] or "")),
+        threshold=_PERSONNEL_DEDUP_SIM, rep="latest",
+    )[:limit]
 
     out = []
-    for c in bucket:
-        r = c["row"]
+    for r, n in clusters:
         cc = _eff_cc(r)
         flag, label, label_en = _country_display(cc)
         codes = [x for x in (r["topics"] or "").split(",") if x]
@@ -429,7 +436,7 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
             src=r["media_name"], d=(r["published_at"] or "")[:10],
             t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
             c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
-            related_count=c["n"] - 1,
+            related_count=n - 1,
             rank_score=ranking.rank_score(r, cm.get(r["article_id"], 0)),
         ))
     return out
