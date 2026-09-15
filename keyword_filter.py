@@ -192,6 +192,38 @@ FINANCE_KEYWORDS: list[str] = [
 ]
 
 # ---------------------------------------------------------------------------
+# ①-b 사회 키워드 (taxonomy.yaml SOCIETY 축과 동기화, 2026-09-15 신설)
+# 금융 키워드와 무관하게 독립적으로 통과 사유가 됨 — "금융 말고도 사회뉴스도
+# 보고 싶다"는 카테고리 확장 요청 반영. 순수 사회·문화 이슈라 노이즈 방지를
+# 위해 구체적 구 단위로 작성(FINANCE_KEYWORDS와 같은 방식).
+# ---------------------------------------------------------------------------
+SOCIETY_KEYWORDS: list[str] = [
+    # 인구·고령화
+    "aging population", "ageing population", "population decline",
+    "population growth", "birth rate", "fertility rate",
+    "demographic shift", "demographic change", "elderly care", "retirement age",
+    # 이주·이민
+    "migrant worker", "migrant workers", "immigration policy",
+    "immigration reform", "refugee", "asylum seeker",
+    "labor migration", "labour migration", "overseas worker", "overseas workers",
+    # 교육
+    "education reform", "education policy", "school enrollment",
+    "university admission", "student loan", "tuition fee",
+    # 주거·복지
+    "affordable housing", "housing shortage", "housing crisis",
+    "social welfare", "welfare policy", "pension reform", "public pension",
+    "healthcare policy", "public health", "social security",
+    # 노동·인권 (경제지표 외)
+    "labor rights", "labour rights", "gender pay gap",
+    "workplace discrimination", "child labor", "child labour",
+    "forced labor", "forced labour",
+    # 문화·소비트렌드
+    "consumer trend", "consumer behavior", "consumer behaviour",
+    "cultural trend", "lifestyle trend", "social media trend",
+    "generation z", "gen z", "millennial consumer",
+]
+
+# ---------------------------------------------------------------------------
 # ② KB 거점국 지명·기관·통화·인명 키워드 (관리국 11개와 동기화)
 # ---------------------------------------------------------------------------
 COUNTRY_KEYWORDS: dict[str, list[str]] = {
@@ -379,6 +411,16 @@ KOREAN_FINANCE_KEYWORDS: list[str] = [
     "esg", "탄소", "탄소중립", "넷제로",
     "유가", "원유", "에너지",
     "재생에너지", "태양광", "풍력",
+]
+
+# 사회 키워드(한국어) — SOCIETY_KEYWORDS와 동일 취지, 2026-09-15 신설
+KOREAN_SOCIETY_KEYWORDS: list[str] = [
+    "고령화", "저출산", "출산율", "인구감소", "인구절벽", "노인돌봄",
+    "이민", "이주노동자", "난민",
+    "교육정책", "대입", "입시", "등록금",
+    "주거복지", "주택공급", "전세", "월세", "사회복지", "연금개혁", "공적연금",
+    "공공보건", "노동인권", "성별임금격차", "아동노동",
+    "소비트렌드", "라이프스타일",
 ]
 
 KOREAN_COUNTRY_KEYWORDS: dict[str, list[str]] = {
@@ -826,7 +868,7 @@ def _apply_keyword_filter(
 
     score = 0
     top_reason: str | None = None
-    title_finance_hit = False  # 제목에 금융 키워드 히트 여부
+    title_relevant_hit = False  # 제목에 금융/사회 키워드 히트 여부
 
     # ── 제외 키워드 (전체 텍스트 대상) ──────────────────────
     excl_hit = _first_match(full_text, EXCLUSION_KEYWORDS)
@@ -838,13 +880,27 @@ def _apply_keyword_filter(
         fin_t = _first_match(title_text, KOREAN_FINANCE_KEYWORDS)
         if fin_t:
             score += FINANCE_SCORE_TITLE
-            title_finance_hit = True
+            title_relevant_hit = True
             top_reason = f"ko_fin_title:{fin_t}"
         else:
             fin_b = _first_match(body_text, KOREAN_FINANCE_KEYWORDS)
             if fin_b:
                 score += FINANCE_SCORE_BODY
                 top_reason = f"ko_fin_body:{fin_b}"
+
+        # ── 한국어 사회 키워드 (금융과 별도, 독립 가산) ───────
+        soc_t = _first_match(title_text, KOREAN_SOCIETY_KEYWORDS)
+        if soc_t:
+            score += FINANCE_SCORE_TITLE
+            title_relevant_hit = True
+            if top_reason is None:
+                top_reason = f"ko_soc_title:{soc_t}"
+        else:
+            soc_b = _first_match(body_text, KOREAN_SOCIETY_KEYWORDS)
+            if soc_b:
+                score += FINANCE_SCORE_BODY
+                if top_reason is None:
+                    top_reason = f"ko_soc_body:{soc_b}"
 
         # ── 한국어 국가 키워드 (국가당 1회) ──────────────────
         c_score, c_reason = _score_countries(title_text, body_text, KOREAN_COUNTRY_KEYWORDS)
@@ -857,13 +913,27 @@ def _apply_keyword_filter(
         fin_t = _first_match(title_text, FINANCE_KEYWORDS)
         if fin_t:
             score += FINANCE_SCORE_TITLE
-            title_finance_hit = True
+            title_relevant_hit = True
             top_reason = f"fin_title:{fin_t}"
         else:
             fin_b = _first_match(body_text, FINANCE_KEYWORDS)
             if fin_b:
                 score += FINANCE_SCORE_BODY
                 top_reason = f"fin_body:{fin_b}"
+
+        # ── 영문 사회 키워드 (금융과 별도, 독립 가산) ─────────
+        soc_t = _first_match(title_text, SOCIETY_KEYWORDS)
+        if soc_t:
+            score += FINANCE_SCORE_TITLE
+            title_relevant_hit = True
+            if top_reason is None:
+                top_reason = f"soc_title:{soc_t}"
+        else:
+            soc_b = _first_match(body_text, SOCIETY_KEYWORDS)
+            if soc_b:
+                score += FINANCE_SCORE_BODY
+                if top_reason is None:
+                    top_reason = f"soc_body:{soc_b}"
 
         # ── 인도네시아어 금융 키워드 ──────────────────────────
         if language == "id":
@@ -901,7 +971,7 @@ def _apply_keyword_filter(
 
     # ── 판정 ─────────────────────────────────────────────────
     # 제목에 금융 키워드가 없으면(body-only) 더 높은 기준 적용 → 오탐 감소
-    threshold = PASS_THRESHOLD if title_finance_hit else BODY_ONLY_THRESHOLD
+    threshold = PASS_THRESHOLD if title_relevant_hit else BODY_ONLY_THRESHOLD
     if score >= threshold:
         return "passed", top_reason or "passed", score
     else:
