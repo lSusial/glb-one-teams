@@ -533,7 +533,9 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                             rl.append({"t": b["title"][:100], "u": b["link"]})
                             break
             articles.append({
-                "c": taxonomy.ui_string(codes),
+                # 55점 미만으로 뜨는 건 오직 SOCIETY 예외 경로뿐 → 사회 탭에만 노출(정책 등 오염 방지)
+                "c": ("society" if (active_only and a["ai_score"] is not None and a["ai_score"] < config.AI_SCORE_ACTIVE_THRESHOLD)
+                      else taxonomy.ui_string(codes)),
                 "src": a["media_name"],
                 "d": (a["published_at"] or "")[:10],
                 "t": a["title_ko"] or a["title"],
