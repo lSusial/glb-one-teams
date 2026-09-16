@@ -4,7 +4,7 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
 <title>KB Global One Team — 주간 리포트</title>
-<meta name="description" content="KB 글로벌 원팀 뉴스 — 국가별 주간 브리핑"/>
+<meta name="description" content="KB 글로벌 원팀 뉴스 — 국가별 주간"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap"/>
@@ -51,7 +51,8 @@
     <a href="brief.html"><svg><use href="#ico-nav-home"/></svg><span data-en="Home">홈</span></a>
     <a href="countries.html"><svg><use href="#ico-nav-news"/></svg><span data-en="News">뉴스</span></a>
     <a href="topics.html"><svg><use href="#ico-nav-monitor"/></svg><span data-en="Monitoring">모니터링</span></a>
-    <a href="weekly.html" class="on"><svg><use href="#ico-nav-weekly"/></svg><span data-en="Weekly">주간 브리핑</span></a>
+    <a href="markets.html"><svg><use href="#ico-spark"/></svg><span data-en="Markets">지표</span></a>
+    <a href="weekly.html" class="on"><svg><use href="#ico-nav-weekly"/></svg><span data-en="Weekly">주간</span></a>
   </nav>
 </div>
 
@@ -81,7 +82,7 @@
     $('#picker').style.display = 'none';
     $('#detail').innerHTML = `<div class="empty-state">${EN
       ? 'No weekly reports yet. Run <code>python main.py brief</code> then <code>export</code>.'
-      : '주간 브리핑이 아직 없습니다. 맥북에서 <code>python main.py brief</code>(주간) 실행 후 <code>python main.py export</code>.'}</div>`;
+      : '주간이 아직 없습니다. 맥북에서 <code>python main.py brief</code>(주간) 실행 후 <code>python main.py export</code>.'}</div>`;
   } else {
     let fCC = cos[0].cc;
     function render(cc){

@@ -182,3 +182,119 @@ def fetch_indicators(conn, snapshot_date: str | None = None) -> dict:
         stats["policy_rate"], stats["bond10y"], stats["bond10y_skipped"],
     )
     return stats
+
+
+# ===========================================================================
+# 추세(시계열) 수집 — 스파크라인용 주간 종가 히스토리
+# ---------------------------------------------------------------------------
+# indicators 테이블(일 스냅샷·등락 배지)과 역할 분리:
+#   - indicators         : 매일 1점, "현재값 + 어제 대비 등락"
+#   - indicator_history  : 주 1회 채우는 6개월 주간 종가, "추세 스파크라인"
+# yfinance history(period="6mo", interval="1wk") 한 번으로 종목별 주봉을 받는다.
+# VM egress가 Yahoo를 막으므로 이 함수는 맥북(파이프라인 실제 실행 환경)에서 돈다.
+# ===========================================================================
+
+# 환율 추세용 yfinance FX 페어(= 1 USD 당 현지통화, indicators.fx 와 동일 방향).
+# KHR·LAK·MMK 등 소통화는 Yahoo에 페어가 없어 히스토리 생략 → export가 일 스냅샷으로 폴백.
+_FX_YF = {
+    "VND": "VND=X", "CNY": "CNY=X", "JPY": "JPY=X", "HKD": "HKD=X",
+    "INR": "INR=X", "IDR": "IDR=X", "SGD": "SGD=X", "THB": "THB=X", "GBP": "GBP=X",
+}
+
+_CREATE_HISTORY = """
+CREATE TABLE IF NOT EXISTS indicator_history (
+    country TEXT NOT NULL,
+    kind    TEXT NOT NULL,      -- fx / index / bond10y
+    symbol  TEXT NOT NULL,
+    d       TEXT NOT NULL,      -- 주간 종가 날짜(YYYY-MM-DD)
+    close   REAL NOT NULL,
+    PRIMARY KEY (country, kind, symbol, d)
+)
+"""
+
+
+def ensure_history_table(conn) -> None:
+    conn.execute(_CREATE_HISTORY)
+    conn.commit()
+
+
+def _upsert_history(cur, cc, kind, symbol, series) -> int:
+    """series = [(YYYY-MM-DD, close), ...]. 이미 있는 날짜는 값 갱신."""
+    n = 0
+    for d, close in series:
+        if close is None:
+            continue
+        cur.execute(
+            """INSERT INTO indicator_history (country, kind, symbol, d, close)
+               VALUES (?, ?, ?, ?, ?)
+               ON CONFLICT(country, kind, symbol, d) DO UPDATE SET close = excluded.close""",
+            (cc, kind, symbol, d, float(close)),
+        )
+        n += 1
+    return n
+
+
+def _yf_weekly(yf, symbol: str, period: str, interval: str):
+    """yfinance 주간 종가 → [(YYYY-MM-DD, close)]. 실패 시 빈 리스트."""
+    try:
+        hist = yf.Ticker(symbol).history(period=period, interval=interval)
+        if hist.empty:
+            return []
+        out = []
+        for idx, close in hist["Close"].items():
+            if close == close:  # NaN 제외
+                out.append((idx.date().isoformat(), float(close)))
+        return out
+    except Exception as e:  # noqa: BLE001 — 종목 실패는 조용히 스킵, 나머지 계속
+        log.warning("히스토리 조회 실패(스킵): %s — %r", symbol, e)
+        return []
+
+
+def fetch_history(conn, period: str = "6mo", interval: str = "1wk") -> dict:
+    """주가지수·국채·환율의 주간 종가 6개월치를 indicator_history 에 적재.
+    정책금리는 계단식이라 추세선 대상 아님(제외)."""
+    ensure_history_table(conn)
+    try:
+        import yfinance as yf
+    except ImportError:
+        log.warning("yfinance 미설치 — 히스토리 수집 불가")
+        return dict(index=0, bond10y=0, fx=0, skipped=0)
+
+    cur = conn.cursor()
+    stats = dict(index=0, bond10y=0, fx=0, skipped=0)
+
+    # 주가지수
+    for cc, spec in config.INDICATOR_MAP.items():
+        for idx in spec.get("indices", []):
+            series = _yf_weekly(yf, idx["symbol"], period, interval)
+            if not series:
+                stats["skipped"] += 1
+                continue
+            _upsert_history(cur, cc, "index", idx["symbol"], series)
+            stats["index"] += 1
+
+    # 국채 10년물
+    for cc, spec in config.BOND10Y_MAP.items():
+        series = _yf_weekly(yf, spec["symbol"], period, interval)
+        if not series:
+            stats["skipped"] += 1
+            continue
+        _upsert_history(cur, cc, "bond10y", spec["symbol"], series)
+        stats["bond10y"] += 1
+
+    # 환율(yfinance FX 페어가 있는 통화만)
+    for cc, spec in config.INDICATOR_MAP.items():
+        currency = spec.get("fx")
+        if not currency or currency not in _FX_YF:
+            continue
+        series = _yf_weekly(yf, _FX_YF[currency], period, interval)
+        if not series:
+            stats["skipped"] += 1
+            continue
+        _upsert_history(cur, cc, "fx", currency, series)
+        stats["fx"] += 1
+
+    conn.commit()
+    log.info("히스토리 수집 완료 — 지수=%d  국채=%d  환율=%d  스킵=%d",
+             stats["index"], stats["bond10y"], stats["fx"], stats["skipped"])
+    return stats

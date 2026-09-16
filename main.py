@@ -214,6 +214,13 @@ def cmd_indicators(_args):
           f"  정책금리={s['policy_rate']}  국채금리={s['bond10y']}(스킵={s['bond10y_skipped']})")
 
 
+
+def cmd_indicators_history(_args):
+    import indicators
+    conn = db.open_conn()
+    s = indicators.fetch_history(conn)
+    print(f"[indicators-history] 지수={s['index']}  국채={s['bond10y']}  환율={s['fx']}  스킵={s['skipped']}")
+
 def cmd_list(args):
     conn = db.open_conn()
     rows = conn.execute("""
@@ -363,6 +370,8 @@ def cmd_export(args):
     print(f"[export] weekly 국가={w['countries']}  → {w['path']}")
     t = export_json.export_topics(conn)
     print(f"[export] topics categories={t['categories']}  → {t['path']}")
+    m = export_json.export_markets(conn)
+    print(f"[export] markets 국가={m['countries']}  지표={m['indicators']}  → {m['path']}")
 
     # 기사 상세 모달(공용 컴포넌트) — 템플릿 주입 대상이 아닌 순수 정적 JS라
     # _inject_html이 안 건드림. brief/countries/topics.html이 참조하므로
@@ -432,6 +441,7 @@ def main():
     sub.add_parser("report", help="매체 가용성 리포트 생성")
     sub.add_parser("run",    help="fetch → filter → dedup 순서 실행")
     sub.add_parser("indicators", help="국가별 거시지표(환율·주가지수) 수집")
+    sub.add_parser("indicators-history", help="지표 6개월 주간 추세(스파크라인용) 수집 — 맥북에서 실행")
 
     flt = sub.add_parser("filter", help="키워드 필터 실행")
     flt.add_argument("--refilter", action="store_true", help="전체 기사 재처리")
@@ -508,7 +518,7 @@ def main():
         "dedup": cmd_dedup, "korean-fi": cmd_korean_fi, "personnel": cmd_personnel,
         "backfill-country": cmd_backfill_country,
         "run": cmd_run, "report": cmd_report, "list": cmd_list,
-        "indicators": cmd_indicators,
+        "indicators": cmd_indicators, "indicators-history": cmd_indicators_history,
         "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "rank": cmd_rank,
         "expand": cmd_expand, "ai-dedup": cmd_ai_dedup,
         "translate": cmd_translate, "brief": cmd_brief, "highlights": cmd_highlights,

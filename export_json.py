@@ -1193,3 +1193,97 @@ def export_topics(conn, days: int | None = None) -> dict:
     _inject_html(_TOPICS_TEMPLATE, "topics-data", "topics", payload)
     log.info("topics.json 작성 — 카테고리=%d", len(cats))
     return {"categories": len(cats), "path": str(config.EXPORT_DIR / "topics.json")}
+
+
+# ===========================================================================
+# markets.json / markets.html — 경제지표(추세) 화면
+# ---------------------------------------------------------------------------
+# indicators(일 스냅샷: 현재값·등락) + indicator_history(주봉: 추세) 를 합쳐
+# 국가별 지표 카드 데이터로 export. 스파크라인 값은 indicator_history 우선,
+# 없으면 indicators 일 스냅샷 시계열로 폴백(둘 다 실데이터).
+# 값이 없는 지표는 아예 제외(화면에서 "데이터 없음" 행 미표시).
+# ===========================================================================
+_MARKETS_TEMPLATE = config.ROOT / "web" / "markets.html"
+_MARKETS_KIND_ORDER = ["index", "fx", "policy_rate", "bond10y"]
+_MARKETS_KIND_LABEL_KO = {"index": "주가지수", "fx": "환율", "policy_rate": "정책금리", "bond10y": "국채 10Y"}
+_MARKETS_KIND_LABEL_EN = {"index": "Index", "fx": "FX", "policy_rate": "Policy Rate", "bond10y": "10Y Bond"}
+
+
+def _markets_spark(conn, cc: str, kind: str, symbol: str, latest_date: str) -> list:
+    """(cc,kind,symbol) 주봉 시계열. 히스토리 우선, 없으면 일 스냅샷 폴백."""
+    rows = conn.execute(
+        "SELECT close FROM indicator_history WHERE country=? AND kind=? AND symbol=? ORDER BY d",
+        (cc, kind, symbol),
+    ).fetchall()
+    if rows:
+        return [round(r["close"], 6) for r in rows]
+    # 폴백: indicators 일 스냅샷(실데이터지만 희소)
+    rows = conn.execute(
+        "SELECT value FROM indicators WHERE country=? AND kind=? AND symbol=? AND value IS NOT NULL ORDER BY date",
+        (cc, kind, symbol),
+    ).fetchall()
+    return [round(r["value"], 6) for r in rows]
+
+
+def export_markets(conn) -> dict:
+    """markets.json + markets.html(경제지표 추세 화면) 생성."""
+    config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    # 히스토리 테이블이 없어도(맥북 미수집) 폴백으로 동작하도록 멱등 보장
+    try:
+        import indicators as _ind
+        _ind.ensure_history_table(conn)
+    except Exception:  # noqa: BLE001
+        pass
+
+    row = conn.execute("SELECT MAX(date) AS d FROM indicators").fetchone()
+    latest = row["d"] if row and row["d"] else _snapshot_date()
+
+    countries = []
+    for cc in _PRESENCE_NAMES_KO:  # 진출 13개국 순서
+        snap = conn.execute(
+            """SELECT kind, symbol, label, value, change_pct
+               FROM indicators WHERE date=? AND country=? ORDER BY kind""",
+            (latest, cc),
+        ).fetchall()
+        by_kind = {}
+        for r in snap:
+            by_kind.setdefault(r["kind"], []).append(r)
+
+        inds = []
+        for kind in _MARKETS_KIND_ORDER:
+            for r in by_kind.get(kind, []):
+                if r["value"] is None:      # 값 없는 지표 제외
+                    continue
+                spark = [] if kind == "policy_rate" else _markets_spark(conn, cc, kind, r["symbol"], latest)
+                net = None
+                if len(spark) >= 2 and spark[0]:
+                    net = round((spark[-1] - spark[0]) / abs(spark[0]) * 100, 1)
+                inds.append({
+                    "kind": kind,
+                    "label": r["label"],
+                    "label_kind_ko": _MARKETS_KIND_LABEL_KO[kind],
+                    "label_kind_en": _MARKETS_KIND_LABEL_EN[kind],
+                    "value": round(r["value"], 6),
+                    "change_pct": round(r["change_pct"], 2) if r["change_pct"] is not None else None,
+                    "spark": spark,
+                    "net_pct": net,
+                })
+        if not inds:
+            continue
+        countries.append({
+            "cc": cc,
+            "name_ko": _PRESENCE_NAMES_KO[cc],
+            "name_en": _PRESENCE_NAMES_EN[cc],
+            "indicators": inds,
+        })
+
+    payload = {
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "snapshot_date": latest,
+        "countries": countries,
+    }
+    _write_json("markets", payload)
+    _inject_html(_MARKETS_TEMPLATE, "markets-data", "markets", payload)
+    n_ind = sum(len(c["indicators"]) for c in countries)
+    log.info("markets.json 작성 — 국가=%d  지표=%d", len(countries), n_ind)
+    return {"countries": len(countries), "indicators": n_ind, "path": str(config.EXPORT_DIR / "markets.json")}

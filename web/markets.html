@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
+<title>KB Global One Team — 경제지표</title>
+<meta name="description" content="KB 글로벌 원팀 — 거점국 주가지수·환율·정책금리·국채 추세"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&display=swap"/>
+<link rel="stylesheet" href="shared-tokens.css"/>
+<!-- 데이터: export_json 이 아래 스크립트에 주입(오프라인). 없으면 markets.json fetch. -->
+<script id="markets-data" type="application/json">null</script>
+<style>
+.pagettl{font-size:clamp(12.5px,1.9cqi,15px);color:var(--muted);margin:2px 2px 12px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.pagettl .asof{margin-left:auto;font-family:var(--f-en);font-size:clamp(10.5px,1.6cqi,12.5px);color:var(--faint)}
+.mkt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.mkt-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:13px 14px 6px;box-shadow:var(--shadow)}
+.mkt-hd{display:flex;align-items:center;gap:8px;padding-bottom:9px;margin-bottom:3px;border-bottom:1px solid var(--line)}
+.mkt-hd .cn{font-weight:700;font-size:clamp(13.5px,2.1cqi,15px);color:var(--ink)}
+.mkt-hd .cc{margin-left:auto;font-family:var(--f-en);font-size:11px;font-weight:700;color:var(--muted);background:var(--bg);padding:2px 8px;border-radius:999px}
+.ind{padding:9px 0;border-bottom:1px dashed var(--line-2)}
+.ind:last-child{border-bottom:0}
+.ind-top{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.ind-k{font-size:clamp(11px,1.7cqi,12.5px);color:var(--muted);font-weight:600}
+.ind-rt{display:flex;align-items:baseline;gap:8px;white-space:nowrap}
+.ind-v{font-size:clamp(14px,2.2cqi,16px);font-weight:700;font-family:var(--f-en);font-variant-numeric:tabular-nums;color:var(--ink)}
+.chg{font-size:clamp(10px,1.5cqi,11.5px);font-weight:700;font-family:var(--f-en);font-variant-numeric:tabular-nums}
+.net{font-size:clamp(10.5px,1.6cqi,12px);font-weight:700;font-family:var(--f-en);font-variant-numeric:tabular-nums}
+.up{color:#E20817}.dn{color:#1b64da}.flat{color:var(--faint)}
+.spark{display:block;width:100%;height:34px;margin-top:7px}
+.ind-flat{font-size:clamp(10px,1.5cqi,11.5px);color:var(--faint);margin-top:7px;font-family:var(--f-en)}
+.mkt-note{font-size:clamp(10.5px,1.6cqi,12px);color:var(--faint);line-height:1.6;margin:16px 2px 0;word-break:keep-all}
+.mkt-note b{color:var(--muted)}
+</style>
+</head>
+<body>
+<script src="shared-sprite.js"></script>
+<div class="shell">
+  <header class="hd">
+    <div class="hd-brand">
+      <div class="brandline">
+        <svg class="kbmark" width="30" height="22" style="color:var(--gold-2)" aria-hidden="true"><use href="#kb-mark"/></svg>
+        <span>KB FINANCIAL GROUP</span>
+      </div>
+      <h1 class="en">GLOBAL ONE TEAM</h1>
+      <div class="hd-sub"><b data-en="Global Markets">경제지표</b><i class="dot-live"></i></div>
+    </div>
+    <div class="hd-tools">
+      <div class="langtoggle" role="group" aria-label="언어 선택">
+        <button type="button" data-lang="ko" aria-pressed="true">KR</button>
+        <button type="button" data-lang="en" aria-pressed="false">EN</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="pagettl">
+    <span data-en="Index · FX · Policy rate · 10Y bond trends across branch markets">거점국 주가지수 · 환율 · 정책금리 · 국채 추세</span>
+    <span class="asof" id="asof"></span>
+  </div>
+  <div class="mkt-grid" id="grid"></div>
+  <div class="mkt-note" id="note"></div>
+
+  <nav class="botnav" id="botnav">
+    <a href="brief.html"><svg><use href="#ico-nav-home"/></svg><span data-en="Home">홈</span></a>
+    <a href="countries.html"><svg><use href="#ico-nav-news"/></svg><span data-en="News">뉴스</span></a>
+    <a href="topics.html"><svg><use href="#ico-nav-monitor"/></svg><span data-en="Monitoring">모니터링</span></a>
+    <a href="markets.html" class="on"><svg><use href="#ico-spark"/></svg><span data-en="Markets">지표</span></a>
+    <a href="weekly.html"><svg><use href="#ico-nav-weekly"/></svg><span data-en="Weekly">주간</span></a>
+  </nav>
+</div>
+
+<script>
+(async function(){
+  const P = new URLSearchParams(location.search), EN = P.get('lang') === 'en';
+  let D = null;
+  try { D = JSON.parse(document.getElementById('markets-data').textContent); } catch(e){}
+  if (!D) { try { D = await (await fetch('markets.json')).json(); } catch(e){} }
+
+  const $ = (s) => document.querySelector(s);
+  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  const svg = (id, w, h) => `<svg width="${w}" height="${h}" aria-hidden="true"><use href="#${id}"/></svg>`;
+
+  const fmtVal = (kind, v) => {
+    if (v == null) return '—';
+    if (kind === 'policy_rate' || kind === 'bond10y') return v.toFixed(2) + '%';
+    if (kind === 'index') return v >= 100 ? Math.round(v).toLocaleString('en-US')
+                                          : v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    // fx
+    if (v >= 1000) return Math.round(v).toLocaleString('en-US');
+    if (v >= 10)   return v.toLocaleString('en-US', {minimumFractionDigits:2, maximumFractionDigits:2});
+    return v.toFixed(4);
+  };
+
+  // 스파크라인 SVG — spark[] 배열로 가로 추세선(전체폭). 상승=적, 하락=청(국내 관행).
+  const spark = (arr) => {
+    if (!arr || arr.length < 2) return '';
+    const n = arr.length, W = 260, H = 34, pad = 3;
+    const lo = Math.min(...arr), hi = Math.max(...arr), rng = (hi - lo) || 1;
+    const up = arr[n-1] >= arr[0];
+    const col = up ? '#E20817' : '#1b64da';
+    const xs = arr.map((_, i) => pad + (W - 2*pad) * i / (n - 1));
+    const ys = arr.map(v => (H - pad) - (H - 2*pad) * (v - lo) / rng);
+    const line = xs.map((x, i) => `${x.toFixed(1)},${ys[i].toFixed(1)}`).join(' ');
+    const area = `${xs[0].toFixed(1)},${H} ` + line + ` ${xs[n-1].toFixed(1)},${H}`;
+    return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">`
+      + `<polygon points="${area}" fill="${col}" opacity="0.08"/>`
+      + `<polyline points="${line}" fill="none" stroke="${col}" stroke-width="1.6" `
+      + `stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>`
+      + `<circle cx="${xs[n-1].toFixed(1)}" cy="${ys[n-1].toFixed(1)}" r="2.4" fill="${col}"/></svg>`;
+  };
+
+  const cls = (x) => x == null ? 'flat' : (x > 0 ? 'up' : (x < 0 ? 'dn' : 'flat'));
+  const sign = (x, d=1) => (x > 0 ? '+' : (x < 0 ? '−' : '')) + Math.abs(x).toFixed(d);
+
+  const cos = D ? (D.countries || []) : [];
+  if (!cos.length) {
+    $('#grid').innerHTML = `<div class="empty-state">${EN
+      ? 'No indicator data yet. Run <code>python main.py indicators</code> (and <code>indicators-history</code>) then <code>export</code>.'
+      : '지표 데이터가 아직 없습니다. 맥북에서 <code>python main.py indicators</code> · <code>indicators-history</code> 실행 후 <code>export</code>.'}</div>`;
+  } else {
+    $('#asof').textContent = (EN ? 'As of ' : '기준일 ') + (D.snapshot_date || '');
+    $('#grid').innerHTML = cos.map(c => {
+      const name = EN ? c.name_en : c.name_ko;
+      const rows = c.indicators.map(ind => {
+        const klab = EN ? ind.label_kind_en : ind.label_kind_ko;
+        const chg = ind.change_pct;
+        const chgBadge = (chg != null && Math.abs(chg) >= 0.005)
+          ? `<span class="chg ${cls(chg)}">${sign(chg,2)}%</span>` : '';
+        const net = ind.net_pct;
+        const netBadge = (net != null)
+          ? `<span class="net ${cls(net)}">${net>=0?'▲':'▼'} ${Math.abs(net).toFixed(1)}%</span>` : '';
+        const sp = ind.kind === 'policy_rate'
+          ? `<div class="ind-flat">${EN?'policy rate (step)':'정책금리 · 계단식'}</div>`
+          : (spark(ind.spark) || `<div class="ind-flat">${EN?'trend n/a':'추세 데이터 축적 중'}</div>`);
+        return `<div class="ind"><div class="ind-top">`
+          + `<span class="ind-k">${esc(klab)} · ${esc(ind.label)}</span>`
+          + `<span class="ind-rt"><span class="ind-v">${fmtVal(ind.kind, ind.value)}</span>`
+          + `${chgBadge}${netBadge}</span></div>${sp}</div>`;
+      }).join('');
+      return `<section class="mkt-card"><div class="mkt-hd">${svg('fl-'+c.cc.toLowerCase(),22,22)}`
+        + `<span class="cn">${esc(name)}</span><span class="cc">${esc(c.cc)}</span></div>${rows}</section>`;
+    }).join('');
+    $('#note').innerHTML = EN
+      ? '<b>Trend</b> = weekly closes (6-month). <b>Badge</b> next to value = change vs previous snapshot. Up in red, down in blue (KR convention). Indicators with no data are hidden.'
+      : '<b>추세선</b>은 주간 종가 기준(최대 6개월). 값 옆 <b>배지</b>는 직전 스냅샷 대비 등락. 상승 <span class="up">빨강</span> · 하락 <span class="dn">파랑</span>. 데이터 없는 지표는 표시하지 않습니다.';
+  }
+
+  // 언어 토글
+  document.querySelectorAll('.langtoggle button').forEach((b) => {
+    b.setAttribute('aria-pressed', String(b.dataset.lang === (EN ? 'en' : 'ko')));
+    b.addEventListener('click', () => { P.set('lang', b.dataset.lang); location.search = P.toString(); });
+  });
+  if (EN) document.querySelectorAll('[data-en]').forEach(el => { el.textContent = el.getAttribute('data-en'); });
+
+  // 하단 내비 쿼리 계승
+  document.querySelectorAll('.botnav a').forEach(a => {
+    const [path, ownQuery] = a.getAttribute('href').split('?');
+    const merged = new URLSearchParams(ownQuery || '');
+    for (const [k,v] of P) if (k !== 'tab') merged.set(k, v);
+    const qs = merged.toString();
+    a.href = path + (qs ? '?' + qs : '');
+  });
+})();
+</script>
+</body>
+</html>
