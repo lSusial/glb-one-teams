@@ -303,6 +303,15 @@ def cmd_highlights(_args):
     print(f"[highlights] 작성={s['written']}")
 
 
+def cmd_dedup(args):
+    """AI 근접중복 판정 — 같은 사건 다른 표현을 묶어 duplicate_of 마킹."""
+    import llm_dedup
+    conn = db.open_conn()
+    s = _ai_guard(lambda: llm_dedup.run_dedup(conn, days=getattr(args, "days", 3),
+                                              use_batch=_batch_flag(args)), "dedup")
+    print(f"[dedup] 국가={s['countries']} 중복마킹={s['marked']}건")
+
+
 def cmd_ai(args):
     """prefilter → rank → expand → translate → brief → highlights 순서 실행."""
     import briefing
@@ -310,6 +319,7 @@ def cmd_ai(args):
     import llm_ranker
     import llm_expand
     import llm_translate
+    import llm_dedup
     import fulltext
     conn = db.open_conn()
     days = getattr(args, "days", None)
@@ -323,6 +333,9 @@ def cmd_ai(args):
     print("▶ [3/7] AI 분석[영어]...")
     s2 = _ai_guard(lambda: llm_ranker.run_rank(conn, days=days, use_batch=ub), "ai")
     print(f"   ranked={s2['ranked']} ACTIVE={s2['active']}")
+    print("▶ AI 근접중복 판정(노출 후보 → duplicate_of)...")
+    sd = _ai_guard(lambda: llm_dedup.run_dedup(conn, days=days, use_batch=ub), "ai")
+    print(f"   중복마킹={sd['marked']}건 (국가 {sd['countries']})")
     print("▶ [4/7] 모달 긴 요약(노출 기사만)...")
     se = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub), "ai")
     print(f"   대상={se['total']} 작성={se['written']} 다출처={se['synthesized']}")
@@ -457,6 +470,9 @@ def main():
     trn = sub.add_parser("translate", help="영어 기준본 → 한국어 번역 (표시분, 저비용)")
     trn.add_argument("--days", type=int, help="최근 N일만")
     trn.add_argument("--sync", action="store_true", help=_SYNC_HELP)
+    ded = sub.add_parser("dedup", help="AI 근접중복 판정 (같은 사건 다른 표현 묶어 duplicate_of 마킹)")
+    ded.add_argument("--days", type=int, default=3, help="최근 N일 노출후보만 (기본 3)")
+    ded.add_argument("--sync", action="store_true", help=_SYNC_HELP)
     brf = sub.add_parser("brief", help="국가별 브리핑 생성")
     brf.add_argument("--type", default="weekly", help="브리핑 유형 (weekly|daily). daily=현지언론 상단 전일+당일 종합")
     brf.add_argument("--days", type=int, help="최근 N일 게시분만 (daily 기본 1=전일+당일)")
@@ -494,7 +510,7 @@ def main():
         "run": cmd_run, "report": cmd_report, "list": cmd_list,
         "indicators": cmd_indicators,
         "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "rank": cmd_rank,
-        "expand": cmd_expand,
+        "expand": cmd_expand, "dedup": cmd_dedup,
         "translate": cmd_translate, "brief": cmd_brief, "highlights": cmd_highlights,
         "ai": cmd_ai, "export": cmd_export, "admin": cmd_admin,
         "broadcast": cmd_broadcast, "eval": cmd_eval,
