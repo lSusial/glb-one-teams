@@ -442,6 +442,11 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
     return out
 
 
+_SOCIETY_ACTIVE_FLOOR = 45   # 사회뉴스 전용 노출 floor(금융55보다 낮게 — 최저임금·노조·실업 등 금융인접 중요건만)
+_SOCIETY_DAYS = 14           # 사회는 느린 이슈라 노출 기간을 넓게(전일+당일 대신 14일)
+_SOCIETY_MAX_PER = 3         # 국가당 되살릴 사회기사 최대 수           # 사회는 느린 이슈라 노출 기간을 넓게(전일+당일 대신 14일)
+
+
 def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     _ensure_ai_columns(conn)
     dc, dparams = _date_clause(days)   # 현지언론 = 전일+당일 (max-1일 이후)
@@ -454,8 +459,16 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     """
     config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     if active_only:
-        where, params_tail = "a.ai_score >= ? AND a.duplicate_of IS NULL", (config.AI_SCORE_ACTIVE_THRESHOLD,)
+        # SOCIETY만 예외: 사회뉴스는 KB-금융 루브릭상 저점이라 55/전일+당일에 다 걸림.
+        # 완전히 금융 무관은 아니므로(최저임금·노조·실업 등) 낮은 floor+넓은 기간으로 상위
+        # 몇 건만 통과. 나머지 카테고리는 그대로. 사회가 아예 없는 국가는 프론트가 탭 자동숨김.
+        dc_soc, dp_soc = _date_clause(_SOCIETY_DAYS)
+        where = ("(a.ai_score >= ?" + dc +
+                 " OR (a.topics LIKE '%SOCIETY%' AND a.ai_score >= ?" + dc_soc + "))"
+                 " AND a.duplicate_of IS NULL")
+        params_tail = (config.AI_SCORE_ACTIVE_THRESHOLD, *dparams, _SOCIETY_ACTIVE_FLOOR, *dp_soc)
         order = "a.ai_score DESC, a.published_at DESC"
+        dc, dparams = "", ()   # 날짜조건을 where에 직접 넣었으니 템플릿 {dc}는 비운다
     else:
         where, params_tail = "a.filter_decision = 'passed' AND a.duplicate_of IS NULL", ()
         order = "a.published_at DESC"
@@ -481,7 +494,13 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
             (cc, *params_tail, *dparams),
         ).fetchall()
         if active_only:
-            rows = ranking.order(conn, rows, cluster_map=cm)[:20]   # 표시 정렬 = 복합 rank_score
+            ordered = ranking.order(conn, rows, cluster_map=cm)   # 표시 정렬 = 복합 rank_score
+            rows = ordered[:20]
+            # 상위 20에서 밀린 사회기사 몇 건 되살림(위 where로 이미 후보에 포함됨).
+            have = {a["article_id"] for a in rows}
+            extra = [a for a in ordered[20:]
+                     if a["article_id"] not in have and "SOCIETY" in (a["topics"] or "")][:_SOCIETY_MAX_PER]
+            rows = rows + extra
 
         articles = []
         for i, a in enumerate(rows):
