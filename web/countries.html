@@ -242,7 +242,7 @@
     if (!co) { $('#detail').innerHTML = `<div class="empty-state">${EN?'Select a hub above.':'위에서 거점을 선택하세요.'}</div>`; return; }
 
     const catCount = (k) => { const rows = (co.articles||[]); return k ? rows.filter(a => (a.c||'').includes(k)).length : rows.length; };
-    $('#presCats').innerHTML = CATS.map(([k,l]) => `<span class="cc-chip" data-k="${k}" aria-selected="${k===fCat}">${l}<span class="n">${catCount(k)}</span></span>`).join('')
+    $('#presCats').innerHTML = CATS.filter(([k]) => k==='' || catCount(k) > 0).map(([k,l]) => `<span class="cc-chip" data-k="${k}" aria-selected="${k===fCat}">${l}<span class="n">${catCount(k)}</span></span>`).join('')
       + `<span class="cc-chip lk-chip" data-lk="1" aria-selected="${lkPresOpen}">🔗 ${EN?'Links':'원문 링크'}</span>`;
     $('#presCats').onclick = (e) => {
       const lk = e.target.closest('.lk-chip'); if (lk) { lkPresOpen = !lkPresOpen; if (lkPresOpen) fCat = ''; renderPresence(); return; }
@@ -309,7 +309,7 @@
     if (cfg.cats) {
       $('#flatCats').style.display = '';
       const catCount = (k) => k ? rows.filter(a => (a.c||'').includes(k)).length : rows.length;
-      $('#flatCats').innerHTML = CATS.map(([k,l]) => `<span class="cc-chip" data-k="${k}" aria-selected="${k===flatCat}">${l}<span class="n">${catCount(k)}</span></span>`).join('')
+      $('#flatCats').innerHTML = CATS.filter(([k]) => k==='' || catCount(k) > 0).map(([k,l]) => `<span class="cc-chip" data-k="${k}" aria-selected="${k===flatCat}">${l}<span class="n">${catCount(k)}</span></span>`).join('')
         + `<span class="cc-chip lk-chip" data-lk="1" aria-selected="${lkFlatOpen}">🔗 ${EN?'Links':'원문 링크'}</span>`;
       $('#flatCats').onclick = (e) => {
         const lk = e.target.closest('.lk-chip'); if (lk) { lkFlatOpen = !lkFlatOpen; if (lkFlatOpen) flatCat = ''; renderFlat(); return; }
