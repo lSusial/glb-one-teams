@@ -14,6 +14,10 @@
 <style>
 .pagettl{font-size:clamp(12.5px,1.9cqi,15px);color:var(--muted);margin:2px 2px 12px;display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
 .pagettl .asof{margin-left:auto;font-family:var(--f-en);font-size:clamp(10.5px,1.6cqi,12.5px);color:var(--faint)}
+.perbar{display:flex;gap:6px;margin:0 2px 12px}
+.perbar .per{flex:none;border:1px solid var(--line-2);border-radius:999px;padding:5px 13px;font-weight:700;
+        font-size:clamp(11.5px,1.8cqi,13px);color:var(--ink-2);background:#fff;cursor:pointer}
+.perbar .per[aria-selected="true"]{background:var(--navy);color:#fff;border-color:var(--navy)}
 .mkt-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
 .mkt-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-md);padding:13px 14px 6px;box-shadow:var(--shadow)}
 .mkt-hd{display:flex;align-items:center;gap:8px;padding-bottom:9px;margin-bottom:3px;border-bottom:1px solid var(--line)}
@@ -57,6 +61,11 @@
   <div class="pagettl">
     <span data-en="Index · FX · Policy rate · 10Y bond trends across branch markets">거점국 주가지수 · 환율 · 정책금리 · 국채 추세</span>
     <span class="asof" id="asof"></span>
+  </div>
+  <div class="perbar" id="perbar">
+    <button class="per" type="button" data-days="30" data-en="1M">1개월</button>
+    <button class="per" type="button" data-days="90" data-en="3M">3개월</button>
+    <button class="per" type="button" data-days="180" aria-selected="true" data-en="6M">6개월</button>
   </div>
   <div class="mkt-grid" id="grid"></div>
   <div class="mkt-note" id="note"></div>
@@ -113,12 +122,27 @@
   const cls = (x) => x == null ? 'flat' : (x > 0 ? 'up' : (x < 0 ? 'dn' : 'flat'));
   const sign = (x, d=1) => (x > 0 ? '+' : (x < 0 ? '−' : '')) + Math.abs(x).toFixed(d);
 
+  // 기간 토글(1/3/6개월) — 서버는 최대 6개월(주봉) 전체를 내려주고, 여기서 최근 N일만 잘라 쓴다.
+  let PERIOD = 180;
+  const windowVals = (spark) => {
+    if (!spark || !spark.length) return [];
+    if (PERIOD >= 180) return spark.map(p => p.v);
+    const maxD = spark[spark.length - 1].d;
+    const cutoff = new Date(maxD + 'T00:00:00Z'); cutoff.setUTCDate(cutoff.getUTCDate() - PERIOD);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const win = spark.filter(p => p.d >= cutoffStr);
+    return (win.length >= 2 ? win : spark.slice(-2)).map(p => p.v);
+  };
+
   const cos = D ? (D.countries || []) : [];
-  if (!cos.length) {
-    $('#grid').innerHTML = `<div class="empty-state">${EN
-      ? 'No indicator data yet. Run <code>python main.py indicators</code> (and <code>indicators-history</code>) then <code>export</code>.'
-      : '지표 데이터가 아직 없습니다. 맥북에서 <code>python main.py indicators</code> · <code>indicators-history</code> 실행 후 <code>export</code>.'}</div>`;
-  } else {
+
+  function renderGrid(){
+    if (!cos.length) {
+      $('#grid').innerHTML = `<div class="empty-state">${EN
+        ? 'No indicator data yet. Run <code>python main.py indicators</code> (and <code>indicators-history</code>) then <code>export</code>.'
+        : '지표 데이터가 아직 없습니다. 맥북에서 <code>python main.py indicators</code> · <code>indicators-history</code> 실행 후 <code>export</code>.'}</div>`;
+      return;
+    }
     $('#asof').textContent = (EN ? 'As of ' : '기준일 ') + (D.snapshot_date || '');
     $('#grid').innerHTML = cos.map(c => {
       const name = EN ? c.name_en : c.name_ko;
@@ -127,12 +151,13 @@
         const chg = ind.change_pct;
         const chgBadge = (chg != null && Math.abs(chg) >= 0.005)
           ? `<span class="chg ${cls(chg)}">${sign(chg,2)}%</span>` : '';
-        const net = ind.net_pct;
+        const vals = ind.kind === 'policy_rate' ? [] : windowVals(ind.spark);
+        const net = (vals.length >= 2 && vals[0]) ? (vals[vals.length-1] - vals[0]) / Math.abs(vals[0]) * 100 : null;
         const netBadge = (net != null)
           ? `<span class="net ${cls(net)}">${net>=0?'▲':'▼'} ${Math.abs(net).toFixed(1)}%</span>` : '';
         const sp = ind.kind === 'policy_rate'
           ? `<div class="ind-flat">${EN?'policy rate (step)':'정책금리 · 계단식'}</div>`
-          : (spark(ind.spark) || `<div class="ind-flat">${EN?'trend n/a':'추세 데이터 축적 중'}</div>`);
+          : (spark(vals) || `<div class="ind-flat">${EN?'trend n/a':'추세 데이터 축적 중'}</div>`);
         return `<div class="ind"><div class="ind-top">`
           + `<span class="ind-k">${esc(klab)} · ${esc(ind.label)}</span>`
           + `<span class="ind-rt"><span class="ind-v">${fmtVal(ind.kind, ind.value)}</span>`
@@ -141,10 +166,20 @@
       return `<section class="mkt-card"><div class="mkt-hd">${svg('fl-'+c.cc.toLowerCase(),22,22)}`
         + `<span class="cn">${esc(name)}</span><span class="cc">${esc(c.cc)}</span></div>${rows}</section>`;
     }).join('');
+    const perLabel = PERIOD===30 ? (EN?'1-month':'1개월') : PERIOD===90 ? (EN?'3-month':'3개월') : (EN?'6-month':'6개월');
     $('#note').innerHTML = EN
-      ? '<b>Trend</b> = weekly closes (6-month). <b>Badge</b> next to value = change vs previous snapshot. Up in red, down in blue (KR convention). Indicators with no data are hidden.'
-      : '<b>추세선</b>은 주간 종가 기준(최대 6개월). 값 옆 <b>배지</b>는 직전 스냅샷 대비 등락. 상승 <span class="up">빨강</span> · 하락 <span class="dn">파랑</span>. 데이터 없는 지표는 표시하지 않습니다.';
+      ? `<b>Trend</b> = weekly closes (${perLabel}). <b>Badge</b> next to value = change vs previous snapshot. Up in red, down in blue (KR convention). Indicators with no data are hidden.`
+      : `<b>추세선</b>은 주간 종가 기준(최근 ${perLabel}). 값 옆 <b>배지</b>는 직전 스냅샷 대비 등락. 상승 <span class="up">빨강</span> · 하락 <span class="dn">파랑</span>. 데이터 없는 지표는 표시하지 않습니다.`;
   }
+  renderGrid();
+
+  document.querySelectorAll('#perbar .per').forEach(b => {
+    b.addEventListener('click', () => {
+      PERIOD = +b.dataset.days;
+      document.querySelectorAll('#perbar .per').forEach(x => x.setAttribute('aria-selected', String(x === b)));
+      renderGrid();
+    });
+  });
 
   // 언어 토글
   document.querySelectorAll('.langtoggle button').forEach((b) => {

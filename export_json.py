@@ -1210,19 +1210,20 @@ _MARKETS_KIND_LABEL_EN = {"index": "Index", "fx": "FX", "policy_rate": "Policy R
 
 
 def _markets_spark(conn, cc: str, kind: str, symbol: str, latest_date: str) -> list:
-    """(cc,kind,symbol) 주봉 시계열. 히스토리 우선, 없으면 일 스냅샷 폴백."""
+    """(cc,kind,symbol) 주봉 시계열 — [{d, v}, ...]. 히스토리 우선, 없으면 일 스냅샷 폴백.
+    날짜를 같이 내려줘야 프런트에서 1개월/3개월/6개월 기간 토글이 가능하다."""
     rows = conn.execute(
-        "SELECT close FROM indicator_history WHERE country=? AND kind=? AND symbol=? ORDER BY d",
+        "SELECT d, close FROM indicator_history WHERE country=? AND kind=? AND symbol=? ORDER BY d",
         (cc, kind, symbol),
     ).fetchall()
     if rows:
-        return [round(r["close"], 6) for r in rows]
+        return [{"d": r["d"], "v": round(r["close"], 6)} for r in rows]
     # 폴백: indicators 일 스냅샷(실데이터지만 희소)
     rows = conn.execute(
-        "SELECT value FROM indicators WHERE country=? AND kind=? AND symbol=? AND value IS NOT NULL ORDER BY date",
+        "SELECT date AS d, value AS v FROM indicators WHERE country=? AND kind=? AND symbol=? AND value IS NOT NULL ORDER BY date",
         (cc, kind, symbol),
     ).fetchall()
-    return [round(r["value"], 6) for r in rows]
+    return [{"d": r["d"], "v": round(r["v"], 6)} for r in rows]
 
 
 def export_markets(conn) -> dict:
@@ -1255,9 +1256,6 @@ def export_markets(conn) -> dict:
                 if r["value"] is None:      # 값 없는 지표 제외
                     continue
                 spark = [] if kind == "policy_rate" else _markets_spark(conn, cc, kind, r["symbol"], latest)
-                net = None
-                if len(spark) >= 2 and spark[0]:
-                    net = round((spark[-1] - spark[0]) / abs(spark[0]) * 100, 1)
                 inds.append({
                     "kind": kind,
                     "label": r["label"],
@@ -1265,8 +1263,7 @@ def export_markets(conn) -> dict:
                     "label_kind_en": _MARKETS_KIND_LABEL_EN[kind],
                     "value": round(r["value"], 6),
                     "change_pct": round(r["change_pct"], 2) if r["change_pct"] is not None else None,
-                    "spark": spark,
-                    "net_pct": net,
+                    "spark": spark,   # [{d, v}, ...] 최대 6개월 — 기간 토글(1/3/6개월)은 프런트에서 필터링
                 })
         if not inds:
             continue
