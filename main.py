@@ -376,7 +376,7 @@ def cmd_export(args):
     # intro.html : 첫 진입 인트로 연출(자기완결, 데이터 주입 없음).
     # index.html : 진입 게이트(/ → intro.html). 둘 다 템플릿이 아니라 정적 파일이라
     #              _inject_html 대상이 아니고 여기서 그대로 복사한다.
-    for name in ("shared-tokens.css", "shared-sprite.js", "intro.html", "index.html", "links.html", "shared-glossary.js"):
+    for name in ("shared-tokens.css", "shared-sprite.js", "intro.html", "intro.mp4", "index.html", "links.html", "shared-glossary.js"):
         src = config.ROOT / "web" / name
         if src.exists():
             shutil.copy2(src, config.EXPORT_DIR / name)
