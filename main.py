@@ -303,13 +303,13 @@ def cmd_highlights(_args):
     print(f"[highlights] 작성={s['written']}")
 
 
-def cmd_dedup(args):
+def cmd_ai_dedup(args):
     """AI 근접중복 판정 — 같은 사건 다른 표현을 묶어 duplicate_of 마킹."""
     import llm_dedup
     conn = db.open_conn()
     s = _ai_guard(lambda: llm_dedup.run_dedup(conn, days=getattr(args, "days", 3),
-                                              use_batch=_batch_flag(args)), "dedup")
-    print(f"[dedup] 국가={s['countries']} 중복마킹={s['marked']}건")
+                                              use_batch=_batch_flag(args)), "ai-dedup")
+    print(f"[ai-dedup] 국가={s['countries']} 중복마킹={s['marked']}건")
 
 
 def cmd_ai(args):
@@ -470,9 +470,9 @@ def main():
     trn = sub.add_parser("translate", help="영어 기준본 → 한국어 번역 (표시분, 저비용)")
     trn.add_argument("--days", type=int, help="최근 N일만")
     trn.add_argument("--sync", action="store_true", help=_SYNC_HELP)
-    ded = sub.add_parser("dedup", help="AI 근접중복 판정 (같은 사건 다른 표현 묶어 duplicate_of 마킹)")
-    ded.add_argument("--days", type=int, default=3, help="최근 N일 노출후보만 (기본 3)")
-    ded.add_argument("--sync", action="store_true", help=_SYNC_HELP)
+    aded = sub.add_parser("ai-dedup", help="AI 근접중복 판정 (같은 사건 다른 표현 묶어 duplicate_of 마킹)")
+    aded.add_argument("--days", type=int, default=3, help="최근 N일 노출후보만 (기본 3)")
+    aded.add_argument("--sync", action="store_true", help=_SYNC_HELP)
     brf = sub.add_parser("brief", help="국가별 브리핑 생성")
     brf.add_argument("--type", default="weekly", help="브리핑 유형 (weekly|daily). daily=현지언론 상단 전일+당일 종합")
     brf.add_argument("--days", type=int, help="최근 N일 게시분만 (daily 기본 1=전일+당일)")
@@ -510,7 +510,7 @@ def main():
         "run": cmd_run, "report": cmd_report, "list": cmd_list,
         "indicators": cmd_indicators,
         "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "rank": cmd_rank,
-        "expand": cmd_expand, "dedup": cmd_dedup,
+        "expand": cmd_expand, "ai-dedup": cmd_ai_dedup,
         "translate": cmd_translate, "brief": cmd_brief, "highlights": cmd_highlights,
         "ai": cmd_ai, "export": cmd_export, "admin": cmd_admin,
         "broadcast": cmd_broadcast, "eval": cmd_eval,
