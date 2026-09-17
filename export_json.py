@@ -282,6 +282,29 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
     return out
 
 
+def _dedup_country_feed(rows, cm):
+    """국가 피드 근접중복 축소 — 같은 스토리 여러 각도를 대표 1건으로 접는다.
+    rows는 rank_score 내림차순 정렬 가정(대표=버킷 첫=최고 rank).
+    시그니처=제목(한국어 우선)+요약 토큰, 임계=config.COUNTRY_STORY_DEDUP_SIM.
+    반환: (대표만 남긴 rows, {article_id: 묶인 기사 수})."""
+    buckets = []
+    for r in rows:
+        text = ((r["title_ko"] or r["title"] or "") + " " +
+                (r["summary_ko"] or r["summary_en"] or ""))[:400]
+        tk = _sig_tokens(text)
+        for b in buckets:
+            if _overlap_ratio(tk, b["tk"]) >= config.COUNTRY_STORY_DEDUP_SIM:
+                b["mem"].append(r); break
+        else:
+            buckets.append({"tk": tk, "mem": [r]})
+    reps, sizes = [], {}
+    for b in buckets:
+        rep = b["mem"][0]           # rank 최고(입력 첫)
+        reps.append(rep)
+        sizes[rep["article_id"]] = len(b["mem"])
+    return reps, sizes
+
+
 def _cluster_dedup(rows, cm, sig, threshold, rep="rank"):
     """근접중복 클러스터링 공통 로직 (korean_fi·personnel 공유, 2026-09-15 추출).
     rows는 rank_score 내림차순 정렬 가정. sig(r)=시그니처 토큰, threshold=병합 임계.
@@ -493,12 +516,15 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
             """,
             (cc, *params_tail, *dparams),
         ).fetchall()
+        dedup_n = {}
         if active_only:
             ordered = ranking.order(conn, rows, cluster_map=cm)   # 표시 정렬 = 복합 rank_score
-            rows = ordered[:20]
-            # 상위 20에서 밀린 사회기사 몇 건 되살림(위 where로 이미 후보에 포함됨).
+            # 근접중복 스토리 축소(같은 사건 여러 각도 → 대표 1건). UPI·Fed 류 홍수 방지.
+            ordered, dedup_n = _dedup_country_feed(ordered, cm)
+            rows = ordered[:config.COUNTRY_MAX_ARTICLES]        # 국가당 노출 상한
+            # 상한에서 밀린 사회기사 몇 건 되살림(위 where로 이미 후보에 포함됨).
             have = {a["article_id"] for a in rows}
-            extra = [a for a in ordered[20:]
+            extra = [a for a in ordered[config.COUNTRY_MAX_ARTICLES:]
                      if a["article_id"] not in have and "SOCIETY" in (a["topics"] or "")][:_SOCIETY_MAX_PER]
             rows = rows + extra
 
@@ -549,6 +575,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                 "score": a["ai_score"],
                 "rank_score": ranking.rank_score(a, cm.get(a["article_id"], 0)),
                 "kfi": [c for c in (a["korean_fi"] or "").split(",") if c],
+                "dupn": dedup_n.get(a["article_id"], 1),  # 묶인 유사기사 수(1=단독)
             })
         total += len(articles)
         kfi_count = sum(1 for x in articles if x["kfi"])

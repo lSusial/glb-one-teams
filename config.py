@@ -209,6 +209,10 @@ NON_PRESENCE_CODES = tuple(NON_PRESENCE_COUNTRIES.keys())
 # 이 값 이상이면 같은 사건으로 보고 대표 1건만 남긴다(export_json._compute_non_presence).
 NON_PRESENCE_DEDUP_SIM = 0.5
 
+# 국가 피드 노출 제어 (2026-09-17, 피드백 후속 — 인도 UPI·미국 Fed 류 스토리 홍수 방지)
+COUNTRY_MAX_ARTICLES   = 8      # 국가당 노출 최대 기사 수(스토리 dedup 후 상한)
+COUNTRY_STORY_DEDUP_SIM = 0.38  # 같은 스토리 근접중복 병합 임계(제목+요약 토큰 겹침, 0~1)
+
 
 def is_presence(cc: str) -> bool:
     """KB 진출국이면 True. 14개 미진출국 화이트리스트에 없는 코드는 전부 True
