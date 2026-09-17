@@ -40,6 +40,7 @@
 </head>
 <body>
 <script src="shared-sprite.js"></script>
+<script src="shared-datenav.js"></script>
 <div class="shell">
   <header class="hd">
     <div class="hd-brand">
@@ -51,6 +52,7 @@
       <div class="hd-sub"><b data-en="Global Markets">경제지표</b><i class="dot-live"></i></div>
     </div>
     <div class="hd-tools">
+      <div id="datenav" class="datesel"></div>
       <div class="langtoggle" role="group" aria-label="언어 선택">
         <button type="button" data-lang="ko" aria-pressed="true">KR</button>
         <button type="button" data-lang="en" aria-pressed="false">EN</button>
@@ -82,8 +84,10 @@
 <script>
 (async function(){
   const P = new URLSearchParams(location.search), EN = P.get('lang') === 'en';
+  const QD = P.get('date');
   let D = null;
-  try { D = JSON.parse(document.getElementById('markets-data').textContent); } catch(e){}
+  if (QD) { try { D = await (await fetch('archive/' + QD + '/markets.json')).json(); } catch(e){} }
+  try { if (!D) D = JSON.parse(document.getElementById('markets-data').textContent); } catch(e){}
   if (!D) { try { D = await (await fetch('markets.json')).json(); } catch(e){} }
 
   const $ = (s) => document.querySelector(s);

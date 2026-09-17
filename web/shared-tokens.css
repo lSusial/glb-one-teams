@@ -76,6 +76,16 @@ ul{margin:0;padding:0;list-style:none}
 }
 .langtoggle button[aria-pressed="true"]{background:var(--navy);color:#fff}
 
+/* ── 날짜(전일자) 선택기 — shared-datenav.js 가 #datenav 에 select 주입 ── */
+.datesel{display:flex}
+.datesel:empty{display:none}
+.dnav-sel{
+  font-family:var(--f-en);font-weight:600;font-size:clamp(11px,1.6cqi,13px);
+  color:var(--ink-2);background:#fff;border:1px solid var(--line-2);border-radius:999px;
+  padding:5px 10px;box-shadow:var(--shadow);cursor:pointer;max-width:170px;
+}
+.dnav-sel:focus{outline:none;border-color:var(--navy)}
+
 /* ── 공통 카드 ──────────────────────────────────────── */
 .card{
   background:var(--card);border:1px solid var(--line);border-radius:var(--r-lg);
