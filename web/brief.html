@@ -352,11 +352,40 @@
   }
   function renderBrief(){
     const cards = (D.market_ticker || []).map(mktCard).join('');
-    // 무한스크롤 애니메이션이 실제로 도는 경우에만 루프용으로 두 벌 넣는다 —
-    // prefers-reduced-motion(애니메이션 꺼짐, CSS가 overflow-x:auto로 전환)일 때
-    // 그대로 두 벌 넣으면 스와이프해서 두 번째 사본을 지나면 빈 화면만 남는다.
+    // 자동 스크롤(아래 initMarquee)이 도는 경우에만 이어붙이기용으로 두 벌 넣는다 —
+    // prefers-reduced-motion이면 자동 스크롤을 아예 안 돌리므로 한 벌만 넣어
+    // 스와이프해서 끝까지 가면 빈 화면만 남는 일이 없게 한다.
     const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
     $('#mkt-track').innerHTML = reduceMotion ? cards : cards + cards;
+    if (!reduceMotion) initMarquee();
+  }
+
+  // GLOBAL MARKETS 자동 스크롤 — CSS 무한 트랜스폼 애니메이션 대신 실제
+  // scrollLeft를 rAF로 밀어준다(마스크+트랜스폼 애니메이션 조합의 iOS Safari
+  // 렌더링 버그를 피하기 위함). 카드가 두 벌 들어있어 중간지점을 넘기면
+  // scrollLeft를 그만큼 빼서 이음매 없이 이어지게 한다.
+  function initMarquee(){
+    const wrap = document.querySelector('.mkt-marquee');
+    const track = document.getElementById('mkt-track');
+    if (!wrap || !track) return;
+    let paused = false, resumeAt = 0;
+    const canHover = window.matchMedia && matchMedia('(hover:hover) and (pointer:fine)').matches;
+    if (canHover) {
+      wrap.addEventListener('mouseenter', () => { paused = true; });
+      wrap.addEventListener('mouseleave', () => { paused = false; });
+    }
+    wrap.addEventListener('pointerdown', () => { paused = true; });
+    wrap.addEventListener('pointerup', () => { resumeAt = performance.now() + 2500; });
+    function step(now){
+      if (paused && resumeAt && now >= resumeAt) { paused = false; resumeAt = 0; }
+      if (!paused) {
+        wrap.scrollLeft += 0.4;
+        const half = track.scrollWidth / 2;
+        if (half > 0 && wrap.scrollLeft >= half) wrap.scrollLeft -= half;
+      }
+      requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
   }
 
   // ── TODAY'S TOP ISSUES: daily_highlights ──

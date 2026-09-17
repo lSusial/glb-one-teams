@@ -190,16 +190,16 @@ ul{margin:0;padding:0;list-style:none}
 .brief-txt{margin-top:9px;font-size:clamp(13px,2.03cqi,17.5px);line-height:1.66;color:var(--ink-2);word-break:keep-all}
 
 /* ── GLOBAL MARKETS 티커 ──
-   -webkit-mask-image + 무한 transform 애니메이션 조합은 iOS Safari에서 스크롤 후
-   레이어가 재합성되며 통째로 사라지는 버그가 있음(잘 알려진 이슈) — GPU 레이어를
-   미리 확정해 재합성을 피하려고 translateZ(0)/will-change 부여. */
-.mkt-marquee{overflow:hidden;margin-top:11px;-webkit-transform:translateZ(0);transform:translateZ(0);
+   예전엔 -webkit-mask-image + 무한 transform 애니메이션(@keyframes) 조합이었는데,
+   iOS Safari에서 스크롤 후 레이어가 재합성되며 콘텐츠가 통째로 사라지는 문제가
+   재현됨(translateZ(0)/will-change로도 해결 안 됨). CSS 트랜스폼 애니메이션 대신
+   실제 overflow-x 스크롤을 JS(rAF)로 밀어주는 방식으로 교체 — 마스크는 애니메이션
+   없는 정적 스크롤 컨테이너에만 적용되므로 훨씬 안전하다(모바일 캐러셀의 표준 방식). */
+.mkt-marquee{overflow-x:auto;overflow-y:hidden;margin-top:11px;scrollbar-width:none;-webkit-overflow-scrolling:touch;
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);
           mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}
-.mkt-track{display:flex;gap:9px;width:max-content;animation:mkt-scroll 48s linear infinite;
-  will-change:transform;-webkit-transform:translateZ(0);backface-visibility:hidden}
-@media (hover:hover) and (pointer:fine){.mkt-marquee:hover .mkt-track{animation-play-state:paused}}
-@keyframes mkt-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.mkt-marquee::-webkit-scrollbar{display:none}
+.mkt-track{display:flex;gap:9px;width:max-content}
 .mkt{flex:none;width:clamp(162px,43cqi,190px);min-height:82px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
 .mkt-h{display:flex;align-items:center;gap:6px}
 .mkt-fl{flex:none;filter:drop-shadow(0 1px 2px rgba(20,32,72,.15))}
