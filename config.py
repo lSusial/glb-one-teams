@@ -75,7 +75,7 @@ FULLTEXT_LIMIT   = 400       # 한 번 실행에 본문 추출할 최대 기사 
 FULLTEXT_WORKERS = 12        # 병렬 fetch 수
 FULLTEXT_TIMEOUT = 15        # 원문 fetch 타임아웃(초)
 FULLTEXT_MAXLEN  = 12000     # 저장 본문 최대 길이(자)
-RANK_BODY_MAXLEN = 2000      # rank 프롬프트에 넣는 본문 최대 길이(자) — 2026-08-31 토큰
+RANK_BODY_MAXLEN = 1200      # rank 프롬프트에 넣는 본문 최대 길이(자) — 2026-08-31 토큰
                               # 다이어트로 4000→2000(rank가 하루 토큰의 ~69%를 차지, 가장 큰 레버)
 
 # ── 다출처 종합 요약(2026-08-26 회의 결정: 저작권 완화) ────────────────
