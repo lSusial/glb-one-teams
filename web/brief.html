@@ -352,7 +352,11 @@
   }
   function renderBrief(){
     const cards = (D.market_ticker || []).map(mktCard).join('');
-    $('#mkt-track').innerHTML = cards + cards;
+    // 무한스크롤 애니메이션이 실제로 도는 경우에만 루프용으로 두 벌 넣는다 —
+    // prefers-reduced-motion(애니메이션 꺼짐, CSS가 overflow-x:auto로 전환)일 때
+    // 그대로 두 벌 넣으면 스와이프해서 두 번째 사본을 지나면 빈 화면만 남는다.
+    const reduceMotion = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    $('#mkt-track').innerHTML = reduceMotion ? cards : cards + cards;
   }
 
   // ── TODAY'S TOP ISSUES: daily_highlights ──

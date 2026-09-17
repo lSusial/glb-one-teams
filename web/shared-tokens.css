@@ -189,11 +189,15 @@ ul{margin:0;padding:0;list-style:none}
 .brief-h .ico svg{width:15px;height:15px}
 .brief-txt{margin-top:9px;font-size:clamp(13px,2.03cqi,17.5px);line-height:1.66;color:var(--ink-2);word-break:keep-all}
 
-/* ── GLOBAL MARKETS 티커 ── */
-.mkt-marquee{overflow:hidden;margin-top:11px;
+/* ── GLOBAL MARKETS 티커 ──
+   -webkit-mask-image + 무한 transform 애니메이션 조합은 iOS Safari에서 스크롤 후
+   레이어가 재합성되며 통째로 사라지는 버그가 있음(잘 알려진 이슈) — GPU 레이어를
+   미리 확정해 재합성을 피하려고 translateZ(0)/will-change 부여. */
+.mkt-marquee{overflow:hidden;margin-top:11px;-webkit-transform:translateZ(0);transform:translateZ(0);
   -webkit-mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent);
           mask-image:linear-gradient(90deg,transparent,#000 5%,#000 95%,transparent)}
-.mkt-track{display:flex;gap:9px;width:max-content;animation:mkt-scroll 48s linear infinite}
+.mkt-track{display:flex;gap:9px;width:max-content;animation:mkt-scroll 48s linear infinite;
+  will-change:transform;-webkit-transform:translateZ(0);backface-visibility:hidden}
 @media (hover:hover) and (pointer:fine){.mkt-marquee:hover .mkt-track{animation-play-state:paused}}
 @keyframes mkt-scroll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .mkt{flex:none;width:clamp(162px,43cqi,190px);min-height:82px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:10px 12px}
