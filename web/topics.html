@@ -22,8 +22,8 @@
 .cc-pk[aria-selected="true"]{background:var(--gold-soft);color:#B67611;font-weight:700}
 .cc-pk .fg{font-size:13px;line-height:1}
 .cc-pk .n{opacity:.65;margin-left:2px}
-.lk-entry{display:inline-block;font-size:12px;color:var(--muted);text-decoration:none;border:1px solid var(--line-2);border-radius:999px;padding:4px 10px;margin-right:6px;white-space:nowrap}
-.lk-entry:hover{border-color:var(--gold);color:var(--ink,#151515)}
+.twcc-lk{flex:0 0 auto;display:inline-flex;align-items:center;gap:4px;padding:4px 9px;border-radius:7px;background:#fff;color:var(--muted);font-size:11.5px;font-weight:500;white-space:nowrap;text-decoration:none;cursor:pointer}
+.twcc-lk:hover{color:var(--ink,#151515)}
 </style>
 </head>
 <body>
@@ -40,7 +40,6 @@
       <div class="hd-sub"><b data-en="Monitoring">모니터링 · TopicWatch</b><i class="dot-live"></i></div>
     </div>
     <div class="hd-tools">
-      <a class="lk-entry" href="links.html" data-en="Links">원문 링크</a>
       <div id="datenav" class="datesel"></div>
       <div class="langtoggle" role="group" aria-label="언어 선택">
         <button type="button" data-lang="ko" aria-pressed="true">KR</button>
@@ -145,7 +144,8 @@
     if (fCC && !ccm.has(fCC)) fCC = '';
     const chip=(cc,flag,label,n,sel)=>`<button class="cc-pk" data-cc="${cc}" aria-selected="${sel}">${flag?`<span class="fg">${esc(flag)}</span>`:''}${label?`<span class="cc-nm">${esc(label)}</span>`:''}<span class="n">${n}</span></button>`;
     const codes=[...ccm.keys()].sort((x,y)=>ccm.get(y).n-ccm.get(x).n);
-    $('#twcc').innerHTML = chip('','',EN?'All':'전체',t.arts.length,fCC==='') + codes.map(cc=>chip(cc,ccm.get(cc).flag,ccm.get(cc).label,ccm.get(cc).n,fCC===cc)).join('');
+    $('#twcc').innerHTML = chip('','',EN?'All':'전체',t.arts.length,fCC==='') + codes.map(cc=>chip(cc,ccm.get(cc).flag,ccm.get(cc).label,ccm.get(cc).n,fCC===cc)).join('')
+      + `<a class="twcc-lk" href="links.html" data-en="Links">🔗 ${EN?'Links':'원문 링크'}</a>`;
     $('#twcc').querySelectorAll('.cc-pk').forEach(b=>b.addEventListener('click',()=>{ fCC=b.dataset.cc; render(curCode); }));
     return ccm;
   }
