@@ -127,7 +127,7 @@ def _system_prompt() -> str:
         '"topics": ["TOPIC_CODE", ...], '
         '"event_type": ["EVENT_CODE", ...] (0-3, empty list if none apply), '
         '"primary_country": "ISO2 code of the country the article is ABOUT, or GLOBAL", '
-        '"kb_implication_en": "1-2 sentence KB-perspective implication/action, in English"}\n\n'
+        '"kb_implication_en": "1-2 sentences: name (a) the specific KB entity/desk affected, (b) the concrete mechanism, (c) the direction or action. Be decisive; do NOT use vague hedges like monitor/keep an eye on/may affect/should watch."}\n\n'
         "Choose topics ONLY from these codes (multiple allowed, max 3):\n"
         + taxonomy.prompt_reference()
         + "\n\nChoose event_type ONLY from these codes (multiple allowed, max 3; empty if the "
@@ -135,21 +135,25 @@ def _system_prompt() -> str:
         + taxonomy.event_prompt_reference()
         + _TOPIC_DISAMBIG_BLOCK
         + _PRIMARY_COUNTRY_BLOCK
-        + "\n\nai_score rubric — assign the highest tier that applies:\n"
-        "75-100  DIRECT · IMMEDIATE: KB branch/subsidiary directly affected today.\n"
-        "  Examples: host-country central bank rate decision, capital controls imposed,\n"
-        "  KB entity under regulatory action/sanction, sovereign rating downgrade\n"
-        "  in a KB-presence market, FX convertibility crisis.\n"
-        "50-74   CONTEXTUAL · IMPORTANT: A KB banker at this hub should read this within the day.\n"
-        "  Examples: major currency move in a KB country (VND/IDR/MMK/CNY/INR…),\n"
-        "  Fed/BoJ/ECB rate path shift, oil shock affecting local inflation,\n"
-        "  geopolitical event in KB market (coup, sanctions risk, capital-flow restriction),\n"
-        "  banking-sector M&A or stress in KB geography, significant trade/tariff change.\n"
-        "25-49   BACKGROUND · CONTEXT: Useful context; no near-term KB action needed.\n"
-        "  Examples: global fintech/ESG trends, developed-market macro that only\n"
-        "  indirectly reaches KB geographies, general industry research.\n"
-        "0-24    NOISE / UNRELATED: Sports, entertainment, stock tips for unrelated sectors,\n"
-        "  crime gossip, local events with no macro or financial relevance to KB operations.\n"
+        + "\n\nai_score rubric — use the FULL 0-100 range and DIFFERENTIATE. Do NOT cluster scores "
+        "in a narrow band: most routine articles belong below 55, and a typical day yields only a "
+        "handful of 80+ items. Score THIS article's specific importance (directness × magnitude × "
+        "novelty), not its topic in general — two articles on the same theme can differ by 20+ points.\n"
+        "85-100  CRITICAL · DIRECT: a KB branch/subsidiary is materially and directly affected NOW —\n"
+        "  host-country central-bank rate decision, capital controls, KB entity under regulatory\n"
+        "  action/sanction, sovereign downgrade in a KB market, FX convertibility crisis,\n"
+        "  failure/run at a KB counterparty. (rare — only a few per day across all markets)\n"
+        "65-84   IMPORTANT · ACTIONABLE: a banker at THIS hub must brief/act within the day —\n"
+        "  a large NON-ROUTINE host-market move (sharp FX break, new local banking regulation,\n"
+        "  banking-sector M&A/stress in KB geography, coup/sanctions risk in a KB market).\n"
+        "45-64   CONTEXTUAL: worth knowing, no near-term action — foreign central-bank path\n"
+        "  (Fed/BoJ/ECB) reaching this market indirectly, ROUTINE currency fluctuation,\n"
+        "  regional macro, a sector/policy trend relevant to KB but not urgent.\n"
+        "25-44   BACKGROUND: general or global trends only indirectly relevant to KB geographies;\n"
+        "  developed-market macro far from a KB market; broad industry research.\n"
+        "0-24    NOISE / UNRELATED: sports, entertainment, unrelated crime, non-financial local events.\n"
+        "Anti-clustering rule: if you are about to score 60-69, re-check — is it truly actionable "
+        "(→65+) or merely contextual (→45-60)? Avoid defaulting to the middle.\n"
         "Write kb_implication_en strictly within the article content; avoid unfounded speculation."
         + _STYLE_AND_SYNTH_BLOCK
     )

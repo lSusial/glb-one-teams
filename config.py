@@ -212,6 +212,8 @@ NON_PRESENCE_DEDUP_SIM = 0.5
 # 국가 피드 노출 제어 (2026-09-17, 피드백 후속 — 인도 UPI·미국 Fed 류 스토리 홍수 방지)
 COUNTRY_MAX_ARTICLES   = 8      # 국가당 노출 최대 기사 수(스토리 dedup 후 상한)
 COUNTRY_STORY_DEDUP_SIM = 0.38  # 같은 스토리 근접중복 병합 임계(제목+요약 토큰 겹침, 0~1)
+COVERAGE_FLOOR      = 2      # 거점당 최소 노출 목표(미만이면 기간 넓혀 보충)
+COVERAGE_FILL_DAYS  = 7      # 보충 fetch 시 넓히는 기간(일)
 
 
 def is_presence(cc: str) -> bool:

@@ -527,6 +527,29 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
             extra = [a for a in ordered[config.COUNTRY_MAX_ARTICLES:]
                      if a["article_id"] not in have and "SOCIETY" in (a["topics"] or "")][:_SOCIETY_MAX_PER]
             rows = rows + extra
+            # 커버리지 플로어: 노출이 얇은 거점은 기간을 넓혀 상위 몇 건 보충(빈 화면 방지).
+            if len(rows) < config.COVERAGE_FLOOR:
+                fill_dc, fill_dp = _date_clause(config.COVERAGE_FILL_DAYS)
+                have = {a["article_id"] for a in rows}
+                fill_rows = conn.execute(
+                    f"""SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko,
+                               a.kb_implication, a.summary_en, a.kb_implication_en, a.expanded_summary,
+                               a.expanded_summary_en, a.event_type, a.personnel_move, m.tier, a.topics,
+                               a.link, a.published_at, a.ai_score, a.source_links, a.korean_fi, m.media_name,
+                               m.primary_country_code cc
+                        FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
+                        WHERE m.primary_country_code = ? AND a.ai_score >= ?
+                          AND a.duplicate_of IS NULL{fill_dc}
+                        ORDER BY a.ai_score DESC, a.published_at DESC LIMIT 30""",
+                    (cc, config.AI_SCORE_ACTIVE_THRESHOLD, *fill_dp),
+                ).fetchall()
+                fill_ordered = ranking.order(conn, fill_rows, cluster_map=cm)
+                fill_ordered, _ = _dedup_country_feed(fill_ordered, cm)
+                for a in fill_ordered:
+                    if a["article_id"] not in have:
+                        rows.append(a); have.add(a["article_id"])
+                        if len(rows) >= config.COVERAGE_FLOOR:
+                            break
 
         articles = []
         for i, a in enumerate(rows):
