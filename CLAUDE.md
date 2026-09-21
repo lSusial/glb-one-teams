@@ -1,39 +1,46 @@
 # glb-one-teams 프로젝트 컨텍스트
 
+> Claude·Codex 등 코딩 에이전트 공통 지침. `AGENTS.md`는 이 파일을 가리키는 포인터다.
+> **현재 상태·다음 작업은 [`STATUS.md`](STATUS.md)** 가 기준이다.
+
 ## 프로젝트 목적
-KB 글로벌 거점(13개국) 뉴스 데일리. 파이프라인: 수집 → 필터 → AI 분석 → export → **정적 4탭 UI**.
-**★ 이 레포(glb-one-teams)가 메인이자 go-forward 레포다.** 신규 작업은 전부 여기서 한다.
+KB 글로벌 거점(13개국) 뉴스 데일리. 파이프라인: 수집 → 필터 → AI 분석 → export → **정적 UI(하단내비 5탭 + 인트로)**.
+신규 작업은 전부 이 레포(glb-one-teams)에서 한다.
+배포: Cloudflare Pages `https://kb-global-daily.pages.dev` (GitHub: `https://github.com/lSusial/glb-one-teams.git`)
 
-## 코드 작성 AIs
-claude_skill.md 내용을 참조 
+## 코드 작성 원칙
+1. **Think Before Coding** — 가정을 명시하고, 불확실하면 묻는다. 해석이 여럿이면 조용히 고르지 말고 제시한다. 더 단순한 방법이 있으면 말한다.
+2. **Simplicity First** — 요청받은 것만, 최소 코드로. 일회성 코드에 추상화 금지, 요청 안 된 "유연성"·불가능한 시나리오의 에러 처리 금지. 200줄이 50줄로 되면 다시 쓴다.
+3. **Surgical Changes** — 필요한 곳만 건드린다. 인접 코드·주석·포맷 "개선" 금지, 기존 스타일 유지. 무관한 dead code는 지우지 말고 언급만. 내 변경으로 생긴 미사용 import/변수만 정리. 바뀐 모든 줄이 요청에 직접 추적돼야 한다.
+4. **Goal-Driven Execution** — 성공 기준을 정하고 검증될 때까지 반복. "버그 수정" = 재현 테스트 작성 후 통과, "리팩터" = 전후 테스트 통과. 다단계 작업은 `[단계] → verify: [확인]` 형태로 짧게 계획을 적는다.
 
-## 관련 레포
-- **glb-one-teams** (이 레포, ★메인): 수집 코어 + AI 레이어 + 정적 4탭 UI. GitHub: https://github.com/lSusial/glb-one-teams.git
-- **glb-news-rss/prototype**: 구 Streamlit 대시보드 (로컬 전용, **참조·아카이브 레거시** — 여기서 신규 작업 안 함)
-  - 경로: `/Users/sangminl/Documents/Claude/Projects/glb-news-rss/prototype/`
-
-> **현재 상태·다음 작업은 [`STATUS.md`](STATUS.md) 참조.** 세션 상세는 [`docs/work_log.md`](docs/work_log.md).
+## 문서 지도
+| 문서 | 내용 |
+|---|---|
+| `STATUS.md` | ★현재 구현 현황·피드백 이행·알려진 이슈·다음 과제 |
+| `README.md` | 모듈 구성·CLI 사용법 |
+| `PLAN.md` | 기획 확정안·비전·로드맵(제품 레이어) |
+| `docs/design.md` | 데이터·AI·카테고리(축 A~E)·화면 구성 요소·미진출국 설계 |
+| `docs/operations.md` | 배포 대상·채널·자동화 결정, 브로드캐스트 설계, 일일 운영 절차 |
+| `docs/rank_score_spec.md` | 표시 정렬 rank_score 스펙·가중치 튜닝 기록 |
+| `docs/quality_audit_2026-09-18.md` | 품질 감사(P1~P2)·잔여 개선 과제 |
+| `docs/work_log.md` | 작업 이력(요약본) |
+| `mockups/HANDOFF.md` | UI 디자인 시스템·화면별 데이터 계약 |
 
 ## 서버 정보
-- **Oracle Cloud:** `ubuntu@168.107.56.139` (포트 22)
-- **SSH 키:** `~/workspace/ssh-key-2026-06-25-4.key`
-- **접속:** `ssh -i ~/workspace/ssh-key-2026-06-25-4.key ubuntu@168.107.56.139`
-- **서버 경로:** `/home/ubuntu/glb-one-teams/`
-- **주의:** Oracle Cloud IP는 Google News RSS 503 차단됨 → 맥북에서 수집 후 rsync 동기화
+- **Oracle Cloud:** `ubuntu@168.107.56.139` (포트 22), 서버 경로 `/home/ubuntu/glb-one-teams/`
+- **SSH 키:** `~/workspace/ssh-key-2026-06-25-4.key` → `ssh -i ~/workspace/ssh-key-2026-06-25-4.key ubuntu@168.107.56.139`
+- **주의:** Oracle Cloud IP는 Google News RSS 503 차단 → **맥북에서 수집** 후 rsync 동기화. SSH 22번 포트 간헐적 타임아웃(2026-08-24부터 `deploy_web.sh`의 서버 동기화는 비활성).
 
 ## 수집 운영 방법 (개발 단계)
 ```bash
-# 수집 후 서버 동기화 (맥북에서 실행)
-./sync_to_server.sh --collect
-
-# DB만 서버로 전송
-./sync_to_server.sh
-
-# 개별 실행
-python main.py run     # fetch → filter → dedup
-python main.py init    # DB 초기화 (sources.yaml 동기화)
-python main.py list    # 최근 기사 확인
+./sync_to_server.sh --collect   # 수집 후 서버 동기화 (맥북)
+./sync_to_server.sh             # DB만 서버로 전송
+python main.py run              # fetch → filter → dedup
+python main.py init             # DB 초기화 (sources.yaml 동기화)
+python main.py list             # 최근 기사 확인
 ```
+일일 전체 절차(수집→AI→export→배포)는 `docs/operations.md` 참조.
 
 ## 관리 국가 (KB 거점 기준, 진출 13개국)
 
@@ -53,36 +60,22 @@ python main.py list    # 최근 기사 확인
 | TH | 태국 | 방콕 | 관심시장(2026-08-28 편입, 실제 지점 없음) |
 | LA | 라오스 | 비엔티안 | 관심시장(2026-08-28 편입, 실제 지점 없음) |
 
-미진출 13개국(통합 피드)은 `docs/design_미진출국.md` 참조.
+미진출 13개국(통합 피드)은 `docs/design.md` §5 참조. (뉴질랜드 오클랜드 지점은 2026-09 폐쇄 — 관리국 아님)
 
-## sources.yaml 규칙
-- 국가 추가/변경 시 `sources.yaml` + `kb_network.py` (prototype 레포) 두 파일 동시 수정
-- 매체 categories는 해당 국가 코드 하나만 (중복 금지)
-- 글로벌 매체는 `GLOBAL`, 국가 전용 매체는 해당 국가 코드
-- 소스·피드 수는 계속 늘고 있어 여기 하드코딩하지 않음 — `sources.yaml` 참조(수집 시 로그에 `feeds=N`으로 실측 출력)
+## 국가·소스 변경 규칙
+- 매체 categories는 해당 국가 코드 **하나만**(중복 금지). 글로벌 매체는 `GLOBAL`, 국가 전용 매체는 해당 국가 코드.
+- 국가 추가/변경 시 함께 손볼 곳: `sources.yaml`, `kb_network.py`, `config.py`(`INDICATOR_MAP`·`POLICY_RATES`·`NON_PRESENCE_COUNTRIES`), `export_json.py`(`_FLAGS_ALL`·`_PRESENCE_NAMES`), `web/*.html`의 NAMES 딕셔너리, `web/shared-sprite.js`(국기).
+- 소스·피드 수는 하드코딩하지 않는다 — `sources.yaml` 참조(수집 로그에 `feeds=N` 출력).
+- `main.py run`이 sources.yaml을 자동 sync하므로, **검증 안 된 피드는 넣기 전에 맥북에서 `fetch`로 수율부터 확인**한다.
 
-## 현재 알려진 이슈
-- Google News 피드: 서버에서 직접 수집 시 503 → 맥북 수집 후 rsync로 해결
-- Google News 링크 해소: 구식 redirect-follow는 최신 consent/JS 리다이렉트에 실패 → `fulltext.py`가 `googlenewsdecoder`로 해소 후 본문 추출 (맥북 실행)
+## 핵심 설계 규칙
+- **AI 레이어**: 모델 Haiku, **Message Batches API(50% 할인) 기본**(`--sync`로 동기 전환). 물량은 `--days`로 제한. 영어가 canonical(`summary_en`) → `llm_translate`가 한국어 채움.
+- **ai_score ACTIVE 임계 = 55** — 노출 게이트·국가 온도는 ai_score 그대로. 화면 정렬만 `ranking.py`의 rank_score(다매체+tier+최신성 등, `docs/rank_score_spec.md`).
+- **카테고리**: 축 A 지역(`sources.yaml`) / 축 B 관련성 게이트(`keyword_filter.py`) / 축 C 주제 6종 ECONOMY·MARKETS·TECH·GEO·POLICY·SOCIETY + 축 E 이벤트유형 REG·SANCTION·DEAL·INCIDENT(`taxonomy.yaml`, AI가 분류). 상세 `docs/design.md`.
+- **국가 태그**: 진출국 현지피드는 매체국적, 인사동향·한국계금융·모니터링·미진출 피드는 AI 주제국가(`primary_country`) 우선.
+- **본문 추출**: prefilter 통과분만 `fulltext.py`(trafilatura+googlenewsdecoder, 무료)로 원문 추출 후 rank. Google News 링크는 맥북에서만 해소 가능. **수집 강화 방향 = 무료 우선(유료 API 보류).**
 
-## 수집 심화 — 본문 추출 (fulltext.py, 무료)
-- prefilter 통과분만 원문 본문 추출(`trafilatura`) → `articles_raw.full_text`, rank가 스니펫 대신 본문으로 분석. 파이프라인: prefilter → **fulltext** → rank. `main.py fulltext` / `ai` 5단계. 패키지: trafilatura·googlenewsdecoder. **뉴스 수집 강화 방향 = 무료 우선(유료 API 보류).**
-
-## 기획·현황 문서 (2026-07-13 확정안 반영)
-- `PLAN.md` — 기획 확정안·비전·11개 거점·로드맵 (기획 레이어). ⚠️ 문서 내 "6탭 UI" 구조는 구안 — 실제는 4탭(아래 참조)
-- `STATUS.md` — 확정안 대비 구현 현황·두 레포 관계 (기술 브리지, ★최신 상태 기준)
-
-## UI 디자인 시스템 · 설계 문서 (2026-09 리디자인 — ★현재 기준)
-- **기준 문서:** `mockups/HANDOFF.md` — 화면별 사양·데이터 계약·구현 매핑(목업 4개: `pulse`/`country_detail`/`non_presence`/`topics`). 4탭(`web/{brief,countries,topics,weekly}.html`) 전면 리스킨 완료(2026-09-04).
-- **디자인 시스템:** 무채색+골드 강조, 커스텀 SVG 국기(`web/shared-sprite.js`), 공용 토큰·컴포넌트 CSS(`web/shared-tokens.css`), 공용 기사 모달(`web/shared-modal.js`) — 전부 `main.py export`가 `data/export/`로 복사.
-- **AI 레이어 현황:** `schema.sql`에 AI 컬럼(`llm_prefilter`, `ai_score`, `summary_ko`, `topics`, `kb_implication`) + `country_briefings` 완비, 매일 운영 중. 모델=Haiku, **Message Batches API(50% 할인) 기본**(`--sync`로 동기 전환). ai_score ACTIVE 임계=**55**. 표시 정렬은 `ranking.py`의 rank_score(다매체 커버리지+매체tier+최신성 등, 상세 `docs/rank_score_spec.md`) — ai_score 게이트 자체는 불변.
-- **카테고리 3축:** 지역(`sources.yaml`) / 관련성게이트(`keyword_filter.py`) / 주제(`taxonomy.yaml`, AI `topics`로 분류).
-
-## 다음 과제 (우선순위) — 2026-09-08 갱신, 상세는 `STATUS.md` 8장
-1. 정기 수집 자동화(Oracle Cloud cron)
-2. ESG 소스 보강 — `docs/esg_coverage_patch.md` 패치안 적용(분류는 정상, 수집 공백이 원인)
-3. Telegram 채널 발송(영어판)
-4. OFFICIAL/tier0 당국 피드 활성화, 태국·라오스 매체 확보
-5. rank_score 재튜닝(현재 라벨 30건 기반, `docs/rank_score_spec.md` §8)
-
-> ⛔ **진행 범위 원칙:** 뉴스 분석으로 도출 가능한 항목 포함 / 비-뉴스 소스 필요 항목 보류. 포함: 현지언론+AI(요약·시사점·분류·**국가 일일 브리핑**)·Global Pulse 지도·인사동향(뉴스)·**TopicWatch**·**국가별 거시지표(환율·주가지수·정책금리, `indicators.py`)**·**KB 미진출국 통합 피드**(`docs/design_미진출국.md`). 보류: 재미요소·참여형, 자회사 IR 링크, OFFICIAL 당국 원천 피드.
+## 진행 범위 원칙
+뉴스 분석으로 도출 가능한 항목은 포함, 비-뉴스 원천이 필요한 항목은 보류.
+- 포함: 현지언론+AI(요약·시사점·분류·국가 브리핑), Global Pulse 지도, 인사동향, 모니터링(이벤트 유형·제재 뉴스), 국가별 거시지표(환율·지수·정책금리·미국채, `indicators.py`), 미진출국 통합 피드.
+- 보류: 재미요소·참여형(퀴즈 등), 자회사 IR 링크, OFFICIAL 당국 원천 피드, 제재 명단 스크리닝.

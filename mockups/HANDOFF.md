@@ -2,7 +2,8 @@
 
 > 대상: Claude Code (glb-one-teams 레포 로컬 작업)
 > 최종 갱신: 2026-09-01
-> 이 문서 하나로 작업 지시 완결. 먼저 `CLAUDE.md`, `STATUS.md`, `docs/design_미진출국.md`를 읽고 시작할 것.
+> 이 문서 하나로 작업 지시 완결. 먼저 `CLAUDE.md`, `STATUS.md`, `docs/design.md`를 읽고 시작할 것.
+> **구현 상태(2026-09-21)**: 4개 화면 리스킨은 2026-09-04 완료. 이후 변경 — 하단내비 5탭(지표 탭 `markets.html` 신설), 주간 브리핑(`weekly.html`) 구현, 모니터링 이벤트유형 4종(규제·제재·거래투자·사건사고)+한국계 금융기관·인사동향 편입, 주제 카테고리 6종. 아래 §2~§3의 REG/DEAL/INCIDENT 3분류·weekly "보류" 서술은 초기 시점 기준이며, 최신은 `STATUS.md`·`docs/design.md`를 따른다.
 
 ## 0. 한 줄 요약
 `mockups/`에 있는 4개 정적 HTML 목업을 **디자인 기준(source of truth)** 으로 삼아, 실제 정적 UI로 구현/이식한다. 목업은 손으로 다듬은 최종 시안이며, 데이터만 `data/export/*.json`에서 주입하면 그대로 동작하도록 설계돼 있다.

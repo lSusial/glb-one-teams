@@ -1,376 +1,48 @@
-# 작업 내역 (Work Log)
-
-## 2026-09-21 — 품질 감사 후속 1차 수정 (Codex)
-
-- `llm_dedup.py`: 전역 AI 중복 초기화 제거. 날짜·국가 범위에 포함되고 유효 응답을 받은 후보만 국가별 트랜잭션으로 교체. API 실패, 응답 누락/오류, 알 수 없는 ID, 겹치는 그룹은 기존 연결 보존.
-- 국가당 40건 잘라내기 제거. 전체 국가 후보를 같은 요청으로 비교하고 발행일 추가, 출력 예산을 후보 수에 맞춰 증가. 입력 80,000자 초과는 일부만 처리하지 않고 실패 수로 보고하며 보존(기간을 좁혀 재실행 필요). `main.py`에도 검사/실패보존 건수 표시.
-- `briefing.py`: 주제국가 우선(기존 라벨 없는 기사는 매체국가 폴백), ai_score>=55, 요약이 있는 비중복 기사만 사용. rank_score 정렬 후 25건 선택. 근거 요약의 160자 절단 제거. 적격 기사 0건이면 API 호출 없이 기준 미충족 안내와 빈 출처를 저장하며 이전 동일 날짜 브리핑을 대체. 일일·주간 모두 적용.
-- 검증: `python -m unittest discover -s tests -v` 11개 통과, 변경 Python 파일 컴파일 및 `git diff --check` 통과. API 호출 없는 메모리 DB 테스트로 부분 실행·실패·트랜잭션 롤백·40건 이후 비교·과대 요청·브리핑 근거/순위/빈 상태 확인.
-- 실데이터 검증: 9/17 로컬 DB를 read-only로 열어 메모리 복사. 9/14~17 중복 후보 미국 385건 모두 요청에 포함, 최대 입력 16,847자. 무효 응답 모의 실행에서 기존 AI 연결 328건 보존. 브리핑 요청 11개국, TH·LA는 적격 0건 안내로 분기. 이는 선택/보존 검증이며 실제 LLM 의미판정 품질 개선 수치가 아님.
-- 운영 DB 수정·유료 LLM 재생성·export·배포는 실행하지 않음. 다음 실행부터 코드가 적용되며 기존 저장 결과는 재생성 전까지 유지됨. 후보 확대·요약 절단 제거로 향후 LLM 입력량 증가 가능.
-- 감사 잔여 과제: 다매체 publisher 집계, 본문 추출 이력/근거 변경 재분석, 운영 랭커 평가 연결, 관심시장 적격 기준 검토. 상세 `docs/quality_audit_2026-09-18.md`.
-
-
-## 2026-06-26 현재 상태
-
-### 레포 구조
-| 레포 | 경로 | 역할 |
-|---|---|---|
-| glb-news-rss/prototype | 로컬 전용 | 풀 파이프라인 + KB 대시보드 (Streamlit) |
-| glb-one-teams | GitHub | 수집 전용 (AI 없음), 새 UI 실험용 베이스 |
-
----
-
-## 세션 이력
-
-### 세션 1~2 (이전)
-- `llm_prefilter.py` — ORDER BY filter_score DESC 변경 (고점수 기사 우선 처리)
-- `keyword_filter.py` — ASEAN, UPI, CPF, gojek, VN-index 등 리전 키워드 추가
-- `collector.py` — Google News URL 실제 링크 해소 기능 추가 (ThreadPoolExecutor 30 workers)
-- `briefing.py` — 브리핑 재생성 스킵 로직 추가, key_stat 스키마 수정
-- `score_engine.py` — 미사용 `_topic_matches()` 함수 제거
-- `llm_ranker.py` — _NOISE_TITLES에서 "bi" 제거 (오탐 방지)
-- `main.py` — cmd_brief 기본값 weekly → daily
-- `dashboard_stocks.py` — `_latest_date()` `<= yesterday` 제약 제거 (당일 데이터 표시)
-- `kb_network.py` — 뭄바이 → 구르구람 변경
-- **glb-one-teams 레포 신규 생성** — GitHub: https://github.com/lSusial/glb-one-teams.git
-
-### 세션 3 (2026-06-25)
-
-#### Oracle Cloud 서버 세팅
-- 서버: `ubuntu@168.107.56.139` (포트 22)
-- SSH 키: `~/workspace/ssh-key-2026-06-25-4.key`
-- 작업: git clone + venv + requirements.txt 설치 완료
-- DB 초기화: 88 sources, 106 feeds
-
-#### Google News 503 문제 발견
-- Oracle Cloud IP → Google이 봇으로 감지 → 503 차단
-- 서버 직접 수집: 106개 중 40 성공 / 66 실패
-- **해결책:** 맥북에서 수집 → rsync로 서버 동기화 (개발 단계)
-- 추후 프로덕션: Residential Proxy 도입 고려
-
-#### 국가 구성 확정
-- **HK(홍콩) 분리** — SCMP를 CN에서 HK로 이동, RTHK·HK Free Press·HKMA 추가
-- **SG(싱가포르) 추가** — Straits Times·CNA를 GLOBAL→SG, Business Times·MAS 추가
-- SCMP categories에서 CN 제거 (HK 전용으로 단일화)
-
-#### 추가 파일
-- `sync_to_server.sh` — 맥북→서버 rsync 동기화 스크립트
-
-### 세션 4 (2026-06-27)
-
-#### 새 UI 레퍼런스 분석
-- 샘플 화면: https://uandix-kaneiko.github.io/global_One_Team/
-- 단일 HTML SPA(바닐라 JS), 콘텐츠 전량 하드코딩. 6개 탭(글로벌동향/현지언론/자회사/TopicWatch/규제/참여)
-- 화면이 요구하는 기사 필드: 매체·날짜·제목·요약(q)·KB시사점(k)·원문URL + 카테고리(c)
-- 메모: 샘플엔 오클랜드(NZ)가 추가됨(관리국 11개엔 없음) → 포함 여부 결정 필요
-
-#### 설계 문서 2종 작성
-- `화면분석_개발가이드.md` — 화면별 항목·콘텐츠 + 데이터 연동 로드맵
-- `데이터_AI_카테고리_설계.md` — 수집 데이터 / AI 산출물 / 3축 카테고리 설계
-
-#### 핵심 발견
-- `schema.sql`이 이미 AI 파이프라인 컬럼 예약: `llm_prefilter`, `ai_score`, `summary_ko`, `topics`, `ai_model` + `country_briefings` 테이블
-- 단, 이 레포엔 AI 모듈 없음(`requirements.txt`에 AI 라이브러리 없음). 실제 모듈은 prototype 레포에
-- UI 'KB 시사점(k)' 담을 컬럼 `kb_implication` **부재** → 신규 필요
-- "카테고리"가 3축 혼재: 지역(sources.yaml) / 관련성게이트(keyword_filter) / 주제(AI topics, 미구현)
-
-### 세션 5 (2026-06-27) — AI 레이어 구현 (코드 생성, 미실행)
-
-#### 신규 모듈
-- `taxonomy.yaml` + `taxonomy.py` — 주제코드 5종(MARKET/BANKING/DIGITAL/ESG/RISK), 시드매칭·검증·UI매핑
-- `config.py` / `db.py` — 공통 경로·임계값·모델, 연결·마이그레이션 헬퍼 (리팩토링)
-- `llm_provider.py` — 프로바이더 추상화 + Anthropic(실제)·OpenAI(스캐폴드)·Stub(오프라인) + 팩토리
-- `kb_network.py` — KB 거점 정의(시사점 맥락 주입용)
-- `llm_prefilter.py` — LLM 1차 관문(keep/drop)
-- `llm_ranker.py` — ai_score / summary_ko / topics / kb_implication 생성
-- `briefing.py` — 국가별 country_briefings 생성
-- `export_json.py` — DB → data/export/countries.json (UI 데이터 계약)
-
-#### 변경
-- `schema.sql` — articles_raw에 `kb_implication` 컬럼 추가
-- `requirements.txt` — anthropic 추가
-- `main.py` — config/db 사용, 서브커맨드 prefilter/rank/brief/ai/export 추가 (run은 수집 전용 유지)
-
-#### 상태
-- py_compile + 순수 헬퍼 검증 통과. **실제 실행·API 호출은 안 함** (ANTHROPIC_API_KEY 필요)
-- 모델 분리: prefilter=haiku, rank/brief=sonnet (config.py에서 조정)
-
-### 세션 6 (2026-06-27) — 수집·필터 점검 + 리팩토링
-
-#### 리팩토링 (동작 보존)
-- `config.py` — 수집 튜닝 상수(USER_AGENT·타임아웃·병렬수·재시도·GNews 해소) 일원화
-- `collector.py` — 위 상수 config 참조, `init_db`를 `db.open_conn` 경유(PRAGMA 일관)
-- `keyword_filter.py` — `ensure_filter_columns`/`ensure_dedup_column`을 `db.ensure_columns`로 위임(중복 제거)
-
-#### 점검 발견·수정 (필터 커버리지 갭)
-- 관리국 11개 중 **GB·HK·SG 누락** — `COUNTRY_KEYWORDS`/`KOREAN_COUNTRY_KEYWORDS`에 추가
-- GB/HK/SG **금융 신호(hang seng·ftse·hkma·MAS·gbp/hkd/sgd 등)가 `FINANCE_KEYWORDS`에도 누락** → 추가
-- 효과: 영국/홍콩/싱가포르 현지 금융기사 정상 통과(오프라인 테스트 확인). 스포츠·무관 거부 동작 보존
-
-#### 검증
-- py_compile + 필터 오프라인 단위테스트(합성 입력). 실제 네트워크 수집·AI 호출 미실행
-
-### 세션 7 (2026-07-16) — 기획 확정안 반영 · 필터 품질 개선 · 관리자 페이지
-
-#### 기획·문서
-- 사내 확정본 「글로벌 One Team 뉴스데일리 구축(안)」(2026-07-13) 반영 → `PLAN.md`·`STATUS.md` 신규(이 레포 기준: 11거점·6탭 UI·3축 카테고리). `CLAUDE.md`에 참조·현재 진행 범위 추가.
-- **이번 진행 범위 확정**: 뉴스 분석으로 도출 가능한 항목 포함(현지언론+AI·온도계·Key-man 인사동향·규제 화면), 비-뉴스 소스(IR·OFFICIAL 원천·거시지표)·재미요소는 보류.
-
-#### 수집·필터 품질 (진단→개선→측정)
-- 평가셋 `eval/eval_set.jsonl`(70건 라벨) 구축.
-- `keyword_filter.py` 개선: **복수형 매칭**(`_kw_pattern` s? 허용), 금융어 보강(opec·fed chair·insurance·stock·net loss 등), 내비게이션 페이지 제외.
-- 결과: 정밀도 54→66% · 재현율 60→92% · **F1 57→77%**. 리포트 `docs/수집필터_품질진단.md`.
-
-#### 코드/CLI
-- `main.py` **복구**(HEAD에 있었으나 워킹트리 삭제 상태) + `export --passed`(Phase1 AI-free) · `admin` 서브커맨드 추가.
-- `export_json.py`: `active_only` 파라미터 추가(AI 없이 passed 기사 export). Phase 1 `countries.json` 생성 검증(9개국 140건).
-- **관리자 페이지** 신규: `web/admin.html`(템플릿) + `admin_export.py` → `data/export/admin.html`(개요·기사·소스 3탭, 오프라인 열람).
-
-#### 미해결 / 다음
-- **최신 재수집 필요**(맥북): 현재 DB는 2026-06-22 스냅샷 — 구 필터 판정·HK/SG 0건. 개선 필터+HK/SG 반영은 재수집 후 `filter --refilter`·`admin`·`export --passed` 재실행.
-- `ai_score` 스케일: 구 DB는 1~5, 코드는 0~100(임계 60) → `export`(ACTIVE) 0건. Phase 2에서 재랭킹·표기 통일.
-- Phase 2 AI(taxonomy 태깅·요약·kb_implication) + LLM 프리필터(정치성 노이즈).
-- **[검토] Phase 2 비용 최적화**: rank가 Sonnet이라 레거시(Haiku) 대비 토큰 비용↑ (+ kb_implication 출력 추가, 1호출=1기사). prompt caching은 시스템 프롬프트 177토큰(<1024 최소치)이라 무효. 레버 — ① `rank --fast`(Haiku) 토글 추가해 품질 A/B, ② N건/호출 배치(시스템 프롬프트 분할, 출력비용은 그대로). 물량은 `--days`로 이미 축소. → **세션 8에서 모델 Haiku 전환 + Message Batches API(50% 할인) 적용 완료.**
-
-### 세션 8 (2026-07-23) — 비용 최적화 · UI 개편 · 현지언론 일일 브리핑
-
-#### AI 비용 최적화
-- **모델 Haiku 전환**: `config.ANTHROPIC_MODEL_SMART` = `claude-haiku-4-5`(rank/brief도 Haiku). 토큰 절약.
-- **Message Batches API 적용(토큰 50% 할인)** — 비실시간 일괄 처리라 일일 파이프라인에 최적(완료 최대 24h·보통 수분).
-  - `llm_provider.py`: `complete_batch`/`complete_json_batch` 추가. `AnthropicProvider`가 배치 제출→폴링→`custom_id` 수거. Stub/OpenAI는 동기 폴백.
-  - `llm_prefilter.py`·`llm_ranker.py`·`llm_translate.py`·`briefing.py`: 기사별 순차 호출 → "요청 일괄 구성→배치→결과 반영"으로 전환.
-  - `config.py`: `LLM_USE_BATCH`(기본 on)·`LLM_BATCH_MIN/CHUNK/POLL_SEC/MAX_WAIT_SEC`.
-  - `main.py`: prefilter/rank/translate/brief/ai에 **`--sync`**(배치 끄고 동기, 디버깅용). SDK 표면(create/retrieve/results, request_counts, result.type) 확인.
-
-#### UI/데이터 개편
-- **규제·정책 → TopicWatch 흡수** (5탭→**4탭**): `web/regulations.html` nav 제거·생성 중단, TopicWatch `_ISSUES`에 **규제·감독 클러스터** 추가.
-- **ai_score ACTIVE 임계 60→55**: 임계 바로 아래(50~59)에 준수한 거시·금융 뉴스가 몰려 노출 폭 확대. export만 재실행하면 반영(AI 재호출 X).
-- **Global Pulse '오늘의 핵심 흐름' 배지 인라인화**: 왼쪽 고정폭 배지 컬럼 제거 → `[국기][배지] 제목` 한 줄, 본문 시작점 정렬.
-- **KO/EN 폴백**: 표시 언어가 비면 반대 언어로 폴백(`tq/tk/tf`) — 미번역분도 빈칸 없이 노출. 4개 화면 적용.
-
-#### 현지언론 화면 재구성
-- **국가 선택 게이팅**: 국가 미선택 시 목록 숨김·안내만. 커버리지에서 거점 클릭 시 브리핑+기사 노출.
-- **일일 브리핑 박스**(목록 상단): 선택 거점의 **전일+당일** 뉴스를 AI가 4~5문장 한/영 동시 종합.
-  - `briefing.py`: `--type daily`(전일+당일, `summary`+`summary_en` 한/영, 배치) 추가. `country_briefings.summary_en` 컬럼 보강.
-  - `export_json.py`: `_daily_briefs()` → 국가별 최신 daily 브리핑을 `countries.json`의 국가별 `brief`{ko,en,date} 필드로 주입.
-  - `main.py ai` 4단계가 이제 **일일 브리핑** 생성.
-
-#### 수집 심화 — 본문 추출 (무료, rank 품질↑)
-- **진단**: 76/118 피드가 Google News RSS → summary 평균 141B(제목 수준 스니펫)로만 분석. keep 802건 중 **490건이 아직 `news.google.com` 리다이렉트 링크**(구식 redirect-follow 해소 실패).
-- **`fulltext.py` 신규**: prefilter 통과분만 원문 URL을 열어 본문 전체 추출(`trafilatura`) → `articles_raw.full_text`. Google News 링크는 `googlenewsdecoder`(현행 batchexecute 방식)로 실제 URL 해소 후 추출. 실패 시 스니펫 폴백. 병렬 fetch.
-- **파이프라인 편입**: prefilter → **fulltext** → rank. `llm_ranker` 는 `full_text` 있으면 본문으로, 없으면 스니펫으로 자동 분석. `main.py fulltext` + `ai` 5단계로 확장. `config`에 FULLTEXT_*·RANK_BODY_MAXLEN. `requirements.txt`에 trafilatura·googlenewsdecoder.
-- **실행 환경**: 수집처럼 **맥북(개방망)**. 방향 결정 = 무료 우선(유료 API는 보류).
-- **다음 후보(무료)**: GDELT breadth, OFFICIAL 12피드 활성화, 구글뉴스 쿼리 확대.
-
-#### 운영 메모
-- 실제 AI 실행은 맥북(ANTHROPIC_API_KEY): `pip install -r requirements.txt` 후 `python main.py ai --days 2`(2단계=본문추출, 5단계=일일 브리핑 포함) → `python main.py export`.
-- 임계 55 하향 후 55~59 신규 노출분 KO 미번역 소수 → `translate --days 2`로 채움(당장은 EN 폴백으로 노출).
-
----
-
-### 세션 9 (2026-08-28) — 인사동향·지표확장·모달 긴요약·태국라오스 편입
-> 세션 8(2026-07-23) 이후 4탭 리브랜딩(글로벌 원팀 뉴스/국가별 뉴스/모니터링/주간 리포트)·
-> taxonomy.yaml·이슈 트래커 카테고리 탭 등 여러 세션이 있었으나 이 로그에는 미기록 —
-> 최신 확정 상태는 `STATUS.md` 참조.
-
-#### 인사동향(리더십 교체) 신설
-- `keyword_filter.py`: 중앙은행·은행·감독당국 "역할어"(bank ceo 등) 단독 매치는 재직 중
-  발언 인용까지 다 잡아 오탐 심함(1차 21건 중 다수 단순 언급) → 역할어 + 교체/이동
-  신호어(appointed/resigned/ex-/outgoing 등) **AND 매치**로 전환(재검증 6건, 전부 실제
-  인사 이벤트). `personnel_move` 컬럼, `run_personnel_tag()`.
-- `export_json.py` `_compute_personnel()`: 진출 13 + 미진출 13 전체 대상, ACTIVE 게이트
-  없음(신호 희소). `countries.html` 4번째 탭 — 은행명/주제 세부 필터 칩은 제거하고
-  전체 목록 + 건수만(신호가 너무 희소해 필터링이 무의미).
-
-#### 국가별 금융지표 확장
-- `config.POLICY_RATES`: 중앙은행마다 API 형식이 달라 표준 무료 API가 없어 소형 표로
-  직접 관리(as_of 명시, 수동 갱신). SG(MAS는 S$NEER 밴드 운용)·KH(달러화 경제)는
-  단일 정책금리가 없어 표에서 제외 — export가 자동 생략.
-- `config.BOND10Y_MAP`: yfinance·stooq 실측 결과 무료·무키로 안정적인 건 미국(`^TNX`)뿐
-  (stooq는 최근 JS 봇 차단 걸림). 미국만 수집, 나머지 생략.
-- 스파크라인: 새 수집원 없이 기존 일별 `indicators` 스냅샷 재사용, 최근 7영업일 미니 SVG.
-- **버그 수정**: index 등락 배지가 yfinance 자체 5일 히스토리의 전일종가를 쓰고
-  스파크라인은 DB 스냅샷을 써서 하루 중 재수집 시 배지↑ 스파크↓ 같은 모순 발생 —
-  index도 fx와 동일하게 DB 전일 스냅샷을 prev_value로 쓰도록 통일.
-
-#### 모달 긴 요약(expanded_summary)
-- `llm_expand.py` 신규: 카드용 짧은 요약(q)과 별개로 모달 전용 10~20줄(4~6문단) 요약.
-  **노출(ACTIVE) 기사에만** 생성(전량 생성 금지, 비용 관리), 증분(`expanded_summary IS NULL`),
-  Haiku + Batches. `llm_ranker._cluster_sources()`의 duplicate_of 클러스터를 재사용해
-  다출처 종합(단일 기사 패러프레이즈 방지, 저작권 완화).
-- `shared-modal.js`는 이미 이 필드의 폴백 구조를 갖고 있었음(선행 세션에서 준비만 해둠) —
-  이번에 실제 데이터를 채움. `.sh-sum`에 `white-space:pre-line` 추가해 문단 줄바꿈 렌더.
-
-#### 태국·라오스 진출국 편입 (진출 11→13, 미진출 14→13)
-- 실측 후 착수: THB·LAK 환율(open.er-api 확인) / SET지수(`^SET.BK`, 1600.70 실측 = 실제
-  종가 일치, 다만 yfinance 히스토리가 1일치만 반환돼 등락은 DB 스냅샷 누적으로 채워짐) /
-  BOT 정책금리 1.00%(2026-08-26). 라오스는 정책금리 시드값 미확보로 생략.
-- `sources.yaml`(태국 재분류+Bangkok Post·Nikkei Asia 보강, 라오스 신규 GNews),
-  `config.py`(INDICATOR_MAP/POLICY_RATES/NON_PRESENCE_COUNTRIES), `kb_network.py`
-  (실제 지점 없음 → "관심시장"), `export_json.py`(`_FLAGS_ALL`/`_PRESENCE_NAMES`),
-  3개 웹페이지 NAMES 딕셔너리 전부 반영.
-
-#### 운영 메모
-- 오늘 실행: `main.py run`(수집, 태국·라오스 신규 피드 포함) → `main.py ai`(7단계,
-  expand 신규 편입) → `main.py indicators` → `main.py export` → `deploy_web.sh`.
-- 디자이너 공유용으로 `data/export/for_designer/`에 4개 화면 + `shared-modal.js` 사본 보관.
-
-### 세션 10 (2026-09-01~04) — mockups 기준 4화면 UI 전면 리디자인 + rank_score 도입
-
-#### UI 리디자인 (mockups/HANDOFF.md → web/*.html 실반영)
-- 디자이너가 `mockups/`에 완성 목업 4개(`pulse`/`country_detail`/`non_presence`/`topics`)와
-  구현 지시서 `HANDOFF.md`를 전달 → `web/{brief,countries,topics}.html`을 목업 기준으로
-  전면 리스킨, `weekly.html`은 목업 없이 같은 디자인 시스템 톤으로 신규 제작.
-- 공용 인프라 신설: `web/shared-tokens.css`(디자인 토큰+공용 컴포넌트 CSS),
-  `web/shared-sprite.js`(진출 13개국 커스텀 SVG 국기+아이콘 스프라이트) — 둘 다
-  `main.py export`가 `data/export/`로 복사. 기존 `web/shared-modal.js`(기사 상세 모달) 재사용.
-- **주입 계약 유지**: `<script id="{name}-data">` 주입 지점·`?date`/`?lang` 아카이브 내비·
-  `export_json.py` 데이터 계약 전부 그대로(HANDOFF §6.1 — export 템플릿 연동만, 수집/AI 무변경).
-  단, topics.html의 진출/미진출 카테고리 병합(같은 code가 2건으로 분리되어 오는 것)은
-  export_json.py를 안 고치고 프런트 JS에서 병합.
-- 공용 고정 하단내비(홈·뉴스·모니터링·주간 브리핑) 신설 — 여러 차례 사용자 피드백으로
-  라벨·순서 조정("진출국"→"뉴스", 모니터링↔주간브리핑 순서 교체 등).
-- 홈 화면(`brief.html`) 세부:
-  - 기존 D3+topojson 세계지도 → 목업의 자체 도트그리드 지도로 교체(외부 CDN 제거).
-  - "TODAY'S GLOBAL BRIEF" 온도계 칩 → **GLOBAL MARKETS 가로 마퀴 티커**로 교체(2026-09-03).
-    진출 13개국 fx/index/policy_rate 스냅샷, `pulse.json`에 `market_ticker[]` 필드 신설
-    (countries.json 전체를 홈에서 중복 로드하지 않도록 `_country_indicators()` 재사용).
-    hover 정지, `prefers-reduced-motion` 대응, 한국식 등락색(상승 빨강/하락 파랑).
-  - 지도 말풍선 반복 수정: 모바일 폭에서 카드 폭이 텍스트 길이만큼 늘어나 화면 밖으로
-    넘치던 버그(고정 px 기반 배치 알고리즘 — 지도 크기 비례로 스케일링해 수정) → 팝오버
-    개수를 심각도순 최대 4개로 축소 → 최종적으로 **키워드 텍스트 자체를 제거**하고
-    국가코드+신호등급 배지만 표시(요청: "깔끔하게").
-  - 기사 모달의 "💡 KB 시사점 · " 라벨 텍스트 제거, 아이콘+내용만 표시.
-- 검증 방식: 각 화면 구현 후 `python main.py export` → 로컬 서버 + Chrome 자동화 스크린샷
-  대조(데스크톱+iframe으로 강제한 375px 모바일폭 양쪽), KR/EN 토글 확인 후 커밋·
-  Cloudflare Pages 배포(우선 `redesign` 프리뷰 브랜치, 이후 프로덕션 승인받고 반영).
-
-#### rank_score 도입 (별도 세션, Opus 5 클라우드, 커밋 `d608f8a`)
-- 문제: `llm_ranker`의 ai_score는 LLM 절대채점이라 양자화 심함(ACTIVE 460건 중 459건이
-  60~64 구간) → "ai_score 순" 정렬이 사실상 동점 무작위.
-- `ranking.py` 신설: rank_score = ai_score + 다매체 커버리지(duplicate_of 형제수, 가장 강한
-  신호였는데 기존 정렬에 안 쓰이고 있었음) + 매체tier + 최신성 + 진출국 + 이벤트유형 +
-  한국계금융 + 인사이동. `export_json.py`의 미진출 피드·국가 기사피드·topics 등 정렬을
-  전부 교체. ai_score 게이트(임계 55)·국가 온도 계산은 불변(표시 정렬 전용).
-  가중치는 daily_highlights 이력 매칭 30건 그리드탐색 + eval_set_v2 교차검증으로 튜닝.
-- 상세: `docs/rank_score_spec.md`. 부가 산출물 `docs/esg_coverage_patch.md`(ESG 기사가
-  적은 원인 진단 — 분류 로직은 정상, 수집 자체가 공백. 적용 준비된 sources.yaml 패치 포함,
-  아직 미적용).
-
-### 세션 11 (2026-09-08) — 실사용 버그 3건 수정 + RANK_LIMIT 병목 재발 + UI 다듬기
-> 이 세션은 별도로 진행되던 Claude Work 세션(인트로 화면 신설, 하단내비 전용
-> 아이콘 교체, 하단 배너 시안 교체 등 커밋 `aa1d1f1`~`8c3b38f`)과 병행됐다 —
-> 그쪽 변경은 각 커밋 메시지에 상세 기록, 여기는 이 세션에서 직접 한 작업만 기록.
-
-#### RANK_LIMIT 병목 발견·수정
-- 사용자가 "뉴스 건수가 적다"고 지적 → 실측 결과 `RANK_LIMIT=400`이 최근 30일
-  중 거의 절반의 날에서 2일창 keep 합계를 초과, 초과분이 `--days 2` 창 밖으로
-  밀려나 영구 미처리(2026-09-03에 고쳤던 PREFILTER_LIMIT 800→1600과 동일 패턴,
-  RANK_LIMIT은 그때 "평시엔 병목 아님"이라며 400 그대로 뒀던 것이 결국 터짐).
-  실측 피크 552(08/12~13) 기준 700으로 상향. 당일 누락분(52건) 즉시 백필.
-
-#### 모달 긴 요약 확대 시행착오 (10~20줄 → 15~35줄, 최종 안정화까지 3차 수정)
-- 1차: "7~8문단 목표" 프롬프트만 강화 → 실측 평균 1,077자→1,454자(+35%, 목표
-  1.5~2배에 미달). 원인: "근거 없으면 억지로 늘리지 마라" 문구가 모델에 쉬운
-  탈출구를 줌.
-- 2차: 탈출구 문구를 인용·비교·프로세스 디테일 등 구체적 추출 지시로 교체 →
-  길이는 개선(예: 2,999자, +94%)됐으나 부작용 발견 — 페이월로 스니펫만 남은
-  얇은 소스(Bloomberg/WSJ 등, 74~120자)에 그대로 적용하니 모델이 "본문을 더
-  달라"며 통째로 거부하거나(1차), 거부 방지 문구를 넣자 같은 얘기를 문단마다
-  다르게 돌려 말하며 억지로 채움(2차) — 둘 다 실사용 부적합.
-- 3차(최종): 소스 스니펫 합계가 300자 이하면 별도의 `_SYS_THIN` 경량 프롬프트
-  (분량 목표 없이 "쓸 수 있는 만큼만, 짧으면 짧은 대로 정직하게")로 분기.
-  검증: 얇은 소스 2문장 요약(정상), 풍부한 소스 6~7문단 장문 유지. 최근 2일치
-  75건 전체 재생성 → 100% 커버, 평균 2,204자(구 기준선 1,077자 대비 약 2배).
-
-#### 홈 TOP ISSUES 모달 — 관련기사 없어 요약이 통째로 비던 버그
-- daily_highlights(AI가 여러 기사를 종합한 합성 헤드라인)는 출처 기사 id가
-  없어, 모달은 country_codes로 `top_news`(국가당 상한 있는 후보풀, 기존 8건)
-  에서 같은 국가 기사를 찾아 요약·링크를 채움 — 그날 top_news에 해당 국가가
-  없으면 요약이 완전히 비어 KB 시사점만 남았음(2026-09-08 기준 10건 중 2건,
-  20%). top_news limit 8→10(리디자인으로 COUNTRIES 섹션이 빠지며 화면 직접
-  노출 용도가 없어져 늘려도 부작용 없음) + `countries.json`(클라이언트에서
-  이미 로드 중) 국가별 전체 기사로 보충 검색. 단순 점수순만 쓰면 무관한 기사가
-  섞여(예: 미국 국채 기사에 일본 엔화 기사 요약이 1순위로 붙음) 헤드라인과의
-  토큰 겹침 수로 재정렬해 실제 관련 기사를 우선시키도록 보정.
-
-#### 인사동향 근접중복 제거
-- 사용자가 "14건이 다 똑같은 내용 같다"고 지적 → 확인 결과 인도네시아 중앙은행
-  총재(데스트리 다마얀티) 취임 이벤트가 지명(8/10)부터 취임(9/2)까지 3주에
-  걸쳐 보도됐고, 일부는 GNews 광역검색 특성상 GB/JP/MM/CN 매체로 잘못
-  국가태깅돼 "같은 국가·같은 날짜" 기준인 일별 dedup을 피해감 — 14건 중 13건이
-  사실상 한 사건. `_compute_non_presence`의 근접중복 클러스터링(제목 토큰
-  겹침 비율)을 재사용하되, 국가 오분류까지 잡아야 해서 cc별이 아닌 전체
-  단일 풀로 클러스터링. 결과 14건→6건.
-
-#### 한국계 금융기관·인사동향 탭 이전
-- 사용자 요청으로 `countries.html`(뉴스 탭)의 두 탭을 `topics.html`(모니터링
-  탭)로 이동. countries.html은 pmode 칩바 4개→2개(진출국/KB 미진출국)로 축소.
-  topics.html은 countries.json을 클라이언트에서 추가 fetch(export_json.py
-  계약 변경 없음)해 korean_fi/personnel을 가상 topic(flat:true)으로 twtabs에
-  편입, 진출/미진출 배지는 국가코드로 직접 판정.
-
-#### 문서 정리
-- STATUS.md 8장 갱신, 본 세션 로그 추가. 병행 진행된 다른 세션의 커밋(인트로
-  화면, 내비 아이콘)은 각 커밋 메시지 참조.
-
----
-
-## 현재 관리 국가 (KB 거점 기준)
-
-| 코드 | 국가 | 도시 | 형태 | 주요 매체 수 |
-|---|---|---|---|---|
-| GB | 영국 | 런던 | 지점 | 5개 |
-| US | 미국 | 뉴욕 | 지점 | 7개 |
-| HK | 홍콩 | 홍콩 | 지점 | 4개 |
-| CN | 중국 | 베이징 | 법인 | 6개 |
-| JP | 일본 | 도쿄 | 지점 | 7개 |
-| SG | 싱가포르 | 싱가포르 | 지점 | 4개 |
-| IN | 인도 | 구르구람 | 지점 | 7개 |
-| VN | 베트남 | 하노이 | 법인 | 6개 |
-| MM | 미얀마 | 양곤 | 사무소 | 9개 |
-| ID | 인도네시아 | - | 자회사(KBI은행) | 7개 |
-| KH | 캄보디아 | - | 자회사(프라삭은행) | 8개 |
-| TH | 태국 | 방콕 | 관심시장(지점 없음) | 3개 |
-| LA | 라오스 | 비엔티안 | 관심시장(지점 없음) | 1개 |
-
-> TH·LA는 2026-08-28 제품 기준으로 진출국 편입(실제 KB 지점·법인 없음) — 상세는 위 세션 9.
-
----
-
-## 서버 동기화 방법
-
-```bash
-# 맥북에서 수집만
-python main.py run
-
-# 수집 후 서버로 전송
-./sync_to_server.sh --collect
-
-# DB만 서버로 전송
-./sync_to_server.sh
-```
-
----
-
-## 다음 과제
-
-> 최신 우선순위는 `STATUS.md` 8장 기준(2026-09-04 갱신). 아래는 이력 보존용 — 완료분은
-> 세션 9·10에서 반영됨.
-
-### 수집원 보강
-- [ ] `OFFICIAL`/tier0 당국 피드 활성화 (규제 화면)
-- [ ] ESG 소스 패치 적용(`docs/esg_coverage_patch.md` — 진단 완료, 패치 미적용)
-- [ ] ID·KH 자회사 IR·공시 수집원 추가 (자회사 화면, 현재 진행 범위 밖)
-- [ ] 태국·라오스 큐레이션 매체 추가 확보(현재 최소 소스만)
-
-### 기타
-- [ ] 정기 수집 자동화 (맥북 cron 또는 Oracle Cloud 스케줄러)
-- [ ] rank_score 재튜닝(현재 라벨 30건 기반 — `docs/rank_score_spec.md` §8)
-- [ ] 라오스 정책금리 시드값 확보(신뢰 가능한 무료 소스 미발견)
-- [ ] Telegram 채널 발송(영어판, `broadcast.py` 배선은 있음)
-
-> RTHK 피드는 2026-08-28 소스 정리 때 제거(XML 파싱 계속 실패, 피드 자체 문제).
-> `web/regulations.html`(TopicWatch에 흡수돼 죽어있던 페이지)·`web/index_v2.html`
-> (커밋된 적 없는 미완성 프로토타입)도 같이 정리.
+# 작업 이력 (요약본)
+
+> 2026-09-21 압축 — 세션별 상세 서술과 완료된 체크리스트를 걷어내고, **날짜별 마일스톤**과 **다시 겪지 않기 위한 교훈**만 남겼다.
+> 코드 단위 세부는 `git log`, 현재 상태는 [`STATUS.md`](../STATUS.md).
+
+## 1. 타임라인
+
+| 날짜 | 마일스톤 |
+|---|---|
+| 2026-06-25~27 | 레포 생성(GitHub `lSusial/glb-one-teams`), Oracle Cloud 서버 세팅. **Google News가 클라우드 IP를 503 차단** → 맥북 수집 + rsync 방식 확정. 홍콩(SCMP를 CN에서 분리)·싱가포르 추가. AI 레이어 이식(taxonomy·llm_provider·prefilter·ranker·briefing·export), `config.py`/`db.py` 리팩터, 필터의 GB·HK·SG 키워드 누락 보강 |
+| 2026-07-16 | 사내 확정안 반영. 평가셋 70건 구축, 필터 개선(복수형 매칭·금융어 보강)으로 F1 57→77. 관리자 페이지(`admin_export.py`) 신설 |
+| 2026-07-23 | 모델 Haiku 전환 + **Message Batches API(50%↓)**, 규제·정책을 TopicWatch로 흡수(4탭), ACTIVE 임계 60→55, 국가 일일 브리핑(한·영), KO/EN 폴백, **본문 추출 `fulltext.py`**(76/118 피드가 GNews 스니펫뿐이던 문제) |
+| 2026-08-06~19 | Telegram 브로드캐스트 기획·`broadcaster.py` 구현, 시범 발송(11개 거점). 8/19 배포 대상·운영 인프라 결정 브리프 |
+| 2026-08-21~26 | KB 미진출국 통합 피드 설계, 신규 기능 5종 설계, 구성요소 정의서 확정 |
+| 2026-08-28 | 인사동향(역할어×교체신호어 AND), 거시지표 확장(정책금리·미국채·스파크라인), 모달 긴 요약(`llm_expand.py`), **태국·라오스 편입(진출 11→13)** |
+| 2026-09-01~04 | 디자이너 목업 기준 4화면 전면 리디자인(공용 토큰·스프라이트·모달·하단내비), **rank_score 도입**(`ranking.py`), GLOBAL MARKETS 티커, 지도 말풍선 정리 |
+| 2026-09-08 | RANK_LIMIT 병목 수정(400→700), 모달 요약 확대(3차 수정 끝에 얇은 소스 분기), 홈 TOP ISSUES 모달 보충 검색, 인사동향 근접중복 제거(14→6), 한국계 금융기관·인사동향을 모니터링 탭으로 이전, 인트로 화면·내비 전용 아이콘 |
+| 2026-09-09 | 영어 모드 언어 누수 수정(key_stat·키워드·지표 라벨 `_ko/_en` 분리), 모니터링 정렬이 rank_score 대신 ai_score를 쓰던 버그 수정 |
+| 2026-09-11~14 | 중간발표(9/10) 피드백 20건 실행계획 확정. **6카테고리·`primary_country`·모달 3~4문단**(피드백 5·6·7) 코드+백필 배포, 원문 링크·용어 툴팁·국가 ★핀·모니터링 국가 칩(2·8·9·10) |
+| 2026-09-15 | 제재(SANCTION) 이벤트유형+전용 피드, 수집 확장(통과 임계 3→2, 거점국 주제확장 13피드), SOCIETY 키워드 독립 통과, 인사동향 중복 병합, 근접중복 클러스터링 공용 헬퍼화 |
+| 2026-09-16 | **AI 근접중복 판정(`llm_dedup.py`)**, SOCIETY 예외 노출, 빈 카테고리 칩 숨김, 인트로 영상(재생 실패로 롤백 후 재인코딩 재적용) |
+| 2026-09-17 | **지표 탭 신설**(1/3/6개월), 국가 피드 스토리 dedup+국가당 상한 8, 과거 날짜 선택 복구, 티커 모바일 정지 수정(CSS→JS scroll), rank 본문 입력 2000→1200자, 피드백 이행 현황 정리 |
+| 2026-09-18 | 소스·DB 품질 감사(`quality_audit_2026-09-18.md`) |
+| 2026-09-21 | 감사 후속 1차: `llm_dedup` 범위 보존·40건 상한 제거·입력 80,000자 초과 시 실패 보고, `briefing` 적격 기준(주제국가·55점·요약 보유, rank_score 25건, 0건은 안내 저장). 단위 테스트 11개 통과. **운영 DB 수정·유료 LLM 재생성·export·배포는 미실행**, 다음 실행부터 적용 |
+
+## 2. 다시 겪지 않기 위한 교훈
+
+**수집·물량**
+- Google News는 클라우드/데이터센터·회사 egress에서 503/403 → 수집과 wrangler 배포는 맥북에서만.
+- **LLM 단계의 한도 상수는 병목이 된다**: `PREFILTER_LIMIT`(800→1600, 9/3), `RANK_LIMIT`(400→700, 9/8) 모두 "평시엔 문제없음"이라 두었다가, 초과분이 `--days 2` 창 밖으로 밀려 **영구 미처리**되며 터졌다. 수집량이 늘면 실측 피크 대비 재점검.
+- 본문 추출은 페이월(Reuters/Bloomberg/WSJ) 때문에 약 50%만 성공 — 얇은 소스에 대한 분기가 필요하다.
+
+**AI 품질**
+- `ai_score`는 LLM 절대채점이라 양자화가 심하다(ACTIVE 460건 중 459건이 60~64) → 게이트는 ai_score, **표시 정렬은 rank_score**. 정렬 코드가 실제로 rank_score를 쓰는지 확인할 것(9/9에 모니터링 탭이 계산만 하고 ai_score를 쓰던 버그).
+- 모달 요약 프롬프트: "근거 없으면 억지로 늘리지 마라" 문구는 모델에게 쉬운 탈출구가 되어 분량 목표가 무너지고, 반대로 얇은 소스(페이월 스니펫 74~120자)에 분량 목표를 강제하면 거부하거나 같은 말을 돌려 채운다. → 소스 스니펫 합계 300자 이하는 `_SYS_THIN` 경량 프롬프트로 분기.
+- 인사동향은 역할어 단독 매치가 재직자 발언 인용까지 잡아 오탐이 심했다 → 역할어 × 교체신호어 **AND**. 같은 인사 이벤트가 GNews 광역검색 특성상 여러 국가로 오태깅돼 며칠간 재탕되므로 근접중복 클러스터링은 **국가별이 아니라 전체 단일 풀**로.
+- 근접중복 판정은 토큰 유사도만으로 의미만 같은 중복(Fed류)을 못 잡는다 → AI 판정 병행. **재실행 시 검사 범위 밖 기존 결과를 지우지 말 것**(9/18 감사 P1, 9/21 수정).
+- 지표: index 등락 배지와 스파크라인의 데이터원이 다르면(yfinance 5일 vs DB 스냅샷) 하루 중 재수집 시 배지↑ 스파크↓ 모순이 난다 → fx와 동일하게 DB 전일 스냅샷 기준으로 통일.
+
+**프런트·배포**
+- iOS Safari에서 CSS 무한 transform 애니메이션·GPU mask는 멈춤/사라짐/스크롤 크래시를 일으킨다 → 티커는 JS `scrollLeft`(rAF), 호버 정지는 데스크톱 미디어쿼리에서만.
+- 인트로 영상은 h264 Main + faststart로 재인코딩해 실기기에서 검증한 뒤 반영(첫 시도는 운영에서 stall).
+- `web/*.html`은 템플릿이다 — `export_json.py`의 주입 지점(`<script id="{name}-data">`)과 JSON 계약을 바꾸면 export도 함께 수정하고 빌드 확인.
+- 국가 추가 시 손볼 곳(sources·kb_network·config·export_json·web NAMES·국기 스프라이트)은 `CLAUDE.md` 참조. 태국·라오스 편입 때 실측 후 착수(환율·지수·정책금리 가용성)했다.
+
+**환경**
+- 샌드박스 VM은 파일 삭제 불가라 git이 `.git/index.lock` 등을 못 지운다(커밋은 됨) — 막히면 lock을 `mv`로 비킨다. 맥OS 네이티브 git은 정상.
+- 노출 기사 46건 기준 본문 보유 47.8% — 본문 추출 상태 추적이 없어 원인 분해 불가(감사 P2).
