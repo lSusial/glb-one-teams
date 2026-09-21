@@ -1,7 +1,7 @@
 """
 AI 분석 (llm_ranker.py)
 
-prefilter 를 통과(keep)한 기사에 중요도·요약·주제·KB 시사점을 부여한다.
+prefilter 를 통과(keep)한 기사에 중요도·요약·주제를 부여한다.
 
 입력: llm_prefilter='keep' AND ai_score IS NULL
 순서: filter_score DESC
@@ -10,7 +10,6 @@ prefilter 를 통과(keep)한 기사에 중요도·요약·주제·KB 시사점�
   - summary_ko      : 한국어 요약 (UI q)
   - topics          : taxonomy 코드 CSV (UI 카테고리 c, 축 C — 현지언론 필터)
   - event_type      : taxonomy event_types 코드 CSV (모니터링 탭 전용, 축 E)
-  - kb_implication  : KB 거점 관점 시사점 (UI k) — 신규 컬럼
   - source_links    : 다출처 종합에 실제로 쓰인 소스 목록(JSON, 클러스터<3이면 NULL)
   - ai_model        : 생성 프로바이더:모델 식별자
 
@@ -74,7 +73,8 @@ def ensure_columns(conn) -> None:
         ("summary_ko",     "ALTER TABLE articles_raw ADD COLUMN summary_ko     TEXT"),
         ("ai_model",       "ALTER TABLE articles_raw ADD COLUMN ai_model       TEXT"),
         ("topics",         "ALTER TABLE articles_raw ADD COLUMN topics         TEXT"),
-        # kb_implication: UI 'KB 시사점' (한국어, llm_translate 에서 채움)
+        # kb_implication(_en): 2026-09-21 신규 생성 중단(UI에서도 제거) — 컬럼은 과거
+        # 데이터 호환을 위해 남겨두되 더 이상 채우지 않는다.
         ("kb_implication", "ALTER TABLE articles_raw ADD COLUMN kb_implication TEXT"),
         # 영어 기준본(canonical) — rank 가 채우고, 한국어는 llm_translate 가 번역
         ("summary_en",        "ALTER TABLE articles_raw ADD COLUMN summary_en        TEXT"),
@@ -126,8 +126,7 @@ def _system_prompt() -> str:
         '"summary_en": "2-4 sentence English summary", '
         '"topics": ["TOPIC_CODE", ...], '
         '"event_type": ["EVENT_CODE", ...] (0-3, empty list if none apply), '
-        '"primary_country": "ISO2 code of the country the article is ABOUT, or GLOBAL", '
-        '"kb_implication_en": "1-2 sentences: name (a) the specific KB entity/desk affected, (b) the concrete mechanism, (c) the direction or action. Be decisive; do NOT use vague hedges like monitor/keep an eye on/may affect/should watch."}\n\n'
+        '"primary_country": "ISO2 code of the country the article is ABOUT, or GLOBAL"}\n\n'
         "Choose topics ONLY from these codes (multiple allowed, max 3):\n"
         + taxonomy.prompt_reference()
         + "\n\nChoose event_type ONLY from these codes (multiple allowed, max 3; empty if the "
@@ -153,14 +152,12 @@ def _system_prompt() -> str:
         "  developed-market macro far from a KB market; broad industry research.\n"
         "0-24    NOISE / UNRELATED: sports, entertainment, unrelated crime, non-financial local events.\n"
         "Anti-clustering rule: if you are about to score 60-69, re-check — is it truly actionable "
-        "(→65+) or merely contextual (→45-60)? Avoid defaulting to the middle.\n"
-        "Write kb_implication_en strictly within the article content; avoid unfounded speculation."
+        "(→65+) or merely contextual (→45-60)? Avoid defaulting to the middle."
         + _STYLE_AND_SYNTH_BLOCK
     )
 
 
-# KB 미진출국(config.NON_PRESENCE_COUNTRIES) 전용 경량 프롬프트 — kb_implication_en
-# 필드를 아예 요청하지 않는다(거점이 없어 "KB 시사점"이 성립하지 않음 + 토큰 절감).
+# KB 미진출국(config.NON_PRESENCE_COUNTRIES) 전용 경량 프롬프트(거점 맥락 없이 채점).
 def _system_prompt_light() -> str:
     return (
         "You are a global intelligence analyst at KB Financial Group. KB has NO branch in "
@@ -301,7 +298,7 @@ def run_rank(conn, provider: LLMProvider | None = None,
             system = system_full
             user = f"[거점 맥락: {ctx}]\n매체: {r['media_name']}  국가: {r['cc']}\n{content_block}"
         else:
-            # KB 미진출국 — 거점 맥락 없이 경량 프롬프트(kb_implication_en 생략)
+            # KB 미진출국 — 거점 맥락 없이 경량 프롬프트
             system = system_light
             user = f"매체: {r['media_name']}  국가: {r['cc']}\n{content_block}"
         requests.append((cid, system, user, 700))
@@ -325,7 +322,6 @@ def run_rank(conn, provider: LLMProvider | None = None,
         event_types = taxonomy.event_validate(data.get("event_type", []))
         if not event_types:
             event_types = taxonomy.event_seed_candidates(f"{r['title']} {r['summary'] or ''}")
-        kb_impl_en = str(data.get("kb_implication_en") or "")[:1000]
         primary_country = _valid_primary_country(data.get("primary_country"))
         links = source_links_by_id.get(cid)
         source_links = json.dumps(links, ensure_ascii=False) if links else None
@@ -335,11 +331,11 @@ def run_rank(conn, provider: LLMProvider | None = None,
         cur.execute(
             """UPDATE articles_raw
                SET ai_score = ?, title_ko = ?, title_en = ?, summary_en = ?, topics = ?,
-                   event_type = ?, kb_implication_en = ?, source_links = ?,
+                   event_type = ?, source_links = ?,
                    primary_country = ?, ai_model = ?
                WHERE article_id = ?""",
             (score, title_ko, title_en, summary_en, ",".join(topics), ",".join(event_types),
-             kb_impl_en, source_links, primary_country, provider.model_id, r["article_id"]),
+             source_links, primary_country, provider.model_id, r["article_id"]),
         )
         if redo_days:
             # 영어 기준본이 바뀌었으므로 한국어 번역·모달요약을 무효화 → translate/expand 재생성

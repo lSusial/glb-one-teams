@@ -6,7 +6,7 @@ DB → UI 데이터 계약(JSON) export (export_json.py)
 동일 패턴으로 확장한다.
 
 UI 매핑 (현지언론 기사 카드):
-  c=topics→ui키, src=매체, d=날짜, t=제목, q=summary_ko, k=kb_implication, u=link
+  c=topics→ui키, src=매체, d=날짜, t=제목, q=summary_ko, u=link
 """
 from __future__ import annotations
 
@@ -503,7 +503,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     for cc, flag in _FLAGS.items():
         rows = conn.execute(
             f"""
-            SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.kb_implication, a.summary_en, a.kb_implication_en,
+            SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en,
                    a.expanded_summary, a.expanded_summary_en, a.event_type, a.personnel_move, m.tier,
                    a.topics, a.link, a.published_at, a.ai_score, a.source_links, a.korean_fi, m.media_name,
                    m.primary_country_code cc
@@ -533,7 +533,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                 have = {a["article_id"] for a in rows}
                 fill_rows = conn.execute(
                     f"""SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko,
-                               a.kb_implication, a.summary_en, a.kb_implication_en, a.expanded_summary,
+                               a.summary_en, a.expanded_summary,
                                a.expanded_summary_en, a.event_type, a.personnel_move, m.tier, a.topics,
                                a.link, a.published_at, a.ai_score, a.source_links, a.korean_fi, m.media_name,
                                m.primary_country_code cc
@@ -1152,8 +1152,7 @@ def _pres_topic_article(r, cm: dict) -> dict:
     return dict(cc=cc, flag=flag, presence="진출",
                 src=r["media_name"], d=(r["published_at"] or "")[:10],
                 t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "",
-                k=r["kb_implication"] or "", q_en=r["summary_en"] or "",
-                k_en=r["kb_implication_en"] or "",
+                q_en=r["summary_en"] or "",
                 expanded_summary=r["expanded_summary"] or "",
                 expanded_summary_en=r["expanded_summary_en"] or "",
                 c=taxonomy.ui_string(topic_codes), score=r["ai_score"], u=r["link"],
@@ -1169,7 +1168,7 @@ def _np_topic_article(r, cm: dict) -> dict:
                 presence="미진출",
                 src=r["media_name"], d=(r["published_at"] or "")[:10],
                 t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "",
-                k="", q_en=r["summary_en"] or "", k_en="",   # KB 시사점 없음(거점 없는 시장)
+                q_en=r["summary_en"] or "",
                 c=taxonomy.ui_string(topic_codes), score=r["ai_score"], u=r["link"],
                 rank_score=ranking.rank_score(r, cm.get(r["article_id"], 0)))
 
@@ -1184,8 +1183,8 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
 
     exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
     pres_rows = conn.execute(
-        f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.summary, a.summary_ko, a.kb_implication,
-                   a.summary_en, a.kb_implication_en, a.expanded_summary, a.expanded_summary_en,
+        f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.summary, a.summary_ko,
+                   a.summary_en, a.expanded_summary, a.expanded_summary_en,
                    a.topics, a.event_type, a.link, a.korean_fi, a.personnel_move, m.tier,
                    a.published_at, m.primary_country_code cc, m.media_name, a.primary_country
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id

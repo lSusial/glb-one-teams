@@ -418,7 +418,6 @@
     return fromCtr.slice(0,4);
   }
   function hlHead(h){ return EN ? (h.headline_en||h.headline_ko) : (h.headline_ko||h.headline_en); }
-  function hlImp(h){ return EN ? (h.impact_en||h.impact_ko) : (h.impact_ko||h.impact_en); }
   // daily_highlights.category는 백엔드가 한국어 고정값(금리/FX/규제/시장/디지털/지정학/인사)
   // 만 주므로(영어 필드 없음) 값이 7개뿐인 고정 목록이라 프론트에서 매핑.
   const HL_CAT_EN = {금리:'Rates', 규제:'Regulation', 시장:'Market', 디지털:'Digital', 지정학:'Geopolitics', 인사:'Personnel'};
@@ -432,7 +431,6 @@
     openArticleModal({
       t: hlHead(h),
       category: hlCat(h),
-      k: h.impact_ko, k_en: h.impact_en,
       expanded_summary: withExpanded ? withExpanded.expanded_summary : '',
       expanded_summary_en: withExpanded ? withExpanded.expanded_summary_en : '',
       q: rel.map(r => r.q).filter(Boolean).join(' '),

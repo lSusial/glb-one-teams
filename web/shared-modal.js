@@ -6,7 +6,6 @@
 //
 // article 필드(전부 선택):
 //   t                         제목
-//   k / k_en                  KB 시사점(kb_implication/kb_implication_en도 허용)
 //   q / q_en                  요약(기본)
 //   expanded_summary / _en    있으면 q보다 우선 사용(10~20줄 다출처 종합, llm_expand.py — 노출 기사만 생성)
 //   rl / source_links         관련 기사 배열 [{t,u,src}] — 없으면 u 1건으로 폴백
@@ -40,7 +39,6 @@
         .sh-modal .sh-meta{font-size:11px;color:#7a746c;margin-bottom:6px}
         .sh-modal .sh-cat{display:inline-block;font-size:10.5px;font-weight:800;color:#fff;border-radius:20px;padding:2px 9px;margin-right:5px}
         .sh-modal h2{font-size:17px;margin:8px 0 8px;line-height:1.4}
-        .sh-modal .sh-imp{background:#fff8e6;border-left:3px solid #FFBC00;padding:8px 12px;border-radius:0 8px 8px 0;font-size:12.5px;margin:10px 0 14px;line-height:1.5}
         .sh-modal .sh-lb{font-size:11px;font-weight:800;color:#7a746c;margin:14px 0 6px}
         .sh-modal .sh-sum{font-size:13px;line-height:1.7;color:#2a2c32;white-space:pre-line}
         .sh-modal .sh-lk{display:block;border:1px solid #e8e4dd;border-radius:8px;padding:9px 11px;margin-top:7px;text-decoration:none;color:inherit}
@@ -71,8 +69,6 @@
   window.openArticleModal = function (article) {
     ensureDom();
     const a = article || {};
-    const kb = EN ? (a.k_en || a.k || a.kb_implication_en || a.kb_implication)
-                  : (a.k || a.k_en || a.kb_implication || a.kb_implication_en);
     const summary = EN ? (a.expanded_summary_en || a.expanded_summary || a.q_en || a.q)
                         : (a.expanded_summary || a.expanded_summary_en || a.q || a.q_en);
     const relRaw = (a.rl && a.rl.length) ? a.rl : ((a.source_links && a.source_links.length) ? a.source_links : null);
@@ -88,7 +84,6 @@
       ${meta ? `<div class="sh-meta">${meta}</div>` : ''}
       ${catBadges}
       <h2>${esc((EN ? (a.t_en || a.t) : (a.t || a.t_en)) || '')}</h2>
-      ${kb ? `<div class="sh-imp">💡 ${esc(kb)}</div>` : ''}
       <div class="sh-lb">${EN ? 'Summary' : '요약'}</div>
       <div class="sh-sum">${summary ? (window.glossarize ? window.glossarize(esc(summary)) : esc(summary)) : `<span class="sh-empty">${EN ? '(No summary available.)' : '(요약 정보가 없습니다.)'}</span>`}</div>
       <div class="sh-lb">${EN ? 'Related Articles' : '관련 기사 링크'}</div>

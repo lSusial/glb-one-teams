@@ -81,8 +81,6 @@ def _system_highlights(count: int) -> str:
         '기사의 핵심이면 반드시 인사(그 인물의 정책 성향 언급은 이유가 되지 않는다)", '
         '"headline_ko": "건조한 신문 헤드라인 1줄(한국어, 설명체 금지)", '
         '"headline_en": "one-line dry newspaper headline (English)", '
-        '"impact_ko": "어느 KB 거점/자회사에 어떤 영향인지 1줄(한국어)", '
-        '"impact_en": "one-line note on which KB hub/subsidiary this affects and how (English)", '
         '"country_codes": ["관련 거점 코드(예: GB, US)"]'
         '}]}\n'
         f'The "highlights" array must have exactly {count} items, ordered by importance.'
@@ -300,12 +298,12 @@ def generate_daily_highlights(
     ensure_highlights_table(conn)
     tdate = target_date or date.today().isoformat()
     dc, dp = db.days_clause_data(1)
-    # KB 미진출국 제외 — impact 필드가 "어느 KB 거점" 전제라 거점 없는 시장엔 안 맞음.
+    # KB 미진출국 제외 — 전 거점 횡단 요약은 KB 진출 거점 기준으로만 구성.
     exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
 
     rows = conn.execute(
         f"""
-        SELECT a.article_id, a.title, a.summary_ko, a.summary_en, a.kb_implication, a.kb_implication_en,
+        SELECT a.article_id, a.title, a.summary_ko, a.summary_en,
                a.topics, a.ai_score, a.published_at, a.event_type, a.korean_fi, a.personnel_move,
                m.tier, m.primary_country_code AS cc
         FROM articles_raw a
@@ -325,8 +323,7 @@ def generate_daily_highlights(
 
     bullets = "\n".join(
         f"- [{r['cc']}] ({r['ai_score']}) {r['title']} :: "
-        f"{((r['summary_ko'] or r['summary_en']) or '')[:160]} "
-        f"| KB 시사점: {((r['kb_implication'] or r['kb_implication_en']) or '')[:120]}"
+        f"{((r['summary_ko'] or r['summary_en']) or '')[:160]}"
         for r in rows
     )
     user = f"KB 거점 네트워크: {kb_network.all_context()}\n\n오늘의 상위 기사:\n{bullets}"
