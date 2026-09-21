@@ -10,7 +10,7 @@
 # 사용처:
 #   - llm_ranker.py : AI가 topics 컬럼을 채울 때 허용 코드 집합 + 시드 후보
 #   - export_json.py: UI 필터(ui) 매핑
-#   - UI(web/countries.html): c(category) 필터 버튼과 1:1 (멀티라벨, includes 부분일치)
+#   - UI(web/countries.html): c(주 카테고리) 필터 버튼과 1:1, c2(보조)는 표시 전용
 
 # ── 주제 코드(축 C) ──────────────────────────────────────────────
 # code : AI topics 출력에 쓰는 표준 코드 (대문자)
@@ -89,8 +89,9 @@ event_types:
 max_event_types_per_article: 3
 
 # ── 멀티라벨 규칙 ────────────────────────────────────────────────
-# 한 기사에 복수 코드 허용. UI는 c:'policy geo' 처럼 소문자 ui 키를 공백 연결해
-# includes() 부분일치로 필터링한다. (예: topics=[POLICY,GEO] → c="policy geopolitics")
+# 한 기사에 복수 코드 허용하되 **첫 번째 코드 = 주 카테고리**(UI 필터·칩 건수 기준, export의 c),
+# 나머지는 보조(export의 c2, 모달 등 표시 전용 — 필터·건수에는 잡히지 않음).
+# (예: topics=[POLICY,GEO] → c="policy", c2="geopolitics"). 칩 건수 합 = 기사 수가 되도록 한다.
 multilabel: true
 max_topics_per_article: 3
 

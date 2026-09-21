@@ -39,6 +39,7 @@
         .sh-modal .sh-hd{background:#f8f5f0;border-radius:10px;padding:14px 16px;margin:-2px 0 16px}
         .sh-modal .sh-meta{font-size:11px;color:#7a746c;margin-bottom:6px}
         .sh-modal .sh-cat{display:inline-block;font-size:10.5px;font-weight:800;color:#fff;border-radius:20px;padding:2px 9px;margin-right:5px}
+        .sh-modal .sh-cat.sh-cat2{background:transparent;border:1px solid;font-weight:600;padding:1px 8px;opacity:.75}
         .sh-modal h2{font-size:17px;margin:8px 0 0;line-height:1.4}
         .sh-modal .sh-lb{font-size:11px;font-weight:800;color:#7a746c;margin:14px 0 6px}
         .sh-modal .sh-sum{font-size:13px;line-height:1.7;color:#2a2c32;white-space:pre-line}
@@ -59,11 +60,14 @@
     document.addEventListener('keydown', e => { if (e.key === 'Escape') window.closeArticleModal(); });
   }
 
-  function tagBadges(cstr) {
+  function tagBadges(cstr, secondary) {
     return (cstr || '').split(/\s+/).filter(Boolean).map(k => {
       const label = EN ? TAG_EN[k] : TAG_KO[k];
       if (!label) return '';
-      return `<span class="sh-cat" style="background:${TAG_COLOR[k] || '#7a746c'}">${esc(label)}</span>`;
+      const col = TAG_COLOR[k] || '#7a746c';
+      return secondary
+        ? `<span class="sh-cat sh-cat2" style="color:${col};border-color:${col}">${esc(label)}</span>`
+        : `<span class="sh-cat" style="background:${col}">${esc(label)}</span>`;
     }).join('');
   }
 
@@ -76,7 +80,7 @@
     const rel = relRaw || (a.u ? [{ t: a.t, u: a.u, src: a.src }] : []);
     const links = rel.map(r => `<a class="sh-lk" href="${esc(r.u)}" target="_blank" rel="noopener">
         ${r.src ? `<div class="sh-lks">${esc(r.src)}</div>` : ''}<div class="sh-lkt">${esc(r.t || r.title || r.u)}</div></a>`).join('');
-    const catBadges = a.c ? tagBadges(a.c)
+    const catBadges = a.c ? tagBadges(a.c) + tagBadges(a.c2, true)
       : (a.category ? `<span class="sh-cat" style="background:${TAG_COLOR[a.category] || '#7a746c'}">${esc(a.category)}</span>` : '');
     const meta = [a.src, a.d].filter(Boolean).map(esc).join(' · ');
 

@@ -49,8 +49,11 @@ def _valid_primary_country(v) -> str | None:
 # 카테고리 중복 시 우선순위 판단기준(피드백 첨부 "판단 기준" 표) — full/light 공통.
 _TOPIC_DISAMBIG_BLOCK = (
     "\n\nWhen an article fits more than one topic (e.g. a bank building a digital platform), "
-    "pick by this priority: (1) the core event/change in the article, (2) who is primarily "
-    "affected, (3) secondary detail. Guidance: MARKETS = market-price change (rates, FX, bonds, "
+    "choose the PRIMARY (first) topic by this priority: (1) the core event/change in the article, "
+    "(2) who is primarily affected, (3) secondary detail. Tie-break for MARKETS vs POLICY: a "
+    "central-bank/regulator DECISION, announcement, or forward-guidance signal is POLICY (primary); "
+    "use MARKETS as primary only when the article is about the market price reaction itself "
+    "(yield, FX, equity or credit-spread moves). Guidance: MARKETS = market-price change (rates, FX, bonds, "
     "equities, insurance/securities); ECONOMY = real-economy change (growth, prices, jobs, trade, "
     "consumption); POLICY = regulatory / central-bank / ESG-policy change; GEO = geopolitical or "
     "country risk (war, coup, election, sanctions, sovereign risk); TECH = technology/digital "
@@ -127,7 +130,7 @@ def _system_prompt() -> str:
         '"topics": ["TOPIC_CODE", ...], '
         '"event_type": ["EVENT_CODE", ...] (0-3, empty list if none apply), '
         '"primary_country": "ISO2 code of the country the article is ABOUT, or GLOBAL"}\n\n'
-        "Choose topics ONLY from these codes (multiple allowed, max 3):\n"
+        "Choose topics ONLY from these codes. Put the PRIMARY topic FIRST — exactly one main category the article is chiefly about; the first item drives filtering, so be decisive. Add at most 2 SECONDARY topics only if clearly relevant (usually 0-1):\n"
         + taxonomy.prompt_reference()
         + "\n\nChoose event_type ONLY from these codes (multiple allowed, max 3; empty if the "
         "article is not about a specific regulatory/sanctions/deal/incident event; use SANCTION for new or expanded sanctions designations, OFAC/EU/UN actions, embargoes, asset freezes, export controls):\n"
@@ -170,7 +173,7 @@ def _system_prompt_light() -> str:
         '"topics": ["TOPIC_CODE", ...], '
         '"event_type": ["EVENT_CODE", ...] (0-3, empty list if none apply), '
         '"primary_country": "ISO2 code of the country the article is ABOUT, or GLOBAL"}\n\n'
-        "Choose topics ONLY from these codes (multiple allowed, max 3):\n"
+        "Choose topics ONLY from these codes. Put the PRIMARY topic FIRST — exactly one main category the article is chiefly about; the first item drives filtering, so be decisive. Add at most 2 SECONDARY topics only if clearly relevant (usually 0-1):\n"
         + taxonomy.prompt_reference()
         + "\n\nChoose event_type ONLY from these codes (multiple allowed, max 3; empty if the "
         "article is not about a specific regulatory/sanctions/deal/incident event; use SANCTION for new or expanded sanctions designations, OFAC/EU/UN actions, embargoes, asset freezes, export controls):\n"

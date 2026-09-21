@@ -274,7 +274,7 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
             cc_label=cc_label, cc_label_en=cc_label_en,
             src=r["media_name"], d=(r["published_at"] or "")[:10],
             t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
-            c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
+            **taxonomy.cat_fields(codes), score=r["ai_score"], u=r["link"],
             related_count=c["n"] - 1,
             rank_score=ranking.rank_score(r, cm.get(r["article_id"], 0)),
             kfi=[x for x in (r["korean_fi"] or "").split(",") if x],
@@ -398,7 +398,7 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
             kfi=[x for x in (r["korean_fi"] or "").split(",") if x],
             src=r["media_name"], d=(r["published_at"] or "")[:10],
             t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
-            c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
+            **taxonomy.cat_fields(codes), score=r["ai_score"], u=r["link"],
             related_count=n - 1,
             rank_score=ranking.rank_score(r, cm.get(r["article_id"], 0)),
         ))
@@ -458,7 +458,7 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
             cc=cc, flag=flag, cc_label=label, cc_label_en=label_en,
             src=r["media_name"], d=(r["published_at"] or "")[:10],
             t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "", q_en=r["summary_en"] or "",
-            c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"],
+            **taxonomy.cat_fields(codes), score=r["ai_score"], u=r["link"],
             related_count=n - 1,
             rank_score=ranking.rank_score(r, cm.get(r["article_id"], 0)),
         ))
@@ -583,8 +583,9 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                             break
             articles.append({
                 # 55점 미만으로 뜨는 건 오직 SOCIETY 예외 경로뿐 → 사회 탭에만 노출(정책 등 오염 방지)
-                "c": ("society" if (active_only and a["ai_score"] is not None and a["ai_score"] < config.AI_SCORE_ACTIVE_THRESHOLD)
-                      else taxonomy.ui_string(codes)),
+                **({"c": "society", "c2": ""}
+                   if (active_only and a["ai_score"] is not None and a["ai_score"] < config.AI_SCORE_ACTIVE_THRESHOLD)
+                   else taxonomy.cat_fields(codes)),
                 "src": a["media_name"],
                 "d": (a["published_at"] or "")[:10],
                 "t": a["title_ko"] or a["title"],
@@ -713,7 +714,7 @@ def _compute_key_flows(conn, days: int | None = None, limit: int = 6) -> list[di
         codes = [c for c in (r["topics"] or "").split(",") if c]
         flows.append(dict(cc=r["cc"], flag=_FLAGS_ALL.get(r["cc"], ""), title=r["title"],
                           summary=(r["summary_ko"] or "")[:170], summary_en=(r["summary_en"] or "")[:170],
-                          c=taxonomy.ui_string(codes), score=r["ai_score"]))
+                          **taxonomy.cat_fields(codes), score=r["ai_score"]))
     return flows
 
 
@@ -793,7 +794,7 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
                         q_en=r["summary_en"] or "",
                         expanded_summary=r["expanded_summary"] or "",
                         expanded_summary_en=r["expanded_summary_en"] or "",
-                        c=taxonomy.ui_string(codes), score=r["ai_score"], u=r["link"], rl=rl[:2]))
+                        **taxonomy.cat_fields(codes), score=r["ai_score"], u=r["link"], rl=rl[:2]))
         seen_tokens.append(tk)
         per_cc[cc] = per_cc.get(cc, 0) + 1
         if len(out) >= limit:
@@ -1155,7 +1156,7 @@ def _pres_topic_article(r, cm: dict) -> dict:
                 q_en=r["summary_en"] or "",
                 expanded_summary=r["expanded_summary"] or "",
                 expanded_summary_en=r["expanded_summary_en"] or "",
-                c=taxonomy.ui_string(topic_codes), score=r["ai_score"], u=r["link"],
+                **taxonomy.cat_fields(topic_codes), score=r["ai_score"], u=r["link"],
                 rank_score=ranking.rank_score(r, cm.get(r["article_id"], 0)))
 
 
@@ -1169,7 +1170,7 @@ def _np_topic_article(r, cm: dict) -> dict:
                 src=r["media_name"], d=(r["published_at"] or "")[:10],
                 t=r["title_ko"] or r["title"], t_en=_t_en(r), q=r["summary_ko"] or "",
                 q_en=r["summary_en"] or "",
-                c=taxonomy.ui_string(topic_codes), score=r["ai_score"], u=r["link"],
+                **taxonomy.cat_fields(topic_codes), score=r["ai_score"], u=r["link"],
                 rank_score=ranking.rank_score(r, cm.get(r["article_id"], 0)))
 
 

@@ -57,14 +57,15 @@ def ui_key(code: str) -> str:
     return code.lower()
 
 
-def ui_string(codes_in: list[str]) -> str:
-    """코드 리스트 → UI c 문자열. 예: ['ESG','RISK'] → 'esg risk' (중복 제거)."""
-    seen: list[str] = []
+def cat_fields(codes_in: list[str]) -> dict:
+    """코드 리스트 → UI 카테고리 필드. 첫 코드 = 주 카테고리(c, 필터·건수 기준),
+    나머지 = 보조(c2, 표시 전용·공백 연결). 예: ['MARKETS','POLICY'] → {'c':'markets','c2':'policy'}."""
+    keys: list[str] = []
     for c in codes_in:
         k = ui_key(c)
-        if k not in seen:
-            seen.append(k)
-    return " ".join(seen)
+        if k not in keys:
+            keys.append(k)
+    return {"c": keys[0] if keys else "", "c2": " ".join(keys[1:])}
 
 
 def max_topics() -> int:
