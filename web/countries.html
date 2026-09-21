@@ -181,7 +181,10 @@
         ${svg('fl-'+c.cc.toLowerCase(), 44, 44)}<span>${esc(EN?(c.name_en||NAMES[c.cc]||c.cc):(c.name||NAMES[c.cc]||c.cc))}</span>
       </button>`;
     }).join('');
-    document.querySelectorAll('.pk').forEach(p => p.addEventListener('click', () => { fCC = p.dataset.cc; renderPresence(); }));
+    document.querySelectorAll('.pk').forEach(p => p.addEventListener('click', () => {
+      if (p.dataset.cc === fCC) return;
+      fCC = p.dataset.cc; fCat = ''; lkPresOpen = false; renderPresence();
+    }));
     document.querySelectorAll('.pk .pin').forEach(el => el.addEventListener('click', (e) => {
       e.stopPropagation();
       const cc = el.dataset.pin;
