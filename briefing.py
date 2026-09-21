@@ -61,7 +61,7 @@ _SYSTEM_DAILY = (
     "for branch executives — what happened and why it matters to KB's overseas operations "
     "(macro / financial markets / banking / regulation / risk). "
     "Write 4-5 sentences, in BOTH Korean and English. Base it strictly on the provided items; "
-    "no speculation. Output ONLY JSON:\n"
+    "no speculation. If evidence is sparse, write fewer sentences; do not pad. Output ONLY JSON:\n"
     '{"summary_ko": "4~5문장 한국어 브리핑", "summary_en": "4-5 sentence English briefing"}'
 )
 
@@ -102,13 +102,14 @@ def ensure_table(conn) -> None:
 def _target_countries(conn) -> list[str]:
     """국가 브리핑 대상 국가 목록. KB 미진출국은 국가 브리핑을 만들지 않는다
     (docs/design_미진출국.md — 통합 피드만 제공, countries.html에서 처리)."""
-    exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
     return [
         r["cc"] for r in conn.execute(
-            f"""SELECT DISTINCT m.primary_country_code AS cc
+            f"""SELECT DISTINCT COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) AS cc
                 FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
-                WHERE a.ai_score IS NOT NULL{exc}""",
-            exp,
+                WHERE a.ai_score IS NOT NULL
+                  AND COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code)
+                      IN ({','.join('?' for _ in kb_network.KB_NETWORK)})""",
+            tuple(kb_network.KB_NETWORK),
         )
     ]
 
@@ -136,7 +137,7 @@ def run_briefing(
     days: int | None = None,
     use_batch: bool | None = None,
 ) -> dict:
-    """국가별로 ai_score 상위 기사를 모아 브리핑 생성·upsert.
+    """주제국가별 적격 기사를 rank_score순으로 모아 브리핑 생성·upsert.
 
     briefing_type='daily': 현지언론 화면 상단용. 전일+당일(days 기본 1) 기사를
       4~5문장 한/영 동시로 종합해 summary·summary_en 에 저장.
@@ -168,38 +169,45 @@ def run_briefing(
     # 국가별 기사 수집 → 요청 일괄 구성(배치 제출) → custom_id=cc 로 결과 수거
     stats = dict(countries=0, written=0)
     requests, meta = [], {}
+    cm = ranking.cluster_sizes(conn)
     for cc in ccs:
         arts = conn.execute(
             f"""
-            SELECT a.title, a.summary_ko, a.summary_en, a.ai_score, a.link
+            SELECT a.article_id, a.title, a.summary_ko, a.summary_en, a.ai_score, a.link,
+                   a.published_at, a.event_type, a.korean_fi, a.personnel_move, m.tier,
+                   COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) AS cc
             FROM articles_raw a
             JOIN media_sources m ON m.source_id = a.source_id
-            WHERE m.primary_country_code = ?
-              AND a.ai_score IS NOT NULL
+            WHERE COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) = ?
+              AND a.ai_score >= ?
+              AND COALESCE(NULLIF(a.summary_ko, ''), a.summary_en, '') != ''
               AND a.duplicate_of IS NULL{dc}
-            ORDER BY a.ai_score DESC
-            LIMIT ?
+            ORDER BY a.published_at DESC, a.article_id ASC
             """,
-            (cc, *dp, config.BRIEFING_MAX_ARTICLES),
+            (cc, config.AI_SCORE_ACTIVE_THRESHOLD, *dp),
         ).fetchall()
+        arts = ranking.order(conn, arts, cluster_map=cm)[:config.BRIEFING_MAX_ARTICLES]
         stats["countries"] += 1
+        meta[cc] = arts
         if not arts:
             continue
         bullets = "\n".join(
-            f"- ({a['ai_score']}) {a['title']} :: {((a['summary_ko'] or a['summary_en']) or '')[:160]}"
+            f"- [{a['published_at']}] ({a['ai_score']}) {a['title']} :: {((a['summary_ko'] or a['summary_en']) or '')}"
             for a in arts
         )
         user = f"국가: {cc} ({kb_network.context_for(cc)})\n기사 목록:\n{bullets}"
         # weekly는 한/영 요약+이슈 3~4개+전망+키워드까지 daily보다 필드가 훨씬 많아
         # 900으로는 잘려서 JSON 파싱이 깨진다(생성 도중 max_tokens 도달) — 여유를 둔다.
         requests.append((cc, system, user, 900 if daily else 2200))
-        meta[cc] = arts
 
     results = provider.complete_json_batch(requests) if requests else {}
 
     cur = conn.cursor()
     for cc, arts in meta.items():
         data = results.get(cc) or {}
+        if not arts:
+            data = {"summary_ko": "해당 기간에 브리핑 기준을 충족한 기사가 없습니다.",
+                    "summary_en": "No articles met the briefing criteria for this period."}
         if not data:
             continue
         if daily:
@@ -246,7 +254,7 @@ def run_briefing(
             (
                 cc, bdate, briefing_type, summary, summary_en,
                 issues, issues_en, outlook, outlook_en, keywords, keywords_en, key_stat, key_stat_en,
-                provider.model_id, len(arts),
+                provider.model_id if arts else "rules:insufficient-evidence", len(arts),
                 json.dumps([a["link"] for a in arts], ensure_ascii=False),
                 week_start, week_end,
             ),

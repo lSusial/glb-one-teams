@@ -316,7 +316,8 @@ def cmd_ai_dedup(args):
     conn = db.open_conn()
     s = _ai_guard(lambda: llm_dedup.run_dedup(conn, days=getattr(args, "days", 3),
                                               use_batch=_batch_flag(args)), "ai-dedup")
-    print(f"[ai-dedup] 국가={s['countries']} 중복마킹={s['marked']}건")
+    print(f"[ai-dedup] 국가={s['countries']} 검사={s['reviewed']} "
+          f"실패보존={s['failed']} 중복마킹={s['marked']}건")
 
 
 def cmd_ai(args):
@@ -342,7 +343,8 @@ def cmd_ai(args):
     print(f"   ranked={s2['ranked']} ACTIVE={s2['active']}")
     print("▶ AI 근접중복 판정(노출 후보 → duplicate_of)...")
     sd = _ai_guard(lambda: llm_dedup.run_dedup(conn, days=days, use_batch=ub), "ai")
-    print(f"   중복마킹={sd['marked']}건 (국가 {sd['countries']})")
+    print(f"   중복마킹={sd['marked']}건 (국가 {sd['countries']}, "
+          f"검사={sd['reviewed']}, 실패보존={sd['failed']})")
     print("▶ [4/7] 모달 긴 요약(노출 기사만)...")
     se = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub), "ai")
     print(f"   대상={se['total']} 작성={se['written']} 다출처={se['synthesized']}")
