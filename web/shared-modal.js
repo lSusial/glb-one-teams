@@ -36,9 +36,10 @@
         .sh-modal{background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:78vh;max-height:78dvh;overflow:auto;padding:22px 24px;position:relative;
           font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Malgun Gothic","Apple SD Gothic Neo",sans-serif;color:#2b2926;font-size:14px}
         .sh-modal .sh-x{position:sticky;top:-4px;float:right;z-index:2;width:40px;height:40px;margin:-8px -12px 0 0;display:grid;place-items:center;cursor:pointer;color:#8a857e;font-size:24px;line-height:1;border:none;background:rgba(255,255,255,.92);border-radius:50%;box-shadow:0 1px 6px rgba(20,18,15,.10)}
+        .sh-modal .sh-hd{background:#f8f5f0;border-radius:10px;padding:14px 16px;margin:-2px 0 16px}
         .sh-modal .sh-meta{font-size:11px;color:#7a746c;margin-bottom:6px}
         .sh-modal .sh-cat{display:inline-block;font-size:10.5px;font-weight:800;color:#fff;border-radius:20px;padding:2px 9px;margin-right:5px}
-        .sh-modal h2{font-size:17px;margin:8px 0 8px;line-height:1.4}
+        .sh-modal h2{font-size:17px;margin:8px 0 0;line-height:1.4}
         .sh-modal .sh-lb{font-size:11px;font-weight:800;color:#7a746c;margin:14px 0 6px}
         .sh-modal .sh-sum{font-size:13px;line-height:1.7;color:#2a2c32;white-space:pre-line}
         .sh-modal .sh-lk{display:block;border:1px solid #e8e4dd;border-radius:8px;padding:9px 11px;margin-top:7px;text-decoration:none;color:inherit}
@@ -81,9 +82,11 @@
 
     document.getElementById('sharedArtModal').innerHTML = `
       <button class="sh-x" onclick="closeArticleModal()" aria-label="Close">×</button>
-      ${meta ? `<div class="sh-meta">${meta}</div>` : ''}
-      ${catBadges}
-      <h2>${esc((EN ? (a.t_en || a.t) : (a.t || a.t_en)) || '')}</h2>
+      <div class="sh-hd">
+        ${meta ? `<div class="sh-meta">${meta}</div>` : ''}
+        ${catBadges}
+        <h2>${esc((EN ? (a.t_en || a.t) : (a.t || a.t_en)) || '')}</h2>
+      </div>
       <div class="sh-lb">${EN ? 'Summary' : '요약'}</div>
       <div class="sh-sum">${summary ? (window.glossarize ? window.glossarize(esc(summary)) : esc(summary)) : `<span class="sh-empty">${EN ? '(No summary available.)' : '(요약 정보가 없습니다.)'}</span>`}</div>
       <div class="sh-lb">${EN ? 'Related Articles' : '관련 기사 링크'}</div>
