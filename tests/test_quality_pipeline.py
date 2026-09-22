@@ -7,6 +7,7 @@ from unittest.mock import patch
 import briefing
 import export_json
 import llm_dedup
+import llm_translate
 
 
 class Provider:
@@ -218,6 +219,26 @@ class QualityTests(unittest.TestCase):
         out = export_json._daily_highlights(conn)
         self.assertEqual(out[0]['source_articles'][0]['article_id'], 10)
         self.assertEqual(out[0]['source_articles'][0]['u'], 'https://example.com/10')
+
+    def test_translation_rejects_amount_that_does_not_match_source(self):
+        self.add(1, score=60)
+        self.db.execute("UPDATE articles_raw SET summary_en=?, summary_ko=NULL, title_ko=NULL "
+                         "WHERE article_id=1", ('Vietnam raises $133 billion in new bonds.',))
+        self.db.commit()
+        llm_translate.run_translate(
+            self.db, Provider({'title_ko': '베트남 국채 발행', 'summary': '베트남이 133억 달러 국채를 발행했다.'}))
+        row = self.db.execute('SELECT summary_ko FROM articles_raw WHERE article_id=1').fetchone()
+        self.assertIsNone(row['summary_ko'])
+
+    def test_translation_stores_amount_that_matches_source(self):
+        self.add(1, score=60)
+        self.db.execute("UPDATE articles_raw SET summary_en=?, summary_ko=NULL, title_ko=NULL "
+                         "WHERE article_id=1", ('Vietnam raises $133 billion in new bonds.',))
+        self.db.commit()
+        llm_translate.run_translate(
+            self.db, Provider({'title_ko': '베트남 국채 발행', 'summary': '베트남이 1,330억 달러 국채를 발행했다.'}))
+        row = self.db.execute('SELECT summary_ko FROM articles_raw WHERE article_id=1').fetchone()
+        self.assertEqual(row['summary_ko'], '베트남이 1,330억 달러 국채를 발행했다.')
 
 
 if __name__ == '__main__':

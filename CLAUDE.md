@@ -72,7 +72,7 @@ python main.py list             # 최근 기사 확인
 - **AI 레이어**: 모델 Haiku, **Message Batches API(50% 할인) 기본**(`--sync`로 동기 전환). 물량은 `--days`로 제한. 영어가 canonical(`summary_en`) → `llm_translate`가 한국어 채움.
 - **ai_score ACTIVE 임계 = 55** — 노출 게이트·국가 온도는 ai_score 그대로. 화면 정렬만 `ranking.py`의 rank_score(다매체+tier+최신성 등, `docs/rank_score_spec.md`).
 - **카테고리**: 축 A 지역(`sources.yaml`) / 축 B 관련성 게이트(`keyword_filter.py`) / 축 C 주제 6종 ECONOMY·MARKETS·TECH·GEO·POLICY·SOCIETY + 축 E 이벤트유형 REG·SANCTION·DEAL·INCIDENT(`taxonomy.yaml`, AI가 분류). 상세 `docs/design.md`.
-- **국가 태그**: 진출국 현지피드는 매체국적, 인사동향·한국계금융·모니터링·미진출 피드는 AI 주제국가(`primary_country`) 우선.
+- **국가 태그**: 전 화면 AI 주제국가(`primary_country`) 우선, 없으면 매체국적(`media_sources.primary_country_code`). 2026-09-22 이전엔 진출국 현지피드만 매체국적이었으나, 미국 매체가 쓴 한국 기사가 US 탭에 뜨는 등 오분류가 있어 통일.
 - **본문 추출**: prefilter 통과분만 `fulltext.py`(trafilatura+googlenewsdecoder, 무료)로 원문 추출 후 rank. Google News 링크는 맥북에서만 해소 가능. **수집 강화 방향 = 무료 우선(유료 API 보류).**
 
 ## 진행 범위 원칙

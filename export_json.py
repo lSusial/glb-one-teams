@@ -55,7 +55,9 @@ def _country_display(cc: str) -> tuple[str, str, str]:
 def _eff_cc(r) -> str:
     """표시용 유효 국가 = 주제국가(primary_country) 우선, 없으면 매체 국적(cc).
     인사동향·한국계금융·모니터링·미진출 피드에서 '기사가 다루는 국가'를 보이기 위함.
-    진출국 현지언론 피드(export_countries)는 정의상 매체국적이라 이 함수를 쓰지 않는다."""
+    진출국 현지언론 피드(export_countries)도 동일 우선순위로 라우팅한다
+    (SQL의 COALESCE(NULLIF(a.primary_country,''), m.primary_country_code)) —
+    2026-09-22: 매체국적만 쓰면 "미국 매체가 쓴 한국 기사"가 US 탭에 뜨는 오분류가 생겨 변경."""
     try:
         pc = r["primary_country"]
     except (IndexError, KeyError):
@@ -617,7 +619,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                    m.primary_country_code cc
             FROM articles_raw a
             JOIN media_sources m ON m.source_id = a.source_id
-            WHERE m.primary_country_code = ?
+            WHERE COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) = ?
               AND {where}{dc}
             ORDER BY {order}
             LIMIT {60 if active_only else 20}

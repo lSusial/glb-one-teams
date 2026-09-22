@@ -11,12 +11,12 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 from datetime import date, timedelta
 
 import config
 import db
 import kb_network
+import numeric_guard
 import ranking
 from llm_provider import LLMProvider, get_provider
 
@@ -297,20 +297,6 @@ def _validate_highlight_sources(items: list, rows, limit: int) -> list[dict]:
     """
     allowed = {int(r["article_id"]): r for r in rows}
 
-    def usd_values(text: str) -> list[float]:
-        values = []
-        units = {"": 1, "m": 1e6, "million": 1e6, "bn": 1e9,
-                 "billion": 1e9, "trillion": 1e12}
-        for m in re.finditer(r"\$\s*([\d,.]+)\s*(trillion|billion|million|bn|m)?\b", text, re.I):
-            values.append(float(m.group(1).replace(",", "")) * units[(m.group(2) or "").lower()])
-        for m in re.finditer(
-                r"([\d,.]+)\s*[- ]?(trillion|billion|million|bn|m)\s*[- ]?(?:USD|US dollars?)\b",
-                text, re.I):
-            values.append(float(m.group(1).replace(",", "")) * units[m.group(2).lower()])
-        for m in re.finditer(r"([\d,.]+)\s*(조|억)\s*달러", text):
-            values.append(float(m.group(1).replace(",", "")) * (1e12 if m.group(2) == "조" else 1e8))
-        return values
-
     def row_text(r) -> str:
         def val(key):
             try:
@@ -339,13 +325,9 @@ def _validate_highlight_sources(items: list, rows, limit: int) -> list[dict]:
         if not valid:
             log.warning("글로벌 핵심 출처 누락/무효 — 항목 제외: %s", item.get("headline_ko", "")[:80])
             continue
-        generated_usd = usd_values((item.get("headline_ko") or "") + " " + (item.get("headline_en") or ""))
-        source_usd = []
-        for aid in valid:
-            source_usd.extend(usd_values(row_text(allowed[aid])))
-        if generated_usd and source_usd and any(
-                not any(abs(g - s) <= max(1, abs(s)) * 0.02 for s in source_usd)
-                for g in generated_usd):
+        generated = (item.get("headline_ko") or "") + " " + (item.get("headline_en") or "")
+        source_text = " ".join(row_text(allowed[aid]) for aid in valid)
+        if numeric_guard.usd_mismatch(source_text, generated):
             log.warning("글로벌 핵심 금액 불일치 — 항목 제외: %s", item.get("headline_ko", "")[:80])
             continue
         clean = dict(item)
