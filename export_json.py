@@ -200,7 +200,11 @@ def _t_en(r) -> str:
 
 
 def _daily_highlights(conn) -> list:
-    """오늘의 글로벌 핵심 3줄(briefing.generate_daily_highlights) 최신본. 없으면 빈 리스트."""
+    """오늘의 글로벌 핵심 최신본과 검증된 근거 기사 카드.
+
+    새 데이터는 source_article_ids로 원문을 직접 연결한다. 구 데이터에는 이 필드가
+    없으므로 source_articles가 빈 배열로 나가며 brief.html의 제한된 유사도 폴백만 쓴다.
+    """
     try:
         cols = [c[1] for c in conn.execute("PRAGMA table_info(daily_highlights)")]
     except Exception:
@@ -213,9 +217,60 @@ def _daily_highlights(conn) -> list:
     if not row:
         return []
     try:
-        return json.loads(row["items"]) or []
+        items = json.loads(row["items"]) or []
     except Exception:
         return []
+
+    ids = []
+    for item in items:
+        for value in item.get("source_article_ids") or []:
+            try:
+                aid = int(value)
+            except (TypeError, ValueError):
+                continue
+            if aid not in ids:
+                ids.append(aid)
+    if not ids:
+        for item in items:
+            item["source_articles"] = []
+        return items
+
+    placeholders = ",".join("?" for _ in ids)
+    rows = conn.execute(
+        f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.title_en, m.language,
+                   a.summary_ko, a.summary_en, a.expanded_summary, a.expanded_summary_en,
+                   a.link, a.published_at, a.topics, m.media_name,
+                   COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) AS cc
+            FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
+            WHERE a.article_id IN ({placeholders})""",
+        ids,
+    ).fetchall()
+    by_id = {int(r["article_id"]): r for r in rows}
+    siblings = _story_links_map(conn)
+
+    def card(r):
+        return {
+            "article_id": r["article_id"], "cc": r["cc"], "src": r["media_name"],
+            "d": (r["published_at"] or "")[:10],
+            "t": r["title_ko"] or r["title"], "t_en": _t_en(r),
+            "q": r["summary_ko"] or "", "q_en": r["summary_en"] or "",
+            "expanded_summary": r["expanded_summary"] or "",
+            "expanded_summary_en": r["expanded_summary_en"] or "",
+            "u": r["link"], "score": r["ai_score"],
+            "rl": _related_links(r, None, siblings.get(r["article_id"], []), []),
+        }
+
+    for item in items:
+        source_articles = []
+        for value in item.get("source_article_ids") or []:
+            try:
+                aid = int(value)
+            except (TypeError, ValueError):
+                continue
+            if aid in by_id:
+                source_articles.append(card(by_id[aid]))
+        item["source_articles"] = source_articles
+    return items
 
 
 def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:

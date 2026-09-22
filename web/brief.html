@@ -409,6 +409,10 @@
     return n;
   }
   function relatedFor(h){
+    // 새 데이터는 생성 시 검증한 article_id로 직접 연결한다.
+    if (h.source_articles && h.source_articles.length) return h.source_articles;
+
+    // 구 daily_highlights 데이터만 제목 유사도 폴백을 사용한다.
     const codes = h.country_codes || [];
     const pool = [];
     const seen = new Set();
@@ -425,7 +429,7 @@
     // 않는 편이 잘못된 출처를 보여주는 것보다 안전하다.
     pool.sort((a,b) => titleOverlap(h,b) - titleOverlap(h,a) || (b.score||0) - (a.score||0));
     const best = pool[0];
-    return best && titleOverlap(h,best) >= 2 ? best : null;
+    return best && titleOverlap(h,best) >= 2 ? [best] : [];
   }
   function hlHead(h){ return EN ? (h.headline_en||h.headline_ko) : (h.headline_ko||h.headline_en); }
   // daily_highlights.category는 백엔드가 한국어 고정값(금리/FX/규제/시장/디지털/지정학/인사)
@@ -435,14 +439,19 @@
   window.openHlModal = function(i){
     const h = highlights[i]; if (!h) return;
     const rel = relatedFor(h);
-    const links = rel ? ((rel.rl && rel.rl.length) ? rel.rl : [{t:rel.t, u:rel.u, src:rel.src}]) : [];
+    const primary = rel[0] || null;
+    const links = [], seen = new Set();
+    for (const a of rel) {
+      const candidates = (a.rl && a.rl.length) ? a.rl : [{t:a.t, u:a.u, src:a.src}];
+      for (const x of candidates) if (x.u && !seen.has(x.u)) { seen.add(x.u); links.push(x); }
+    }
     openArticleModal({
       t: hlHead(h),
       category: hlCat(h),
-      expanded_summary: rel ? (rel.expanded_summary||'') : '',
-      expanded_summary_en: rel ? (rel.expanded_summary_en||'') : '',
-      q: rel ? (rel.q||'') : '',
-      q_en: rel ? (rel.q_en||rel.q||'') : '',
+      expanded_summary: primary ? (primary.expanded_summary||'') : '',
+      expanded_summary_en: primary ? (primary.expanded_summary_en||'') : '',
+      q: primary ? (primary.q||'') : '',
+      q_en: primary ? (primary.q_en||primary.q||'') : '',
       rl: links.map(r => ({t:r.t, u:r.u, src:r.src})),
     });
   };

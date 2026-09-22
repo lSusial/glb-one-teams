@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import date, timedelta
 
 import config
@@ -81,9 +82,13 @@ def _system_highlights(count: int) -> str:
         '기사의 핵심이면 반드시 인사(그 인물의 정책 성향 언급은 이유가 되지 않는다)", '
         '"headline_ko": "건조한 신문 헤드라인 1줄(한국어, 설명체 금지)", '
         '"headline_en": "one-line dry newspaper headline (English)", '
-        '"country_codes": ["관련 거점 코드(예: GB, US)"]'
+        '"country_codes": ["관련 거점 코드(예: GB, US)"], '
+        '"source_article_ids": ["이 항목의 직접 근거가 된 입력 기사의 article_id. '
+        '입력에 표시된 정수 ID만 1개 이상 그대로 복사"]'
         '}]}\n'
-        f'The "highlights" array must have exactly {count} items, ordered by importance.'
+        f'The "highlights" array must have exactly {count} items, ordered by importance. '
+        'Every item must cite at least one source_article_id; never invent an ID. '
+        'Copy every number and monetary unit exactly from the cited source; do not convert units.'
     )
 
 
@@ -284,6 +289,71 @@ def ensure_highlights_table(conn) -> None:
     conn.commit()
 
 
+def _validate_highlight_sources(items: list, rows, limit: int) -> list[dict]:
+    """LLM 출처 ID를 입력 후보 집합에 대해 검증한다.
+
+    잘못되거나 출처가 없는 항목은 저장하지 않는다. 화면에서 국가·제목으로 원문을
+    추측해 붙이는 것보다 항목을 누락시키는 편이 출처 신뢰성 면에서 안전하다.
+    """
+    allowed = {int(r["article_id"]): r for r in rows}
+
+    def usd_values(text: str) -> list[float]:
+        values = []
+        units = {"": 1, "m": 1e6, "million": 1e6, "bn": 1e9,
+                 "billion": 1e9, "trillion": 1e12}
+        for m in re.finditer(r"\$\s*([\d,.]+)\s*(trillion|billion|million|bn|m)?\b", text, re.I):
+            values.append(float(m.group(1).replace(",", "")) * units[(m.group(2) or "").lower()])
+        for m in re.finditer(
+                r"([\d,.]+)\s*[- ]?(trillion|billion|million|bn|m)\s*[- ]?(?:USD|US dollars?)\b",
+                text, re.I):
+            values.append(float(m.group(1).replace(",", "")) * units[m.group(2).lower()])
+        for m in re.finditer(r"([\d,.]+)\s*(조|억)\s*달러", text):
+            values.append(float(m.group(1).replace(",", "")) * (1e12 if m.group(2) == "조" else 1e8))
+        return values
+
+    def row_text(r) -> str:
+        def val(key):
+            try:
+                return r[key] or ""
+            except (KeyError, TypeError, IndexError):
+                return ""
+        return " ".join(val(k) for k in ("title", "title_ko", "summary_ko", "summary_en"))
+
+    out = []
+    for item in items[:limit]:
+        if not isinstance(item, dict):
+            continue
+        valid = []
+        raw_ids = item.get("source_article_ids")
+        if not isinstance(raw_ids, list):
+            raw_ids = []
+        for value in raw_ids:
+            if isinstance(value, bool):
+                continue
+            try:
+                aid = int(value)
+            except (TypeError, ValueError):
+                continue
+            if aid in allowed and aid not in valid:
+                valid.append(aid)
+        if not valid:
+            log.warning("글로벌 핵심 출처 누락/무효 — 항목 제외: %s", item.get("headline_ko", "")[:80])
+            continue
+        generated_usd = usd_values((item.get("headline_ko") or "") + " " + (item.get("headline_en") or ""))
+        source_usd = []
+        for aid in valid:
+            source_usd.extend(usd_values(row_text(allowed[aid])))
+        if generated_usd and source_usd and any(
+                not any(abs(g - s) <= max(1, abs(s)) * 0.02 for s in source_usd)
+                for g in generated_usd):
+            log.warning("글로벌 핵심 금액 불일치 — 항목 제외: %s", item.get("headline_ko", "")[:80])
+            continue
+        clean = dict(item)
+        clean["source_article_ids"] = valid
+        out.append(clean)
+    return out
+
+
 def generate_daily_highlights(
     conn,
     provider: LLMProvider | None = None,
@@ -303,7 +373,7 @@ def generate_daily_highlights(
 
     rows = conn.execute(
         f"""
-        SELECT a.article_id, a.title, a.summary_ko, a.summary_en,
+        SELECT a.article_id, a.title, a.title_ko, a.summary_ko, a.summary_en,
                a.topics, a.ai_score, a.published_at, a.event_type, a.korean_fi, a.personnel_move,
                m.tier, m.primary_country_code AS cc
         FROM articles_raw a
@@ -322,7 +392,7 @@ def generate_daily_highlights(
         return {"written": 0}
 
     bullets = "\n".join(
-        f"- [{r['cc']}] ({r['ai_score']}) {r['title']} :: "
+        f"- [article_id={r['article_id']}] [{r['cc']}] ({r['ai_score']}) {r['title']} :: "
         f"{((r['summary_ko'] or r['summary_en']) or '')[:160]}"
         for r in rows
     )
@@ -331,7 +401,7 @@ def generate_daily_highlights(
     count = config.HIGHLIGHTS_COUNT
     provider = provider or get_provider("smart", use_batch=False)
     data = provider.complete_json(_system_highlights(count), user, max_tokens=3200)
-    items = (data.get("highlights") or [])[:count]
+    items = _validate_highlight_sources(data.get("highlights") or [], rows, count)
 
     if not items:
         log.info("글로벌 핵심 — LLM이 0개 반환, 스킵")

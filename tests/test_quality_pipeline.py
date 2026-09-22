@@ -5,6 +5,7 @@ from datetime import date
 from unittest.mock import patch
 
 import briefing
+import export_json
 import llm_dedup
 
 
@@ -163,6 +164,60 @@ class QualityTests(unittest.TestCase):
         self.assertIsNotNone(row)
         self.assertEqual(row[0], 0)
         self.assertIn('충족', row[1])
+
+    def test_highlight_sources_are_limited_to_input_articles(self):
+        rows = [{'article_id': 10}, {'article_id': 20}]
+        items = [
+            {'headline_ko': '검증된 항목', 'source_article_ids': [10, '20', 10, 999]},
+            {'headline_ko': '출처 없는 항목', 'source_article_ids': [999]},
+            {'headline_ko': 'ID 누락 항목'},
+        ]
+        out = briefing._validate_highlight_sources(items, rows, 10)
+        self.assertEqual(len(out), 1)
+        self.assertEqual(out[0]['source_article_ids'], [10, 20])
+        self.assertIn('source_article_ids', briefing._system_highlights(10))
+
+    def test_highlight_with_unsupported_usd_amount_is_rejected(self):
+        rows = [{'article_id': 10, 'title': 'Vietnam establishes 190-million-USD company',
+                 'title_ko': '베트남 1.9억 달러 회사 설립', 'summary_ko': '',
+                 'summary_en': 'Charter capital is 190 million USD.'}]
+        items = [
+            {'headline_ko': '베트남 190억 달러 회사 설립',
+             'headline_en': 'Vietnam establishes $1.9 billion company', 'source_article_ids': [10]},
+            {'headline_ko': '베트남 1.9억 달러 회사 설립',
+             'headline_en': 'Vietnam establishes $190 million company', 'source_article_ids': [10]},
+        ]
+        out = briefing._validate_highlight_sources(items, rows, 10)
+        self.assertEqual(len(out), 1)
+        self.assertIn('$190 million', out[0]['headline_en'])
+
+    def test_export_resolves_highlight_source_id_to_exact_article(self):
+        conn = sqlite3.connect(':memory:')
+        conn.row_factory = sqlite3.Row
+        self.addCleanup(conn.close)
+        conn.executescript('''
+            CREATE TABLE media_sources(source_id INTEGER PRIMARY KEY, media_name TEXT,
+                primary_country_code TEXT, language TEXT, tier INTEGER);
+            INSERT INTO media_sources VALUES(1,'Test News','IN','en',1);
+            CREATE TABLE articles_raw(
+                article_id INTEGER PRIMARY KEY, source_id INTEGER, ai_score INTEGER,
+                title TEXT, title_ko TEXT, title_en TEXT, summary_ko TEXT, summary_en TEXT,
+                expanded_summary TEXT, expanded_summary_en TEXT, link TEXT, published_at TEXT,
+                topics TEXT, primary_country TEXT, duplicate_of INTEGER);
+            INSERT INTO articles_raw VALUES(
+                10,1,72,'RBI raises rate','인도 중앙은행 금리 인상','RBI raises rate',
+                '금리 인상 요약','Rate increase summary','','','https://example.com/10',
+                '2026-09-22','ECONOMY','IN',NULL);
+            CREATE TABLE daily_highlights(id INTEGER PRIMARY KEY, date TEXT, items TEXT, model TEXT,
+                generated_at TEXT);
+        ''')
+        items = json.dumps([{'headline_ko': '인도 중앙은행 금리 인상',
+                             'source_article_ids': [10]}], ensure_ascii=False)
+        conn.execute('INSERT INTO daily_highlights VALUES(1,?,?,?,?)',
+                     ('2026-09-22', items, 'test:model', '2026-09-22'))
+        out = export_json._daily_highlights(conn)
+        self.assertEqual(out[0]['source_articles'][0]['article_id'], 10)
+        self.assertEqual(out[0]['source_articles'][0]['u'], 'https://example.com/10')
 
 
 if __name__ == '__main__':

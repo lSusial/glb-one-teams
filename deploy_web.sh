@@ -15,8 +15,8 @@ cd "$DIR"
 .venv/bin/python main.py export
 
 echo ""
-echo "▶ [1b] 표시 감사 (리포트만 — 배포를 막지 않는다)..."
-.venv/bin/python eval/display_audit.py || true
+echo "▶ [1b] 표시 감사 (탑이슈 출처 무결성 실패 시 배포 중단)..."
+.venv/bin/python eval/display_audit.py --strict
 echo ""
 
 # ── Oracle Cloud 동기화 임시 비활성화 (SSH 22번 포트 타임아웃, 2026-08-24) ──

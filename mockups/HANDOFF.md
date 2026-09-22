@@ -20,7 +20,7 @@
 ## 2. 화면별 데이터 계약 (data/export/*.json)
 | 화면 | 파일 | 경로 | 카드 필드 |
 |---|---|---|---|
-| 홈 Top Issues | `pulse.json` | `daily_highlights[]` | `headline_ko`, `country_codes[0]`(국기), `category`(대표 카테고리) |
+| 홈 Top Issues | `pulse.json` | `daily_highlights[]` | `headline_ko`, `country_codes[0]`(국기), `category`, `source_article_ids`, `source_articles`(검증된 원문 카드) |
 | 홈 지도/브리핑 | `pulse.json` | `country_signals`, `categories`, `daily_highlights` | — |
 | 진출국 상세 | `countries.json` | `countries[]` | `brief.ko`, `articles[]`(t,q,src,d,u), `indicators[]`(kind=fx/index/policy_rate: label,value,change_pct,note) |
 | 미진출국 피드 | `countries.json` | `non_presence.articles[]` | cc, flag, cc_label, src, d, t, q, score, u, related_count |

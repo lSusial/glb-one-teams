@@ -20,6 +20,8 @@ LLM 호출·DB 쓰기 없음. export 직후 돌린다:
  11 SELF_TITLE_MISMATCH 모달 '관련 기사 링크'의 자기참조(rl[0])가 카드 헤드라인과 다른 제목으로
                         표시됨 — url은 같은데 원문(raw) 제목을 써서 다른 기사처럼 보이는 버그
                         (2026-09-22 인도 탭 '러시아 제재법' 기사에서 실제 발견)
+ 12 HIGHLIGHT_SOURCE_MISSING 홈 탑이슈에 검증된 source_article_ids가 없음
+ 13 HIGHLIGHT_SOURCE_INVALID 저장된 근거 ID가 DB·export 근거 기사와 일치하지 않음
 '점검 통과'가 '정확함'을 뜻하진 않는다 — 규칙으로 잡히는 결함만 센다.
 """
 from __future__ import annotations
@@ -96,6 +98,7 @@ def main() -> int:
     ap.add_argument("--db", default=str(config.DB_PATH))
     ap.add_argument("--stale-days", type=int, default=3)
     ap.add_argument("--json", action="store_true", help="요약 집계를 JSON 한 줄로도 출력")
+    ap.add_argument("--strict", action="store_true", help="탑이슈 출처 무결성 오류가 있으면 종료코드 1")
     args = ap.parse_args()
 
     export_dir = Path(args.export_dir)
@@ -114,6 +117,34 @@ def main() -> int:
         return conn.execute(
             "SELECT article_id, primary_country, summary_en, title, published_at, ai_score "
             "FROM articles_raw WHERE link=?", (link,)).fetchone()
+
+    # 12~13 홈 탑이슈 출처 무결성. 새 계약은 생성 시 검증된 article_id를 저장하고
+    # export가 해당 기사 카드를 source_articles로 직접 포함해야 한다.
+    try:
+        pulse = json.loads((export_dir / "pulse.json").read_text(encoding="utf-8"))
+    except Exception:
+        pulse = {}
+    for i, h in enumerate(pulse.get("daily_highlights") or [], 1):
+        head = (h.get("headline_ko") or h.get("headline_en") or "")[:52]
+        ids = []
+        for value in h.get("source_article_ids") or []:
+            try:
+                aid = int(value)
+            except (TypeError, ValueError):
+                continue
+            if aid not in ids:
+                ids.append(aid)
+        if not ids:
+            add("HIGHLIGHT_SOURCE_MISSING", f"Top {i} '{head}'")
+            continue
+        placeholders = ",".join("?" for _ in ids)
+        found = {r[0] for r in conn.execute(
+            f"SELECT article_id FROM articles_raw WHERE article_id IN ({placeholders})", ids)}
+        exported = {int(a["article_id"]) for a in (h.get("source_articles") or [])
+                    if isinstance(a, dict) and str(a.get("article_id", "")).isdigit()}
+        if found != set(ids) or exported != set(ids):
+            add("HIGHLIGHT_SOURCE_INVALID",
+                f"Top {i} '{head}' · 저장={ids} DB={sorted(found)} export={sorted(exported)}")
 
     # 1 EMPTY_SUMMARY  (모든 파일의 카드)
     seen = set()
@@ -220,7 +251,7 @@ def main() -> int:
 
     order = ["EMPTY_SUMMARY", "STALE", "PREVIEW_SHOWN", "COUNTRY_MISMATCH", "NEAR_DUP_IN_TAB",
              "JUNK_TITLE", "UNRELATED_LINKS", "TITLE_SUMMARY_GAP", "HIDDEN_NEWER_REP", "THIN_TABS",
-             "SELF_TITLE_MISMATCH"]
+             "SELF_TITLE_MISMATCH", "HIGHLIGHT_SOURCE_MISSING", "HIGHLIGHT_SOURCE_INVALID"]
     print(f"표시 감사 — 기준일 {today} · 카드 {len(cards)}장 (국가탭 {len(tabs)}장) · export={export_dir}")
     print("-" * 78)
     for k in order:
@@ -238,7 +269,8 @@ def main() -> int:
             print(f"  … 외 {len(v) - 12}건")
     if args.json:
         print(json.dumps({k: len(issues.get(k, [])) for k in order}, ensure_ascii=False))
-    return 0
+    critical = issues.get("HIGHLIGHT_SOURCE_MISSING", []) + issues.get("HIGHLIGHT_SOURCE_INVALID", [])
+    return 1 if args.strict and critical else 0
 
 
 if __name__ == "__main__":
