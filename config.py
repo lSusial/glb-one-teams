@@ -213,6 +213,10 @@ NON_PRESENCE_DEDUP_SIM = 0.5
 COUNTRY_MAX_ARTICLES   = 8      # 국가당 노출 최대 기사 수(스토리 dedup 후 상한)
 COUNTRY_STORY_DEDUP_SIM = 0.38  # 같은 스토리 근접중복 병합 임계(제목+요약 토큰 겹침, 0~1)
 DEDUP_MIN_OVERLAP = 0.25   # AI 중복판정 오묶음 가드: 묶인 기사끼리 제목+요약 토큰 겹침 계수가 이 미만이면 같은 사건으로 잇지 않는다(llm_dedup.split_by_overlap). 라벨 70쌍 평가(eval/eval_dedup_guard.py): 0.25=오묶음 20/31 제거·진짜 중복 37/39 유지, 0.30부터 진짜 중복이 급감(30/39)
+DEDUP_PAIR_MIN_OVERLAP = 0.08  # LLM이 SAME인 제목쌍의 최소 겹침. 공통 고유 주체도 반드시 있어야 함
+DEDUP_CANDIDATE_OVERLAP = 0.08  # LLM에 보낼 후보쌍 최소 겹침(최종 병합 가드보다 넓게 잡아 recall 확보)
+DEDUP_MAX_NEIGHBORS = 2         # 라벨 recall 39/39를 유지한 최소 상한 — 국가별 O(n²) 후보 폭증 방지
+DEDUP_PAIRS_PER_REQUEST = 20    # Haiku가 뒤쪽 pair 판정을 생략하지 않는 크기(라벨 회귀평가 기준)
 
 
 def is_presence(cc: str) -> bool:

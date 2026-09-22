@@ -53,6 +53,20 @@ _SYSTEM = (
     "— 2건 이상 묶인 그룹만 넣고, 단독 기사는 생략."
 )
 
+_PAIR_SYSTEM = (
+    "당신은 뉴스 기사쌍 중복 판정기다. 각 pair_id를 다른 쌍과 독립적으로 판정한다. 두 제목이 "
+    "독자에게 사실상 같은 뉴스 묶음이면 SAME이다. 다음은 SAME으로 판정한다: 같은 정책결정·지표발표·"
+    "인사·거래·프로젝트의 반복 보도, 같은 중앙은행 회의의 전망·결정·직접 시장반응, 같은 날 같은 "
+    "자산 움직임을 같은 원인으로 보도한 기사, 같은 수치를 반올림하거나 후속 기사에서 갱신한 경우. "
+    "예: BOJ 금리인상 전망 ↔ 실제 금리인상 ↔ 그 결정 직후 엔화 반응은 SAME이다. 게시일 차이는 "
+    "신디케이션·후속보도일 수 있으므로 그것만으로 DIFFERENT로 두지 마라. 서로 다른 기업·기관·지표·"
+    "정책, 같은 기관의 별도 발표, 같은 국가·분야라는 공통점만 있는 기사는 DIFFERENT다. "
+    "제목이 다른 표현을 쓰더라도 주체·핵심 사건·시기가 맞으면 SAME으로 판정하라. "
+    "모든 입력 pair_id를 정확히 한 번씩 판정해야 한다. JSON만 출력한다: "
+    "{\"decisions\": [{\"pair_id\": \"p1\", \"same\": true}, "
+    "{\"pair_id\": \"p2\", \"same\": false}]}. 입력 순서를 지키고 ID를 만들거나 생략하지 마라."
+)
+
 
 def ensure_columns(conn) -> None:
     db.ensure_columns(conn, "articles_raw", [
@@ -64,6 +78,8 @@ def ensure_columns(conn) -> None:
 _STOP = set("the and for with from that this are was were has have had will its into over than "
             "after amid says said new news via not but out per his her their who what when how "
             "more than also can may could would year years first two".split())
+_EVENT_GENERIC = {"rate", "rates", "hike", "cut", "decision", "policy", "market", "markets",
+                  "bank", "banks", "central", "government", "economy", "economic", "financial"}
 
 # 사건 '전' 예고·프리뷰 헤드라인 — 같은 그룹에 결과 기사가 있으면 대표에서 뒤로 민다.
 _PREVIEW_RE = re.compile(
@@ -73,13 +89,38 @@ _PREVIEW_RE = re.compile(
 
 
 def _tokens(text: str | None) -> set:
-    return {w for w in re.findall(r"[a-z0-9]+", (text or "").lower())
+    text = (text or "").lower()
+    aliases = {
+        "bank of japan": "boj", "hong kong monetary authority": "hkma",
+        "bank of england": "boe", "reserve bank of india": "rbi",
+        "federal reserve": "fed",
+    }
+    for full, short in aliases.items():
+        text = text.replace(full, short)
+    forms = {"rates": "rate", "raises": "raise", "raised": "raise", "raising": "raise",
+             "hikes": "hike", "hiked": "hike", "cuts": "cut", "cutting": "cut"}
+    return {forms.get(w, w) for w in re.findall(r"[a-z0-9]+", text)
             if len(w) > 2 and w not in _STOP}
 
 
 def overlap(a: set, b: set) -> float:
     """겹침 계수(교집합/min) — 길이가 다른 헤드라인+요약 쌍에서도 안정적."""
     return len(a & b) / min(len(a), len(b)) if a and b else 0.0
+
+
+def pair_passes_guard(a: int, b: int, meta, threshold: float | None = None) -> bool:
+    """LLM SAME 간선의 오묶음 가드.
+
+    LLM 판정 뒤에도 제목에 공통 고유 주체가 있는지 확인한다. repair_existing이 넘기는
+    명시적 임계값과 신규 pair 판정의 낮은 임계값은 서로 독립적으로 운용한다.
+    """
+    th = config.DEDUP_PAIR_MIN_OVERLAP if threshold is None else threshold
+    ta = meta[a].get("title_tok") or meta[a]["tok"]
+    tb = meta[b].get("title_tok") or meta[b]["tok"]
+    sim = overlap(ta, tb)
+    common = ta & tb
+    anchors = common - _EVENT_GENERIC
+    return sim >= th and bool(anchors)
 
 
 def is_preview(*titles: str | None) -> bool:
@@ -115,7 +156,7 @@ def split_by_overlap(group, meta, threshold: float | None = None) -> list[list[i
 
     for i, a in enumerate(ids):
         for b in ids[i + 1:]:
-            if overlap(meta[a]["tok"], meta[b]["tok"]) >= th:
+            if pair_passes_guard(a, b, meta, th):
                 parent[find(a)] = find(b)
     comps: dict[int, list[int]] = {}
     for a in ids:
@@ -138,21 +179,181 @@ def _normalize_groups(groups):
     return out
 
 
+def _candidate_pairs(arts, meta) -> list[tuple[int, int, float]]:
+    """국가 전체를 LLM에 넣지 않고 기사별 상위 유사 후보쌍만 만든다.
+
+    낮은 1차 임계로 recall을 확보하되 기사당 이웃 수를 제한한다. 기존 AI 연결은
+    유사도와 무관하게 반드시 후보에 넣어 재검토·보존 대상에서 빠지지 않게 한다.
+    """
+    ids = [int(a["article_id"]) for a in arts]
+    selected: set[tuple[int, int]] = set()
+    scored: dict[tuple[int, int], float] = {}
+    exact_buckets: dict[frozenset, list[int]] = {}
+    for aid in ids:
+        exact_buckets.setdefault(frozenset(meta[aid]["candidate_tok"]), []).append(aid)
+    for members in exact_buckets.values():
+        if len(members) < 2:
+            continue
+        anchor = members[0]
+        for aid in members[1:]:
+            key = (min(anchor, aid), max(anchor, aid))
+            selected.add(key); scored[key] = 1.0
+
+    for i, aid in enumerate(ids):
+        neighbors = []
+        for bid in ids[i + 1:]:
+            if meta[aid]["candidate_tok"] == meta[bid]["candidate_tok"]:
+                continue
+            sim = overlap(meta[aid]["candidate_tok"], meta[bid]["candidate_tok"])
+            if sim >= config.DEDUP_CANDIDATE_OVERLAP:
+                neighbors.append((sim, bid))
+                scored[(min(aid, bid), max(aid, bid))] = sim
+        for sim, bid in sorted(neighbors, reverse=True)[:config.DEDUP_MAX_NEIGHBORS]:
+            selected.add((min(aid, bid), max(aid, bid)))
+
+    # 한쪽에서 상위 이웃에 들지 못했어도 반대 방향 상위 후보가 될 수 있으므로 역방향도 본다.
+    for j, bid in enumerate(ids):
+        neighbors = []
+        for aid in ids[:j]:
+            if meta[aid]["candidate_tok"] == meta[bid]["candidate_tok"]:
+                continue
+            key = (min(aid, bid), max(aid, bid))
+            sim = scored.get(key)
+            if sim is None:
+                sim = overlap(meta[aid]["candidate_tok"], meta[bid]["candidate_tok"])
+            if sim >= config.DEDUP_CANDIDATE_OVERLAP:
+                neighbors.append((sim, aid))
+                scored[key] = sim
+        for sim, aid in sorted(neighbors, reverse=True)[:config.DEDUP_MAX_NEIGHBORS]:
+            selected.add((min(aid, bid), max(aid, bid)))
+
+    for aid in ids:
+        old_rep = meta[aid].get("old_rep")
+        if old_rep in meta and old_rep != aid:
+            key = (min(aid, old_rep), max(aid, old_rep))
+            selected.add(key)
+            scored.setdefault(key, overlap(meta[key[0]]["candidate_tok"], meta[key[1]]["candidate_tok"]))
+    return sorted((a, b, scored.get((a, b), 0.0)) for a, b in selected)
+
+
+def _pair_chunks(cc: str, pairs, meta):
+    """후보쌍을 작은 독립 요청으로 직렬화한다."""
+    out = []
+    size = config.DEDUP_PAIRS_PER_REQUEST
+    for n, start in enumerate(range(0, len(pairs), size)):
+        chunk = pairs[start:start + size]
+        lookup = {}
+        blocks = []
+        for i, (a, b, _sim) in enumerate(chunk, 1):
+            pid = f"p{i}"
+            lookup[pid] = (a, b)
+            ma, mb = meta[a], meta[b]
+            blocks.append(
+                f"{pid}\nA {a} [{ma['pub'][:10]}] {ma['display_title'][:220]}\n"
+                f"B {b} [{mb['pub'][:10]}] {mb['display_title'][:220]}"
+            )
+        cid = f"{cc}__{n:03d}"
+        user = f"[국가:{cc}] 후보 기사쌍\n\n" + "\n\n".join(blocks)
+        out.append((cid, lookup, user))
+    return out
+
+
+def _groups_from_edges(edges, meta, subject: str | None = None) -> list[list[int]]:
+    """SAME 간선에서 대표와 직접 연결된 기사만 한 그룹으로 묶는다.
+
+    A-B, B-C 판정만으로 A-C까지 자동 병합하는 전이 오류를 막는다. 연결요소마다 표시
+    대표를 먼저 고른 뒤 그 대표와 직접 SAME인 기사만 붙이고, 남은 기사는 다시 처리한다.
+    """
+    adj: dict[int, set[int]] = {}
+    for a, b in edges:
+        adj.setdefault(a, set()).add(b)
+        adj.setdefault(b, set()).add(a)
+    groups = []
+    pending = set(adj)
+    while pending:
+        start = min(pending)
+        component, stack = set(), [start]
+        while stack:
+            aid = stack.pop()
+            if aid in component or aid not in pending:
+                continue
+            component.add(aid)
+            stack.extend(adj.get(aid, ()) & pending)
+        rep = pick_rep(component, meta, subject)
+        group = {rep} | (adj.get(rep, set()) & component)
+        if len(group) >= 2:
+            groups.append(sorted(group))
+        pending.difference_update(group)
+    return groups
+
+
+def _valid_same_pairs(response, lookup):
+    """응답을 검증해 SAME 후보쌍을 반환한다. 무효 응답은 None."""
+    if not isinstance(response, dict):
+        return None
+    if "decisions" in response:
+        decisions = response["decisions"]
+        if not isinstance(decisions, list) or len(decisions) != len(lookup):
+            return None
+        seen, same = set(), []
+        for item in decisions:
+            if not isinstance(item, dict):
+                return None
+            pid, verdict = item.get("pair_id"), item.get("same")
+            if pid not in lookup or pid in seen or type(verdict) is not bool:
+                return None
+            seen.add(pid)
+            if verdict:
+                same.append(lookup[pid])
+        return same if seen == set(lookup) else None
+    if "same_pair_ids" in response:
+        ids = response["same_pair_ids"]
+        if (not isinstance(ids, list)
+                or any(not isinstance(x, str) or x not in lookup for x in ids)
+                or len(ids) != len(set(ids))):
+            return None
+        return [lookup[x] for x in ids]
+
+    # 이전 groups 응답 형식은 테스트·과도기 프로바이더 호환용으로만 수용한다.
+    groups = _normalize_groups(response.get("groups"))
+    if groups is None:
+        return None
+    allowed_ids = {aid for pair in lookup.values() for aid in pair}
+    pairs = []
+    seen = set()
+    for group in groups:
+        if (len(group) < 2 or any(type(aid) is not int or aid not in allowed_ids for aid in group)
+                or len(group) != len(set(group))):
+            return None
+        group_set = set(group)
+        matched = {tuple(sorted(pair)) for pair in lookup.values() if set(pair) <= group_set}
+        if not matched or seen.intersection(matched):
+            return None
+        seen.update(matched)
+        pairs.extend(matched)
+    return pairs
+
+
 def run_dedup(conn, provider: LLMProvider | None = None,
               days: int | None = 3, use_batch: bool | None = None,
               only_cc: str | None = None, dry_run: bool = False) -> dict:
-    """노출 후보를 국가별로 LLM 근접중복 판정. only_cc 지정 시 그 국가만(디버그).
-    dry_run=True면 LLM은 호출하되 DB는 바꾸지 않고, 가드까지 통과한 최종 그룹을 결과의
-    "groups"({국가: [[id,...],...]})로 돌려준다 — 프롬프트·가드를 실데이터로 평가할 때 쓴다
-    (eval/eval_dedup_guard.py --live)."""
+    """노출 후보에서 유사 후보쌍을 만들고 작은 요청으로 LLM 근접중복을 판정한다.
+
+    국가 전체 단일 요청을 없애 입력 초과·응답 한 건 오류가 국가 전체 recall을 무너뜨리지
+    않게 한다. 무효 청크에 포함된 기존 AI 그룹만 보존하고 나머지는 정상 결과로 갱신한다.
+    """
     ensure_columns(conn)
     provider = provider or get_provider("fast", use_batch=use_batch)
 
     date_clause, params = db.days_clause_now(days)
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(articles_raw)")}
+    title_en_sql = "a.title_en" if "title_en" in cols else "NULL"
     rows = conn.execute(
         f"""
         SELECT a.article_id, COALESCE(a.title_ko, a.title) AS t, a.title AS raw_title,
+               {title_en_sql} AS title_en,
                a.summary_en AS s_en, a.ai_score, a.published_at,
+               a.duplicate_of,
                m.primary_country_code AS media_cc,
                COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) AS cc
         FROM articles_raw a
@@ -172,70 +373,94 @@ def run_dedup(conn, provider: LLMProvider | None = None,
             continue
         by_cc.setdefault(cc, []).append(r)
 
-    requests, ctx, metas = [], {}, {}
-    oversized = 0
+    requests, chunk_info, metas, chunks_by_cc = [], {}, {}, {}
     for cc, arts in by_cc.items():
         if len(arts) < 2:
             continue
-        lines = "\n".join(f"{a['article_id']}: [{(a['published_at'] or '')[:10]}] {(a['t'] or '')[:160]}" for a in arts)
-        # 광범위한 백필에서 컨텍스트를 넘기지 않는다. 일부만 잘라 검사하지 않고
-        # 기존 결과를 보존하며 명시적으로 실패 집계한다(더 좁은 days로 재실행).
-        if len(lines) > 80000:
-            oversized += len(arts)
-            log.warning("AI 중복판정 입력 초과 — 국가=%s 후보=%d, days를 줄여 재실행 필요", cc, len(arts))
-            continue
-        cid = str(cc)
-        requests.append((cid, _SYSTEM, f"[국가:{cc}] 헤드라인 목록:\n{lines}", min(16000, max(1024, len(arts) * 32))))
-        ctx[cid] = {a["article_id"]: (a["ai_score"] or 0) for a in arts}
-        metas[cid] = {a["article_id"]: {
+        meta = {a["article_id"]: {
             "score": a["ai_score"] or 0, "pub": a["published_at"] or "",
-            "titles": [a["t"], a["raw_title"]], "media_cc": a["media_cc"],
-            "tok": _tokens((a["raw_title"] or "") + " " + (a["s_en"] or ""))} for a in arts}
+            "titles": [a["t"], a["title_en"], a["raw_title"]], "media_cc": a["media_cc"],
+            "display_title": a["title_en"] or a["t"] or a["raw_title"] or "",
+            "old_rep": a["duplicate_of"],
+            # 기존 오병합 그룹은 같은 요약이 복제될 수 있다. 그 요약을 다시 후보·가드에
+            # 쓰면 오병합이 자기강화되므로 원문/영문 제목만 판정 근거로 사용한다.
+            "candidate_tok": _tokens(" ".join(x or "" for x in
+                                                (a["title_en"], a["raw_title"]))),
+            "title_tok": _tokens(a["title_en"] or a["raw_title"] or ""),
+            "tok": _tokens(a["title_en"] or a["raw_title"] or "")} for a in arts}
+        pairs = _candidate_pairs(arts, meta)
+        if not pairs:
+            continue
+        metas[cc] = meta
+        chunks = _pair_chunks(cc, pairs, meta)
+        chunks_by_cc[cc] = chunks
+        for cid, lookup, user in chunks:
+            chunk_info[cid] = (cc, lookup)
+            requests.append((cid, _PAIR_SYSTEM, user, max(512, min(4096, len(lookup) * 80))))
 
     results = provider.complete_json_batch(requests) if requests else {}
 
     marked = reviewed = released = 0
-    failed = oversized
+    failed = 0
     collected: dict[str, list] = {}
-    for cid, scores in ctx.items():
-        res = results.get(cid)
-        groups = _normalize_groups(res.get("groups")) if isinstance(res, dict) else None
-        # 누락/파싱 실패와 명시적인 groups=[]를 구분한다. 중복 ID/겹치는 그룹은
-        # 순환 연결을 만들 수 있으므로 국가 응답 전체를 거부하고 기존 결과를 유지한다.
-        seen = set()
-        valid = isinstance(groups, list)
-        if valid:
-            for group in groups:
-                if (not isinstance(group, list) or len(group) < 2
-                        or any(type(aid) is not int or aid not in scores for aid in group)
-                        or len(set(group)) != len(group) or seen.intersection(group)):
-                    valid = False
-                    break
-                seen.update(group)
-        if not valid:
-            failed += len(scores)
-            log.warning("AI 중복판정 응답 무효 — 국가=%s 기존 결과 보존, 후보=%d", cid, len(scores))
-            continue
-        # API 호출 중에는 기존 연결을 유지한다. 결과 검증 후에만 같은 트랜잭션에서 교체.
-        meta = metas[cid]
-        # 오묶음 가드: LLM 그룹을 겹침 그래프의 연결요소로 쪼개 2건 이상인 요소만 묶는다.
-        final_groups = []
-        for group in groups:
-            comps = split_by_overlap(group, meta)
-            kept = [c for c in comps if len(c) >= 2]
-            released += len(group) - sum(len(c) for c in kept)
-            final_groups.extend(kept)
+    for cc, chunks in chunks_by_cc.items():
+        meta = metas[cc]
+        accepted_edges: set[tuple[int, int]] = set()
+        invalid_ids: set[int] = set()
+        valid_ids: set[int] = set()
+        for cid, lookup, _user in chunks:
+            pairs = _valid_same_pairs(results.get(cid), lookup)
+            ids_here = {aid for pair in lookup.values() for aid in pair}
+            if pairs is None:
+                invalid_ids.update(ids_here)
+                log.warning("AI 중복판정 응답 무효 — 청크=%s 기존 연결 보존, 기사=%d", cid, len(ids_here))
+                continue
+            valid_ids.update(ids_here)
+            for a, b in pairs:
+                if pair_passes_guard(a, b, meta):
+                    accepted_edges.add((min(a, b), max(a, b)))
+                else:
+                    released += 1
+
+        # 무효 청크가 기존 그룹 일부를 건드렸다면 그룹 전체를 보호해 끊어진 참조를 막는다.
+        protected = set(invalid_ids)
+        changed = True
+        while changed:
+            changed = False
+            for aid, m in meta.items():
+                rep = m.get("old_rep")
+                if rep in meta and ((aid in protected) != (rep in protected)):
+                    protected.update((aid, rep)); changed = True
+        failed += len(protected)
+        reviewed += len(valid_ids - protected)
+        accepted_edges = {e for e in accepted_edges if not set(e).intersection(protected)}
+
+        active_ids = {aid for aid in meta if aid not in protected}
+        final_groups = _groups_from_edges(accepted_edges, meta, cc)
+
         if dry_run:
-            collected[cid] = final_groups
+            # 무효 청크의 기존 그룹은 평가 결과에 보존 상태로 포함한다.
+            old_edges = [(aid, m["old_rep"]) for aid, m in meta.items()
+                         if aid in protected and m.get("old_rep") in protected]
+            if old_edges:
+                p2 = {aid: aid for aid in protected}
+                def f2(x):
+                    while p2[x] != x:
+                        p2[x] = p2[p2[x]]; x = p2[x]
+                    return x
+                for a, b in old_edges: p2[f2(a)] = f2(b)
+                old_comps = {}
+                for aid in protected: old_comps.setdefault(f2(aid), []).append(aid)
+                final_groups += [g for g in old_comps.values() if len(g) >= 2]
+            collected[cc] = final_groups
             marked += sum(len(g) - 1 for g in final_groups)
-            reviewed += len(scores)
             continue
         with conn:
             conn.executemany(
                 "UPDATE articles_raw SET duplicate_of=NULL, dup_by_ai=0 "
-                "WHERE article_id=? AND dup_by_ai=1", [(aid,) for aid in scores])
+                "WHERE article_id=? AND dup_by_ai=1", [(aid,) for aid in active_ids])
             for group in final_groups:
-                rep = pick_rep(group, meta, cid)
+                rep = pick_rep(group, meta, cc)
                 others = [aid for aid in group if aid != rep]
                 conn.executemany(
                     "UPDATE articles_raw SET duplicate_of=?, dup_by_ai=1 WHERE article_id=?",
@@ -245,11 +470,10 @@ def run_dedup(conn, provider: LLMProvider | None = None,
                     "UPDATE articles_raw SET duplicate_of=? WHERE duplicate_of=? AND dup_by_ai=0",
                     [(rep, aid) for aid in others])
                 marked += len(others)
-        reviewed += len(scores)
 
-    log.info("AI 중복판정 완료 — 국가=%d 검사=%d 실패보존=%d 중복마킹=%d건 가드해제=%d건",
-             len(requests), reviewed, failed, marked, released)
-    out = {"countries": len(requests), "marked": marked,
+    log.info("AI 중복판정 완료 — 국가=%d 요청=%d 검사=%d 실패보존=%d 중복마킹=%d건 가드해제=%d건",
+             len(chunks_by_cc), len(requests), reviewed, failed, marked, released)
+    out = {"countries": len(chunks_by_cc), "requests": len(requests), "marked": marked,
            "reviewed": reviewed, "failed": failed, "released": released}
     if dry_run:
         out["groups"] = collected

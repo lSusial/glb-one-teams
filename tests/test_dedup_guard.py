@@ -12,7 +12,7 @@ class Provider:
     def __init__(self, response):
         self.response = response
 
-    def complete_json_batch(self, requests):
+    def complete_json_batch(self, requests, **_kwargs):
         return {r[0]: self.response for r in requests}
 
 
@@ -94,19 +94,63 @@ class DedupGuardTests(unittest.TestCase):
         meta = self.tok_meta(a, b, c)
         self.assertEqual([sorted(x) for x in L.split_by_overlap([1, 2, 3], meta, 0.25)], [[1, 2, 3]])
 
+    def test_pair_guard_allows_same_named_event_below_global_threshold(self):
+        meta = {
+            1: {'tok': L._tokens('BOJ rate hike currency alliance analysis japan'),
+                'title_tok': L._tokens('BOJ rate hike currency alliance')},
+            2: {'tok': L._tokens('BOJ raises benchmark rate policy shift inflation'),
+                'title_tok': L._tokens('BOJ raises benchmark rate')},
+        }
+        self.assertTrue(L.pair_passes_guard(1, 2, meta, 0.25))
+
+    def test_pair_guard_rejects_only_generic_event_words(self):
+        meta = {
+            1: {'tok': L._tokens('bank rate decision alpha lending'),
+                'title_tok': L._tokens('bank rate decision')},
+            2: {'tok': L._tokens('bank rate decision beta deposits'),
+                'title_tok': L._tokens('bank rate decision')},
+        }
+        self.assertFalse(L.pair_passes_guard(1, 2, meta, 0.8))
+
     def test_normalize_groups_accepts_both_formats_and_rejects_bad(self):
         self.assertEqual(L._normalize_groups([[1, 2]]), [[1, 2]])
         self.assertEqual(L._normalize_groups([{'event': 'x', 'ids': [1, 2]}]), [[1, 2]])
         self.assertIsNone(L._normalize_groups('bad'))
         self.assertIsNone(L._normalize_groups([{'event': 'x'}]))
 
+    def test_pair_decisions_require_every_pair_once(self):
+        lookup = {'p1': (1, 2), 'p2': (3, 4)}
+        good = {'decisions': [
+            {'pair_id': 'p1', 'same': True}, {'pair_id': 'p2', 'same': False},
+        ]}
+        self.assertEqual(L._valid_same_pairs(good, lookup), [(1, 2)])
+        self.assertIsNone(L._valid_same_pairs(
+            {'decisions': [{'pair_id': 'p1', 'same': True}]}, lookup))
+
+    def test_edge_groups_do_not_merge_transitive_chain(self):
+        meta = {
+            1: self.meta(pub='2026-09-16'),
+            2: self.meta(pub='2026-09-15'),
+            3: self.meta(pub='2026-09-14'),
+        }
+        self.assertEqual(L._groups_from_edges({(1, 2), (2, 3)}, meta, 'US'), [[1, 2]])
+
+    def test_pair_prompt_omits_summary(self):
+        meta = {
+            1: {**self.meta(), 'display_title': 'First title', 'summary': 'LEAKED SUMMARY'},
+            2: {**self.meta(), 'display_title': 'Second title', 'summary': 'OTHER SUMMARY'},
+        }
+        chunks = L._pair_chunks('US', [(1, 2, 0.5)], meta)
+        self.assertIn('First title', chunks[0][2])
+        self.assertNotIn('LEAKED SUMMARY', chunks[0][2])
+
     def test_run_dedup_guard_releases_unrelated_and_elects_latest_rep(self):
         self.add(1, FED_PREVIEW, FED_SUMMARY, day='2026-09-14')
         self.add(2, FED_DECISION, FED_SUMMARY, day='2026-09-16')
         self.add(3, 'Fasset to list dirham stablecoin', UAE_SUMMARY, day='2026-09-16')
-        stats = L.run_dedup(self.db, Provider({'groups': [{'event': 'Fed', 'ids': [1, 2, 3]}]}), days=None)
+        stats = L.run_dedup(self.db, Provider({'groups': [{'event': 'Fed', 'ids': [1, 2]}]}), days=None)
         self.assertEqual(self.links(), {1: 2, 2: None, 3: None})   # 결정 기사가 대표, 무관 기사는 풀림
-        self.assertEqual(stats['released'], 1)
+        self.assertEqual(stats['released'], 0)
         self.assertEqual(stats['marked'], 1)
 
     def test_run_dedup_dry_run_does_not_write(self):
@@ -114,7 +158,7 @@ class DedupGuardTests(unittest.TestCase):
         self.add(2, FED_DECISION, FED_SUMMARY, day='2026-09-16')
         stats = L.run_dedup(self.db, Provider({'groups': [[1, 2]]}), days=None, dry_run=True)
         self.assertEqual(self.links(), {1: None, 2: None})
-        self.assertEqual(stats['groups']['US'], [[1, 2]])
+        self.assertEqual([sorted(g) for g in stats['groups']['US']], [[1, 2]])
 
     def test_run_dedup_repoints_keyword_duplicates_to_new_rep(self):
         self.add(1, FED_PREVIEW, FED_SUMMARY, day='2026-09-14')

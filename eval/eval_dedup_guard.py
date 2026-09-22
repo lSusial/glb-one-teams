@@ -8,6 +8,7 @@
   python3 eval/eval_dedup_guard.py --db ~/x.db --thresholds 0.2,0.25,0.3
   python3 eval/eval_dedup_guard.py --live --days 8   # 새 프롬프트+가드를 실제 LLM으로 돌려 평가
                                                      # (DB는 안 바꾼다. 맥에서 실행, ANTHROPIC_API_KEY 필요, 소액)
+  python3 eval/eval_dedup_guard.py --labeled-live    # 라벨 70쌍만 LLM 판정(가장 저렴한 회귀 평가)
 
 읽는 법
   · precision = 가드 후에도 묶여 있는 쌍 중 진짜 같은 사건 비율 (높을수록 기사가 덜 사라짐)
@@ -52,7 +53,7 @@ def load_groups(conn):
     return {r: [r] + ch for r, ch in groups.items() if r in meta}, meta
 
 
-def live_eval(conn, labels, days) -> None:
+def live_eval(conn, labels, days, country=None) -> None:
     """현행 프롬프트+가드+대표선정을 실제 LLM으로 돌려(dry_run) 라벨 쌍의 묶임을 채점한다."""
     import os
     env = ROOT / ".env"
@@ -60,7 +61,7 @@ def live_eval(conn, labels, days) -> None:
         for line in env.read_text(encoding="utf-8").splitlines():
             if line.startswith("ANTHROPIC_API_KEY="):
                 os.environ["ANTHROPIC_API_KEY"] = line.split("=", 1)[1].strip().strip("\"'")
-    res = L.run_dedup(conn, days=days, use_batch=False, dry_run=True)
+    res = L.run_dedup(conn, days=days, use_batch=False, only_cc=country, dry_run=True)
     together: set[frozenset] = set()
     for groups in res.get("groups", {}).values():
         for g in groups:
@@ -75,6 +76,75 @@ def live_eval(conn, labels, days) -> None:
     print(f"[live] 라벨 {len(labels)}쌍 중 여전히 묶임 {len(kept)} — 같은사건 {tp}/{pos}(recall {tp/pos:.2f}), "
           f"별개 {len(kept) - tp}/{len(labels) - pos} 남음 → precision {tp/max(1,len(kept)):.2f}")
     print("        (기존 저장분 baseline precision 0.56, 가드만 0.25 적용 시 0.77/recall 0.95)")
+    if country:
+        for group in res.get("groups", {}).get(country, []):
+            print(f"  {country} 그룹 {group}")
+            for aid in group:
+                row = conn.execute("SELECT COALESCE(title_en,title) FROM articles_raw WHERE article_id=?",
+                                   (aid,)).fetchone()
+                print(f"    {aid}: {(row[0] if row else '')[:100]}")
+
+
+def labeled_live_eval(conn, labels) -> None:
+    """사람이 라벨링한 쌍만 현행 pair 프롬프트로 판정해 저비용으로 회귀 평가한다."""
+    import os
+    from llm_provider import get_provider
+    env = ROOT / ".env"
+    if env.exists() and not os.environ.get("ANTHROPIC_API_KEY"):
+        for line in env.read_text(encoding="utf-8").splitlines():
+            if line.startswith("ANTHROPIC_API_KEY="):
+                os.environ["ANTHROPIC_API_KEY"] = line.split("=", 1)[1].strip().strip("\"'")
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(articles_raw)")}
+    title_en_sql = "title_en" if "title_en" in cols else "NULL"
+    ids = {int(p[k]) for p in labels for k in ("rep", "child")}
+    meta = {}
+    for aid in ids:
+        a = conn.execute(
+            f"SELECT title, {title_en_sql} AS title_en, published_at FROM articles_raw WHERE article_id=?",
+            (aid,),
+        ).fetchone()
+        if not a:
+            continue
+        title = a["title_en"] or a["title"] or ""
+        toks = L._tokens(" ".join(x or "" for x in (a["title_en"], a["title"])))
+        meta[aid] = {"display_title": title, "pub": a["published_at"] or "",
+                     "tok": toks, "title_tok": L._tokens(title)}
+    pairs = [(int(p["rep"]), int(p["child"]), 0.0) for p in labels
+             if int(p["rep"]) in meta and int(p["child"]) in meta]
+    chunks = L._pair_chunks("LABEL", pairs, meta)
+    requests = [(cid, L._PAIR_SYSTEM, user, max(512, min(4096, len(lookup) * 80)))
+                for cid, lookup, user in chunks]
+    results = get_provider("fast", use_batch=False).complete_json_batch(requests, temperature=0)
+    raw_kept = set()
+    kept = set()
+    failed = 0
+    for cid, lookup, _user in chunks:
+        same = L._valid_same_pairs(results.get(cid), lookup)
+        if same is None:
+            failed += len(lookup)
+            continue
+        raw_kept.update(tuple(sorted(pair)) for pair in same)
+        kept.update(tuple(sorted(pair)) for pair in same if L.pair_passes_guard(*pair, meta))
+    scored = [p for p in labels if int(p["rep"]) in meta and int(p["child"]) in meta]
+    tp = sum(1 for p in scored if p["label"] == 1 and tuple(sorted((p["rep"], p["child"]))) in kept)
+    fp = sum(1 for p in scored if p["label"] == 0 and tuple(sorted((p["rep"], p["child"]))) in kept)
+    pos = sum(1 for p in scored if p["label"] == 1)
+    neg = len(scored) - pos
+    raw_tp = sum(1 for p in scored if p["label"] == 1 and tuple(sorted((p["rep"], p["child"]))) in raw_kept)
+    raw_fp = sum(1 for p in scored if p["label"] == 0 and tuple(sorted((p["rep"], p["child"]))) in raw_kept)
+    print(f"[labeled-live] 요청={len(requests)} 실패쌍={failed} "
+          f"LLM SAME={raw_tp + raw_fp}(TP {raw_tp}/FP {raw_fp}) → 가드 후={tp + fp}")
+    print(f"[labeled-live] 같은사건 {tp}/{pos} (recall {tp/max(1,pos):.2f}), "
+          f"별개 오병합 {fp}/{neg}, precision {tp/max(1,tp+fp):.2f}")
+    misses = [p for p in scored if p["label"] == 1
+              and tuple(sorted((p["rep"], p["child"]))) not in kept]
+    false_positives = [p for p in scored if p["label"] == 0
+                       and tuple(sorted((p["rep"], p["child"]))) in kept]
+    for label, items in (("놓침", misses[:12]), ("오병합", false_positives[:12])):
+        for p in items:
+            reason = "가드" if tuple(sorted((p["rep"], p["child"]))) in raw_kept else "LLM"
+            print(f"  {label}({reason}): {meta[p['rep']]['display_title'][:70]} | "
+                  f"{meta[p['child']]['display_title'][:70]}")
 
 
 def main() -> None:
@@ -82,14 +152,18 @@ def main() -> None:
     ap.add_argument("--db", default=str(config.DB_PATH))
     ap.add_argument("--thresholds", default="0.08,0.12,0.16,0.2,0.25,0.3,0.35")
     ap.add_argument("--live", action="store_true", help="LLM을 실제 호출해 현행 프롬프트+가드 전체를 평가(DB 무변경)")
+    ap.add_argument("--labeled-live", action="store_true", help="라벨 70쌍만 현행 pair 프롬프트로 실제 판정")
     ap.add_argument("--days", type=int, default=8, help="--live: 최근 N일 후보 (라벨 쌍이 다 들어오게 8 권장)")
+    ap.add_argument("--country", help="--live 대상 국가 코드(예: JP)")
     args = ap.parse_args()
 
     conn = sqlite3.connect(f"file:{args.db}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     labels = json.loads((ROOT / "eval" / "dedup_pairs_labeled.json").read_text(encoding="utf-8"))["pairs"]
+    if args.labeled_live:
+        return labeled_live_eval(conn, labels)
     if args.live:
-        return live_eval(conn, labels, args.days)
+        return live_eval(conn, labels, args.days, args.country)
     groups, meta = load_groups(conn)
     n_children = sum(len(m) - 1 for m in groups.values())
     n_pos = sum(1 for p in labels if p["label"] == 1)

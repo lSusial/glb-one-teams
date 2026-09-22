@@ -1,4 +1,5 @@
 import json
+import re
 import sqlite3
 import unittest
 from datetime import date
@@ -87,7 +88,8 @@ class QualityTests(unittest.TestCase):
         self.add(1); self.add(2, duplicate=1, ai=1)
         self.add(3, source=2, cc='JP'); self.add(4, source=2, cc='JP', duplicate=3, ai=1)
         p = Provider()
-        p.complete_json_batch = lambda requests: {'US': {'groups': []}}
+        p.complete_json_batch = lambda requests: {
+            r[0]: {'groups': []} for r in requests if r[0].startswith('US__')}
         stats = llm_dedup.run_dedup(self.db, p)
         self.assertEqual(self.links()[2], None)
         self.assertEqual(self.links()[4], 3)
@@ -105,16 +107,18 @@ class QualityTests(unittest.TestCase):
         self.assertIn('headline 2', p.requests[0][2])
         self.assertNotIn('headline 1', p.requests[0][2])
 
-    def test_oversized_request_preserves_links_and_reports_failure(self):
+    def test_large_country_is_split_into_bounded_requests(self):
         for aid in range(1, 502):
             self.add(aid, duplicate=1 if aid==2 else None, ai=1 if aid==2 else 0)
         self.db.execute("UPDATE articles_raw SET title=?", ('x' * 160,))
         self.db.commit()
         p = Provider({'groups': []})
         stats = llm_dedup.run_dedup(self.db, p)
-        self.assertEqual(p.requests, [])
-        self.assertEqual(stats['failed'], 501)
-        self.assertEqual(self.links()[2], 1)
+        self.assertGreater(len(p.requests), 1)
+        self.assertTrue(all(req[0].startswith('US__') for req in p.requests))
+        self.assertTrue(all(req[3] <= 4096 for req in p.requests))
+        self.assertEqual(stats['failed'], 0)
+        self.assertIsNone(self.links()[2])
 
     def test_empty_weekly_replaces_previous_briefing(self):
         self.add(1, source=3, cc='LA', score=60)
@@ -134,10 +138,22 @@ class QualityTests(unittest.TestCase):
     def test_more_than_40_includes_cross_boundary_pair(self):
         for aid in range(1, 82):
             self.add(aid)
-        p = Provider({'groups': [[1, 81]]})
+        p = Provider()
+        def respond(requests):
+            p.requests.extend(requests)
+            out = {}
+            for cid, _system, user, _tokens in requests:
+                same = []
+                for m in re.finditer(r'(p\d+)\nA (\d+).*?\nB (\d+)', user):
+                    if {int(m.group(2)), int(m.group(3))} == {1, 81}:
+                        same.append(m.group(1))
+                out[cid] = {'same_pair_ids': same}
+            return out
+        p.complete_json_batch = respond
         llm_dedup.run_dedup(self.db, p)
-        self.assertIn('81:', p.requests[0][2])
-        self.assertIn(date.today().isoformat(), p.requests[0][2])
+        all_input = '\n'.join(r[2] for r in p.requests)
+        self.assertIn('B 81 ', all_input)
+        self.assertIn(date.today().isoformat(), all_input)
         self.assertEqual(self.links()[81], 1)
 
     def test_briefing_uses_subject_country_gate_and_full_summary(self):
