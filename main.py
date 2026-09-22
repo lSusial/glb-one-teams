@@ -19,6 +19,7 @@ AI 레이어(별도 — ANTHROPIC_API_KEY 필요, 미설정 시 즉시 안내 �
   python main.py brief                 # 국가별 브리핑 생성
   python main.py highlights            # 오늘의 글로벌 핵심 생성(전 거점 횡단)
   python main.py ai [--days N]         # prefilter → rank → translate → brief → highlights 한 번에
+  python main.py dedup-repair [--apply]  # 저장된 AI 중복그룹 소급 보정(오묶음 해제·대표 재선출). 기본 dry-run
   python main.py export            # DB → data/export/countries.json (ACTIVE)
   python main.py export --passed   # AI 없이 필터 통과 기사로 export (Phase 1)
   python main.py admin             # 관리자 페이지 생성 (data/export/admin.html)
@@ -317,7 +318,37 @@ def cmd_ai_dedup(args):
     s = _ai_guard(lambda: llm_dedup.run_dedup(conn, days=getattr(args, "days", 3),
                                               use_batch=_batch_flag(args)), "ai-dedup")
     print(f"[ai-dedup] 국가={s['countries']} 검사={s['reviewed']} "
-          f"실패보존={s['failed']} 중복마킹={s['marked']}건")
+          f"실패보존={s['failed']} 중복마킹={s['marked']}건 가드해제={s.get('released', 0)}건")
+
+
+def cmd_dedup_repair(args):
+    """저장된 AI 그룹 소급 보정 — 겹침 가드로 오묶음을 풀고 대표를 새 규칙으로 재선출(LLM 비용 0).
+    기본은 dry-run(DB 무변경). --apply 면 DB를 백업(data/backups)한 뒤 반영한다."""
+    import sqlite3
+    from datetime import datetime
+    import llm_dedup
+    conn = db.open_conn()
+    llm_dedup.ensure_columns(conn)
+    if args.apply:
+        dst = config.DATA_DIR / "backups" / f"news.db.pre-dedup-repair-{datetime.now():%Y%m%d_%H%M%S}"
+        dst.parent.mkdir(exist_ok=True)
+        bk = sqlite3.connect(dst)
+        conn.backup(bk)
+        ok = bk.execute("PRAGMA quick_check").fetchone()[0]
+        bk.close()
+        if ok != "ok":
+            raise SystemExit(f"[dedup-repair] 백업 검증 실패({ok}) — 중단. DB는 변경되지 않았다.")
+        print(f"[dedup-repair] 백업 완료 → {dst}")
+    s = llm_dedup.repair_existing(conn, threshold=args.threshold, apply=args.apply)
+    print(f"[dedup-repair] {'적용' if args.apply else 'dry-run(DB 무변경)'} — 그룹={s['groups']} "
+          f"자식={s['children']} 그룹에서 풀림={s['released']} 대표교체/분리={s['rep_changed']} "
+          f"키워드중복 이동={s['keyword_repointed']}")
+    for line in s["rep_change_examples"][:8]:
+        print("   ", line)
+    for line in s["released_examples"][:8]:
+        print("    풀림:", line)
+    if not args.apply:
+        print("[dedup-repair] 반영하려면: python3 main.py dedup-repair --apply  (백업 후 적용)")
 
 
 def cmd_ai(args):
@@ -344,7 +375,7 @@ def cmd_ai(args):
     print("▶ AI 근접중복 판정(노출 후보 → duplicate_of)...")
     sd = _ai_guard(lambda: llm_dedup.run_dedup(conn, days=days, use_batch=ub), "ai")
     print(f"   중복마킹={sd['marked']}건 (국가 {sd['countries']}, "
-          f"검사={sd['reviewed']}, 실패보존={sd['failed']})")
+          f"검사={sd['reviewed']}, 실패보존={sd['failed']}, 가드해제={sd.get('released', 0)})")
     print("▶ [4/7] 모달 긴 요약(노출 기사만)...")
     se = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub), "ai")
     print(f"   대상={se['total']} 작성={se['written']} 다출처={se['synthesized']}")
@@ -482,6 +513,9 @@ def main():
     trn = sub.add_parser("translate", help="영어 기준본 → 한국어 번역 (표시분, 저비용)")
     trn.add_argument("--days", type=int, help="최근 N일만")
     trn.add_argument("--sync", action="store_true", help=_SYNC_HELP)
+    rdd = sub.add_parser("dedup-repair", help="저장된 AI 중복그룹 소급 보정(오묶음 해제·대표 재선출, 기본 dry-run)")
+    rdd.add_argument("--apply", action="store_true", help="백업 후 실제 반영")
+    rdd.add_argument("--threshold", type=float, help="겹침 가드 임계(기본 config.DEDUP_MIN_OVERLAP)")
     aded = sub.add_parser("ai-dedup", help="AI 근접중복 판정 (같은 사건 다른 표현 묶어 duplicate_of 마킹)")
     aded.add_argument("--days", type=int, default=3, help="최근 N일 노출후보만 (기본 3)")
     aded.add_argument("--sync", action="store_true", help=_SYNC_HELP)
@@ -522,7 +556,7 @@ def main():
         "run": cmd_run, "report": cmd_report, "list": cmd_list,
         "indicators": cmd_indicators, "indicators-history": cmd_indicators_history,
         "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "rank": cmd_rank,
-        "expand": cmd_expand, "ai-dedup": cmd_ai_dedup,
+        "expand": cmd_expand, "ai-dedup": cmd_ai_dedup, "dedup-repair": cmd_dedup_repair,
         "translate": cmd_translate, "brief": cmd_brief, "highlights": cmd_highlights,
         "ai": cmd_ai, "export": cmd_export, "admin": cmd_admin,
         "broadcast": cmd_broadcast, "eval": cmd_eval,

@@ -410,12 +410,22 @@
   }
   function relatedFor(h){
     const codes = h.country_codes || [];
-    const fromTop = (D.top_news || []).filter(n => codes.includes(n.cc)).slice(0,4);
-    if (fromTop.length) return fromTop;
-    const fromCtr = [];
-    for (const cc of codes) fromCtr.push(...(ctrArtsByCC.get(cc) || []));
-    fromCtr.sort((a,b) => titleOverlap(h,b) - titleOverlap(h,a) || (b.score||0) - (a.score||0));
-    return fromCtr.slice(0,4);
+    const pool = [];
+    const seen = new Set();
+    const add = (a) => {
+      if (!a || !a.u || seen.has(a.u)) return;
+      seen.add(a.u); pool.push(a);
+    };
+    for (const a of (D.top_news || [])) if (codes.includes(a.cc)) add(a);
+    for (const cc of codes) for (const a of (ctrArtsByCC.get(cc) || [])) add(a);
+
+    // daily_highlights에는 원문 article_id가 없으므로 제목·요약으로 가장 가까운
+    // 기사 하나만 고른다. 국가가 같다는 이유로 상위 4건을 그대로 붙이면 서로
+    // 다른 사건이 '관련 기사'로 노출된다. 겹치는 토큰이 2개 미만이면 연결하지
+    // 않는 편이 잘못된 출처를 보여주는 것보다 안전하다.
+    pool.sort((a,b) => titleOverlap(h,b) - titleOverlap(h,a) || (b.score||0) - (a.score||0));
+    const best = pool[0];
+    return best && titleOverlap(h,best) >= 2 ? best : null;
   }
   function hlHead(h){ return EN ? (h.headline_en||h.headline_ko) : (h.headline_ko||h.headline_en); }
   // daily_highlights.category는 백엔드가 한국어 고정값(금리/FX/규제/시장/디지털/지정학/인사)
@@ -425,17 +435,15 @@
   window.openHlModal = function(i){
     const h = highlights[i]; if (!h) return;
     const rel = relatedFor(h);
-    // 관련기사 중 모달용 긴 요약(expanded_summary)이 있으면 그걸 그대로 쓴다(뉴스
-    // 탭 모달과 동일한 상세도) — 없으면 기존처럼 카드용 짧은 요약(q)들을 이어붙임.
-    const withExpanded = rel.find(r => r.expanded_summary || r.expanded_summary_en);
+    const links = rel ? ((rel.rl && rel.rl.length) ? rel.rl : [{t:rel.t, u:rel.u, src:rel.src}]) : [];
     openArticleModal({
       t: hlHead(h),
       category: hlCat(h),
-      expanded_summary: withExpanded ? withExpanded.expanded_summary : '',
-      expanded_summary_en: withExpanded ? withExpanded.expanded_summary_en : '',
-      q: rel.map(r => r.q).filter(Boolean).join(' '),
-      q_en: rel.map(r => r.q_en||r.q).filter(Boolean).join(' '),
-      rl: rel.map(r => ({t:r.t, u:r.u, src:r.src})),
+      expanded_summary: rel ? (rel.expanded_summary||'') : '',
+      expanded_summary_en: rel ? (rel.expanded_summary_en||'') : '',
+      q: rel ? (rel.q||'') : '',
+      q_en: rel ? (rel.q_en||rel.q||'') : '',
+      rl: links.map(r => ({t:r.t, u:r.u, src:r.src})),
     });
   };
   function renderIssues(){

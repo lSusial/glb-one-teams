@@ -1,0 +1,425 @@
+{
+ "note": "2026-09-21 사람(Claude)이 제목+요약을 읽고 라벨링. label=1: 독자에게 같은 하나의 사건/뉴스, 0: 별개 사건. unsure=경계 사례. 표본은 저장된 dup_by_ai=1 443쌍의 겹침도(제목+요약 토큰) 십분위 균등추출(십분위당 7쌍, seed=7). 검토·수정 환영.",
+ "pairs": [
+  {
+   "rep": 162668,
+   "child": 162662,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 150500,
+   "child": 150515,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 158302,
+   "child": 158213,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 146336,
+   "child": 157636,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 162836,
+   "child": 162842,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 162705,
+   "child": 162702,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 150943,
+   "child": 162654,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 156553,
+   "child": 156552,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 168407,
+   "child": 168417,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 147249,
+   "child": 158433,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 168211,
+   "child": 168207,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 158302,
+   "child": 158235,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 147173,
+   "child": 153507,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 153834,
+   "child": 158760,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 153502,
+   "child": 163268,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 164406,
+   "child": 168068,
+   "label": 1,
+   "unsure": true
+  },
+  {
+   "rep": 152786,
+   "child": 150631,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 153502,
+   "child": 147259,
+   "label": 1,
+   "unsure": true
+  },
+  {
+   "rep": 168211,
+   "child": 167572,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 163558,
+   "child": 163586,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 148499,
+   "child": 160463,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 146056,
+   "child": 146581,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 162786,
+   "child": 151107,
+   "label": 0,
+   "unsure": true
+  },
+  {
+   "rep": 154150,
+   "child": 149268,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 168793,
+   "child": 168819,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 153081,
+   "child": 163138,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 146251,
+   "child": 158070,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 153502,
+   "child": 146884,
+   "label": 1,
+   "unsure": true
+  },
+  {
+   "rep": 161055,
+   "child": 149015,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 161055,
+   "child": 149105,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 151189,
+   "child": 162857,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 161055,
+   "child": 160840,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 149540,
+   "child": 155947,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 161055,
+   "child": 158398,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 161055,
+   "child": 146843,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 153502,
+   "child": 157400,
+   "label": 1,
+   "unsure": true
+  },
+  {
+   "rep": 154150,
+   "child": 147411,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 152715,
+   "child": 150476,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 164571,
+   "child": 160007,
+   "label": 0,
+   "unsure": true
+  },
+  {
+   "rep": 150330,
+   "child": 156445,
+   "label": 1,
+   "unsure": true
+  },
+  {
+   "rep": 153837,
+   "child": 153838,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 149969,
+   "child": 150109,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 146056,
+   "child": 147337,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 154161,
+   "child": 154154,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 161055,
+   "child": 148953,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 154161,
+   "child": 154783,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 158302,
+   "child": 163318,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 152992,
+   "child": 151336,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 156902,
+   "child": 156900,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 158536,
+   "child": 163425,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 162120,
+   "child": 162127,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 149969,
+   "child": 152704,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 146554,
+   "child": 147215,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 167778,
+   "child": 167792,
+   "label": 1,
+   "unsure": true
+  },
+  {
+   "rep": 162651,
+   "child": 162667,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 147477,
+   "child": 147489,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 158536,
+   "child": 158280,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 163035,
+   "child": 157189,
+   "label": 0,
+   "unsure": false
+  },
+  {
+   "rep": 164374,
+   "child": 169002,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 156666,
+   "child": 162407,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 147390,
+   "child": 154149,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 165451,
+   "child": 165483,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 158302,
+   "child": 158288,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 156632,
+   "child": 150570,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 164374,
+   "child": 169030,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 163923,
+   "child": 165296,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 162651,
+   "child": 162653,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 164470,
+   "child": 169361,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 153524,
+   "child": 157508,
+   "label": 1,
+   "unsure": false
+  },
+  {
+   "rep": 162380,
+   "child": 162387,
+   "label": 1,
+   "unsure": false
+  }
+ ]
+}

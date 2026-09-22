@@ -286,7 +286,8 @@ def _dedup_country_feed(rows, cm):
     """국가 피드 근접중복 축소 — 같은 스토리 여러 각도를 대표 1건으로 접는다.
     rows는 rank_score 내림차순 정렬 가정(대표=버킷 첫=최고 rank).
     시그니처=제목(한국어 우선)+요약 토큰, 임계=config.COUNTRY_STORY_DEDUP_SIM.
-    반환: (대표만 남긴 rows, {article_id: 묶인 기사 수})."""
+    반환: (대표만 남긴 rows, {article_id: 묶인 기사 수}, {article_id: 대표 외 묶인 rows}).
+    세 번째 값은 모달 '관련 기사 링크'에 쓴다(같은 사건을 다룬 실제 기사만)."""
     buckets = []
     for r in rows:
         text = ((r["title_ko"] or r["title"] or "") + " " +
@@ -297,12 +298,64 @@ def _dedup_country_feed(rows, cm):
                 b["mem"].append(r); break
         else:
             buckets.append({"tk": tk, "mem": [r]})
-    reps, sizes = [], {}
+    reps, sizes, members = [], {}, {}
     for b in buckets:
         rep = b["mem"][0]           # rank 최고(입력 첫)
         reps.append(rep)
         sizes[rep["article_id"]] = len(b["mem"])
-    return reps, sizes
+        members[rep["article_id"]] = b["mem"][1:]
+    return reps, sizes, members
+
+
+_RL_MAX = 5   # 모달 '관련 기사 링크' 최대 개수(본 기사 포함)
+
+
+def _story_links_map(conn) -> dict[int, list[dict]]:
+    """대표 article_id → 같은 사건을 다룬 다른 기사 [{t,u,src}] (duplicate_of 형제).
+    '관련 기사'는 실제로 같은 스토리인 것만 쓴다 — 같은 국가·토픽이 겹친다는 이유로
+    무관한 기사를 붙이지 않는다(2026-09-21 오연결 수정).
+    제목은 카드 본문 헤드라인과 동일하게 title_ko(있으면) 우선 — 원문 title을 쓰면
+    같은 기사인데도 다른 기사처럼 보이는 표시 불일치가 생긴다(2026-09-22 수정)."""
+    out: dict[int, list[dict]] = {}
+    for r in conn.execute(
+        "SELECT a.duplicate_of AS rep, a.title AS title, a.title_ko AS title_ko, "
+        "a.link AS link, m.media_name AS src "
+        "FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id "
+        "WHERE a.duplicate_of IS NOT NULL "
+        "ORDER BY a.ai_score DESC, a.published_at DESC"
+    ):
+        disp = r["title_ko"] or r["title"]
+        out.setdefault(int(r["rep"]), []).append(
+            {"t": (disp or "")[:100], "u": r["link"], "src": r["src"]})
+    return out
+
+
+def _related_links(a, synth_links, siblings, members) -> list[dict]:
+    """본 기사 + 같은 사건 기사만. 우선순위: 다출처 종합 소스 → duplicate_of 형제 →
+    피드 스토리 묶음 멤버. 없으면 본 기사 링크 1건(모달은 이 경우 '원문' 1개만 표시).
+    표시 제목은 카드 헤드라인(t = title_ko or title)과 반드시 일치시킨다 — 원문
+    title(raw)을 쓰면 같은 기사의 자기 참조가 마치 다른/무관한 기사처럼 보인다
+    (2026-09-22: 인도 탭 '러시아 제재법' 기사에서 발견 — url은 동일한데 자기 참조
+    링크 제목이 원문 영문 헤드라인이라 AI가 다듬은 카드 제목과 달라 보였음)."""
+    keys = a.keys()
+    self_title = (a["title_ko"] if "title_ko" in keys else None) or a["title"]
+    rl = [{"t": self_title[:100], "u": a["link"], "src": a["media_name"]}]
+    seen = {a["link"]}
+
+    def add(t, u, src):
+        if u and u not in seen:
+            seen.add(u)
+            rl.append({"t": (t or "")[:100], "u": u, "src": src})
+
+    for x in (synth_links or []):
+        add(x.get("t"), x.get("u"), x.get("src"))
+    for x in siblings:
+        add(x["t"], x["u"], x["src"])
+    for m in members:
+        m_keys = m.keys()
+        m_title = (m["title_ko"] if "title_ko" in m_keys else None) or m["title"]
+        add(m_title, m["link"], m["media_name"])
+    return rl[:_RL_MAX]
 
 
 def _cluster_dedup(rows, cm, sig, threshold, rep="rank"):
@@ -500,6 +553,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     total = 0
 
     cm = ranking.cluster_sizes(conn)   # 표시 정렬용 복합 rank_score 재료(export 1회 계산)
+    siblings_map = _story_links_map(conn)   # 모달 관련 기사(같은 사건) 재료
     for cc, flag in _FLAGS.items():
         rows = conn.execute(
             f"""
@@ -517,10 +571,11 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
             (cc, *params_tail, *dparams),
         ).fetchall()
         dedup_n = {}
+        story_mem = {}
         if active_only:
             ordered = ranking.order(conn, rows, cluster_map=cm)   # 표시 정렬 = 복합 rank_score
             # 근접중복 스토리 축소(같은 사건 여러 각도 → 대표 1건). UPI·Fed 류 홍수 방지.
-            ordered, dedup_n = _dedup_country_feed(ordered, cm)
+            ordered, dedup_n, story_mem = _dedup_country_feed(ordered, cm)
             rows = ordered[:config.COUNTRY_MAX_ARTICLES]        # 국가당 노출 상한
             # 상한에서 밀린 사회기사 몇 건 되살림(위 where로 이미 후보에 포함됨).
             have = {a["article_id"] for a in rows}
@@ -544,7 +599,8 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                     (cc, config.AI_SCORE_ACTIVE_THRESHOLD, *fill_dp),
                 ).fetchall()
                 fill_ordered = ranking.order(conn, fill_rows, cluster_map=cm)
-                fill_ordered, _ = _dedup_country_feed(fill_ordered, cm)
+                fill_ordered, _, fill_mem = _dedup_country_feed(fill_ordered, cm)
+                story_mem.update(fill_mem)
                 for a in fill_ordered:
                     if a["article_id"] not in have:
                         rows.append(a); have.add(a["article_id"])
@@ -555,32 +611,17 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
         for i, a in enumerate(rows):
             codes = [c for c in (a["topics"] or "").split(",") if c]
             my_topics = set(codes)
-            # related links: 다출처 종합에 실제로 쓰인 소스가 있으면 그걸 우선 사용(진짜
-            # 근거), 없으면 기존처럼 같은 cc 내 topics 겹치는 다른 기사로 추정.
+            # related links: 같은 사건을 다룬 실제 기사만(다출처 종합 소스 → duplicate_of 형제 →
+            # 피드 스토리 묶음). 같은 국가·토픽이 겹친다는 이유로 무관한 기사를 붙이지 않는다.
             synth_links = None
             if a["source_links"]:
                 try:
                     synth_links = json.loads(a["source_links"]) or None
                 except Exception:
                     synth_links = None
-            if synth_links:
-                rl = [{"t": s["t"], "u": s["u"]} for s in synth_links if s.get("u") != a["link"]]
-                rl = ([{"t": a["title"][:100], "u": a["link"]}] + rl) if rl else \
-                     [{"t": a["title"][:100], "u": a["link"]}]
-            else:
-                rl = [{"t": a["title"][:100], "u": a["link"]}]
-                for j, b in enumerate(rows):
-                    if j == i:
-                        continue
-                    b_topics = set((b["topics"] or "").split(","))
-                    if (not my_topics) or (my_topics & b_topics):
-                        rl.append({"t": b["title"][:100], "u": b["link"]})
-                        break
-                if len(rl) < 2:
-                    for j, b in enumerate(rows):
-                        if j != i:
-                            rl.append({"t": b["title"][:100], "u": b["link"]})
-                            break
+            rl = _related_links(a, synth_links,
+                                siblings_map.get(a["article_id"], []),
+                                story_mem.get(a["article_id"], []))
             articles.append({
                 # 55점 미만으로 뜨는 건 오직 SOCIETY 예외 경로뿐 → 사회 탭에만 노출(정책 등 오염 방지)
                 **({"c": "society", "c2": ""}
@@ -595,7 +636,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                 "expanded_summary": a["expanded_summary"] or "",
                 "expanded_summary_en": a["expanded_summary_en"] or "",
                 "u": a["link"],
-                "rl": rl[:2],
+                "rl": rl,
                 "score": a["ai_score"],
                 "rank_score": ranking.rank_score(a, cm.get(a["article_id"], 0)),
                 "kfi": [c for c in (a["korean_fi"] or "").split(",") if c],
@@ -767,6 +808,7 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
         (config.AI_SCORE_ACTIVE_THRESHOLD, *params, *exp),
     ).fetchall()
     rows = ranking.order(conn, rows)   # 표시 정렬 = 복합 rank_score(근접중복·국가상한은 아래서 적용)
+    siblings_map = _story_links_map(conn)
 
     out, seen_tokens, per_cc = [], [], {}
     for r in rows:
@@ -778,15 +820,8 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
             continue                                   # 국가별 상한
         codes = [c for c in (r["topics"] or "").split(",") if c]
         my_topics = set(codes)
-        # related: 전체 후보에서 같은 cc + topics 겹치는 기사 1개
-        rl = [{"t": r["title"][:100], "u": r["link"]}]
-        for b in rows:
-            if b["link"] == r["link"]:
-                continue
-            b_topics = set((b["topics"] or "").split(","))
-            if b["cc"] == cc and (not my_topics or my_topics & b_topics):
-                rl.append({"t": b["title"][:100], "u": b["link"]})
-                break
+        # related: 같은 사건 기사(duplicate_of 형제)만 — 같은 국가·토픽 겹침으로 붙이지 않음
+        rl = _related_links(r, None, siblings_map.get(r["article_id"], []), [])
         t_ko = r["title_ko"] if "title_ko" in r.keys() else None
         out.append(dict(cc=cc, flag=_FLAGS_ALL.get(cc, ""), src=r["media_name"],
                         d=(r["published_at"] or "")[:10],
@@ -794,7 +829,7 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
                         q_en=r["summary_en"] or "",
                         expanded_summary=r["expanded_summary"] or "",
                         expanded_summary_en=r["expanded_summary_en"] or "",
-                        **taxonomy.cat_fields(codes), score=r["ai_score"], u=r["link"], rl=rl[:2]))
+                        **taxonomy.cat_fields(codes), score=r["ai_score"], u=r["link"], rl=rl))
         seen_tokens.append(tk)
         per_cc[cc] = per_cc.get(cc, 0) + 1
         if len(out) >= limit:

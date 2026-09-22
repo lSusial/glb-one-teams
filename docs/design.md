@@ -33,7 +33,7 @@ fetch(collector) → 관련성 게이트(keyword_filter, 축B) + dedup
 | 기사 | `ai_score`(0~100), `summary_en`, `topics`(주제 카테고리), `event_type`, `primary_country`, `kb_implication_en` | `llm_ranker.py` | 노출 게이트(≥55)·카드 요약·필터·KB 시사점 |
 | 기사 | `summary_ko`, `kb_implication` | `llm_translate.py` | 표시분 한국어(영어가 canonical, 미번역 시 EN 폴백) |
 | 기사 | `expanded_summary` | `llm_expand.py` | 모달 3~4문단, 다출처 종합. 소스가 얇으면(스니펫 ≤300자) 경량 프롬프트로 분기 |
-| 기사 | `duplicate_of`(`dup_by_ai`) | `llm_dedup.py` | 같은 사건의 다른 표현 묶기. 검사 성공 범위만 교체, 실패·미검사분은 기존 결과 보존 |
+| 기사 | `duplicate_of`(`dup_by_ai`) | `llm_dedup.py` | 같은 사건의 다른 표현 묶기. 검사 성공 범위만 교체, 실패·미검사분은 기존 결과 보존. **대표 = 프리뷰 아님 → 그 나라 현지언론 → ai_score → 게시 최신**(국가 탭이 매체국적 기준이라 현지언론 대표가 아니면 탭에서 사라짐), **겹침 가드**(`config.DEDUP_MIN_OVERLAP`=0.25, 제목+요약 토큰 겹침 그래프의 연결요소만 한 그룹). 소급은 `main.py dedup-repair` |
 | 국가 | `country_briefings`(summary/issues/outlook/keywords/key_stat/source_articles, 한·영) | `briefing.py` | 뉴스 탭 상단 일일 브리핑, 주간 브리핑. 적격 기사(주제국가·55점·요약 보유)가 없으면 "기준 미충족" 안내 저장 |
 | 전체 | `daily_highlights`(Top 10) | `briefing.py` | 홈 TOP ISSUES |
 | 전체 | `rank_score` | `ranking.py` | 화면 정렬 전용(게이트·온도는 ai_score) |

@@ -11,6 +11,7 @@ python main.py run                 # fetch → filter → dedup (Google News 때
 python main.py ai --days 2         # prefilter → fulltext → rank → ai-dedup → expand → translate → brief → highlights (Batches, 수 분~10분)
 python main.py indicators          # 환율·지수·정책금리·국채 스냅샷
 python main.py export              # data/export/*.json + 화면 HTML 생성
+python3 eval/display_audit.py      # 표시 감사(읽기 전용 리포트) — 요약 없음·오래된 기사·오묶음·관련링크 무관 등. deploy_web.sh가 export 직후 자동 실행
 ./deploy_web.sh                    # export + wrangler pages deploy (= 아래 한 줄)
 wrangler pages deploy data/export --project-name kb-global-daily --commit-dirty=true
 ```
@@ -18,6 +19,7 @@ wrangler pages deploy data/export --project-name kb-global-daily --commit-dirty=
 - 주 1회: `python main.py indicators-history`(6개월 주봉 백필, 맥북). 필요 시 `korean-fi` · `personnel` · `backfill-country` 태깅.
 - 서버 동기화(`sync_to_server.sh`, `deploy_web.sh` 내 rsync)는 Oracle Cloud SSH 22번 타임아웃으로 **2026-08-24부터 비활성**. 복구되면 `deploy_web.sh`의 주석 블록 해제.
 - 평가: `python main.py eval --mode prefilter|ranker` (`eval/`). 품질 회귀: `python -m unittest discover -s tests -v`.
+- **AI 중복판정 신뢰성(2026-09-21)**: 저장분 오묶음률이 라벨 표본 기준 약 44%였고, 점수 동점 시 가장 오래된 기사(예: '결정 임박' 프리뷰)가 대표가 돼 실제 결정 기사가 숨는 결함이 있었다. 코드는 대표 재선정 + 겹침 가드로 고쳤다. **기존 저장분 소급은 맥북에서**: `python3 main.py dedup-repair`(dry-run, DB 무변경) → `python3 main.py dedup-repair --apply`(백업 후 반영, LLM 비용 0). 새 프롬프트+가드를 실제 LLM으로 평가하려면 `python3 eval/eval_dedup_guard.py --live --days 8`(DB 무변경, 소액). 결과·해석은 `eval/eval_dedup_guard.py` 머리말과 `docs/work_log.md`.
 - 물량 병목 주의: `PREFILTER_LIMIT=1600`, `RANK_LIMIT=700`(2026-09-08 상향). 초과분은 `--days 2` 창 밖으로 밀려 영구 미처리되므로 수집량이 늘면 재점검.
 
 ## 2. 결정 필요 — 주 대상 독자와 채널
@@ -39,7 +41,7 @@ wrangler pages deploy data/export --project-name kb-global-daily --commit-dirty=
 | Zalo(베트남) | — | — | OA + 사업자 인증 + ZNS 템플릿 사전 승인(수일~수주), 토큰 갱신 필요 | 어려움 |
 
 카카오는 매일 자동 push하려면 유료 브랜드메시지 외 대안이 없다(무료 채널 소식은 수동 발행). 권장 순서는 **Telegram으로 먼저 파이프라인 검증 → Zalo/왓츠앱은 승인 절차를 병행 준비**.
-관련 미결: 채널 확정(#18), 다국어 확대(#16), 업데이트 주기(#17), 해외법인 접근 인증(#19) — `../STATUS.md` §5.
+관련 미결: 채널 확정(#18), 업데이트 주기(#17), 해외법인 접근 인증(#19) — `../STATUS.md` §5.
 
 ## 3. 브로드캐스트 (Telegram) — 현재 구현
 

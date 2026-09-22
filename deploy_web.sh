@@ -14,6 +14,11 @@ echo "▶ [1/2] 최신 화면 생성 (export)..."
 cd "$DIR"
 .venv/bin/python main.py export
 
+echo ""
+echo "▶ [1b] 표시 감사 (리포트만 — 배포를 막지 않는다)..."
+.venv/bin/python eval/display_audit.py || true
+echo ""
+
 # ── Oracle Cloud 동기화 임시 비활성화 (SSH 22번 포트 타임아웃, 2026-08-24) ──
 # 복구되면 아래 두 블록 주석 해제.
 # echo "▶ [2/4] 화면 파일 업로드 (rsync)..."
