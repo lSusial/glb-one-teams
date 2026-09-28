@@ -9,6 +9,7 @@ import briefing
 import export_json
 import llm_dedup
 import llm_ranker
+import llm_expand
 import llm_translate
 import numeric_guard
 
@@ -302,6 +303,33 @@ class NumericGuardTests(unittest.TestCase):
         self.assertTrue(numeric_guard.usd_mismatch('a $19 million deal', '19만 달러 거래'))
         self.assertFalse(numeric_guard.usd_mismatch('a $19 million deal', '1,900만 달러 거래'))
         self.assertFalse(numeric_guard.usd_mismatch('$1.2 trillion', '1조 2,000억 달러'))
+
+    def test_decimal_with_korean_unit_is_not_truncated(self):
+        # 2026-09-28 라이브 IN 브리핑: "$186.5억"이 186달러로 읽혀 정상 번역이 불일치 판정됨
+        self.assertEqual(numeric_guard.usd_values('$186.5억을 기록'), [186.5e8])
+        self.assertFalse(numeric_guard.usd_mismatch('$18.65 billion', '$186.5억'))
+        self.assertTrue(numeric_guard.usd_mismatch('$18.65 billion', '$18.65억'))
+
+    def test_expanded_korean_summary_with_wrong_amount_is_not_stored(self):
+        db = sqlite3.connect(':memory:')
+        db.row_factory = sqlite3.Row
+        self.addCleanup(db.close)
+        db.executescript("""
+            CREATE TABLE media_sources(source_id INTEGER PRIMARY KEY, primary_country_code TEXT,
+                media_name TEXT, tier INTEGER);
+            INSERT INTO media_sources VALUES(1,'IN','Business Standard',1);
+            CREATE TABLE articles_raw(article_id INTEGER PRIMARY KEY, source_id INTEGER, title TEXT,
+                summary TEXT, full_text TEXT, link TEXT, ai_score INTEGER, duplicate_of INTEGER,
+                published_at TEXT);
+            INSERT INTO articles_raw VALUES(1,1,'RBI net dollar purchases hit record $18.65bn',
+                'RBI bought a net $18.65 billion in July.','', 'https://x/1', 70, NULL, '2026-09-27');
+        """)
+        llm_expand.run_expand(db, Provider({
+            'expanded_summary_en': 'The RBI purchased a net $18.65 billion in July.',
+            'expanded_summary_ko': '인도중앙은행이 7월 달러 순매입액 $18.65억을 기록했다.'}))
+        row = db.execute('SELECT expanded_summary, expanded_summary_en FROM articles_raw').fetchone()
+        self.assertIsNone(row['expanded_summary'])
+        self.assertEqual(row['expanded_summary_en'], 'The RBI purchased a net $18.65 billion in July.')
 
     def test_dollar_sign_without_digits_does_not_raise(self):
         self.assertEqual(numeric_guard.usd_values('priced in US$, analysts said. Up to $5...'), [5.0])
