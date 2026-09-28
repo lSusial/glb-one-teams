@@ -22,8 +22,10 @@ LLM 호출·DB 쓰기 없음. export 직후 돌린다:
                         (2026-09-22 인도 탭 '러시아 제재법' 기사에서 실제 발견)
  12 HIGHLIGHT_SOURCE_MISSING 홈 탑이슈에 검증된 source_article_ids가 없음
  13 HIGHLIGHT_SOURCE_INVALID 저장된 근거 ID가 DB·export 근거 기사와 일치하지 않음
- 14 AMOUNT_MISMATCH    카드 한국어(제목·요약·모달)의 달러 금액이 영문과 다름 — 단위 오변환
-                        (2026-09-28 인도 RBI 기사 모달에서 $18.65 billion → "$18.65억" 실제 발견)
+ 14 AMOUNT_MISMATCH    카드(제목·요약·모달)·국가 브리핑·주간 요약의 한국어 금액(USD·INR)이 영문과 다름
+                        (2026-09-28 인도 RBI 모달 $18.65 billion → "$18.65억", Rs 10,000 crore → "1조 루피" 등)
+ 15 STALE_WEEKLY       주간 탭이 기준일보다 14일 넘게 지난 주를 보여줌(주간 브리핑 미생성)
+ 16 STALE_SPARK        지표 탭 6개월 추세(주봉) 마지막 점이 기준일보다 13일 넘게 지남(주 1회 indicators-history 미실행)
 '점검 통과'가 '정확함'을 뜻하진 않는다 — 규칙으로 잡히는 결함만 센다.
 """
 from __future__ import annotations
@@ -272,13 +274,50 @@ def main() -> int:
             continue
         seen_amount.add(a.get("u"))
         for en, ko in (("t_en", "t"), ("q_en", "q"), ("expanded_summary_en", "expanded_summary")):
-            if a.get(en) and a.get(ko) and numeric_guard.usd_mismatch(a[en], a[ko]):
+            if a.get(en) and a.get(ko) and numeric_guard.amount_mismatch(a[en], a[ko]):
                 add("AMOUNT_MISMATCH", f"{w} {ko}: {short(a)} · {a.get('u', '')[:70]}")
+
+    def load(name):
+        try:
+            return json.loads((export_dir / f"{name}.json").read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+
+    for c in load("countries").get("countries", []):
+        b = c.get("brief") or {}
+        if b.get("ko") and b.get("en") and numeric_guard.amount_mismatch(
+                json.dumps(b["en"], ensure_ascii=False), json.dumps(b["ko"], ensure_ascii=False)):
+            add("AMOUNT_MISMATCH", f"국가 브리핑 {c['cc']}")
+
+    # 15 STALE_WEEKLY / 주간 금액
+    for c in load("weekly").get("countries", []):
+        ko = " ".join([c.get(k) or "" for k in ("summary", "outlook", "key_stat")] + list(c.get("issues") or []))
+        en = " ".join([c.get(k) or "" for k in ("summary_en", "outlook_en", "key_stat_en")]
+                      + list(c.get("issues_en") or []))
+        if numeric_guard.amount_mismatch(en, ko):
+            add("AMOUNT_MISMATCH", f"주간 {c['cc']} ({c.get('week_start')}~{c.get('week_end')})")
+        try:
+            lag = (today - date.fromisoformat(c["week_end"])).days
+        except (KeyError, TypeError, ValueError):
+            continue
+        if lag > 14:
+            add("STALE_WEEKLY", f"{c['cc']} {c.get('week_start')}~{c['week_end']} ({lag}일 전)")
+
+    # 16 STALE_SPARK
+    for c in load("markets").get("countries", []):
+        for i in c.get("indicators") or []:
+            sp = i.get("spark") or []
+            try:
+                lag = (today - date.fromisoformat(sp[-1]["d"])).days if sp else None
+            except (KeyError, TypeError, ValueError):
+                continue
+            if lag is not None and lag > 13:   # 주 1회 백필이면 정상 최대 13일
+                add("STALE_SPARK", f"{c['cc']} {i.get('label')} 마지막 {sp[-1]['d']} ({lag}일 전)")
 
     order = ["EMPTY_SUMMARY", "STALE", "PREVIEW_SHOWN", "COUNTRY_MISMATCH", "NEAR_DUP_IN_TAB",
              "JUNK_TITLE", "UNRELATED_LINKS", "TITLE_SUMMARY_GAP", "HIDDEN_NEWER_REP", "THIN_TABS",
              "SELF_TITLE_MISMATCH", "HIGHLIGHT_SOURCE_MISSING", "HIGHLIGHT_SOURCE_INVALID",
-             "AMOUNT_MISMATCH"]
+             "AMOUNT_MISMATCH", "STALE_WEEKLY", "STALE_SPARK"]
     print(f"표시 감사 — 기준일 {today} · 카드 {len(cards)}장 (국가탭 {len(tabs)}장) · export={export_dir}")
     print("-" * 78)
     for k in order:

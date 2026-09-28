@@ -120,14 +120,14 @@ def run_translate(conn, provider: LLMProvider | None = None,
             continue
         if target == "ko":
             t_ko = str(data.get("title_ko") or "")[:60]
-            if numeric_guard.usd_mismatch(src_s, s + " " + t_ko):
+            if numeric_guard.amount_mismatch(src_s, s + " " + t_ko):
                 log.warning("번역 금액 불일치 — 저장 안 함(article_id=%s): %s", article_id, t_ko[:40])
                 continue
             cur.execute("UPDATE articles_raw SET summary_ko=?, title_ko=? WHERE article_id=?",
                         (s, t_ko or None, article_id))
             stats["ko"] += 1
         else:
-            if numeric_guard.usd_mismatch(src_s, s):
+            if numeric_guard.amount_mismatch(src_s, s):
                 log.warning("번역 금액 불일치 — 저장 안 함(article_id=%s)", article_id)
                 continue
             cur.execute("UPDATE articles_raw SET summary_en=? WHERE article_id=?",

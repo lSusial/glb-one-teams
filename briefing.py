@@ -233,7 +233,7 @@ def run_briefing(
         if arts:
             generated = " ".join((summary, summary_en, issues, issues_en,
                                   outlook, outlook_en, key_stat, key_stat_en))
-            if numeric_guard.usd_mismatch(bullets_by_cc.get(cc, ""), generated):
+            if numeric_guard.amount_mismatch(bullets_by_cc.get(cc, ""), generated):
                 log.warning("브리핑 금액 불일치 — 저장 안 함(국가=%s, %s): %s",
                             cc, briefing_type, summary[:80])
                 continue
@@ -336,7 +336,7 @@ def _validate_highlight_sources(items: list, rows, limit: int) -> list[dict]:
             continue
         generated = (item.get("headline_ko") or "") + " " + (item.get("headline_en") or "")
         source_text = " ".join(row_text(allowed[aid]) for aid in valid)
-        if numeric_guard.usd_mismatch(source_text, generated):
+        if numeric_guard.amount_mismatch(source_text, generated):
             log.warning("글로벌 핵심 금액 불일치 — 항목 제외: %s", item.get("headline_ko", "")[:80])
             continue
         clean = dict(item)
