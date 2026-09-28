@@ -80,6 +80,9 @@
         <option value="rejected">거부</option>
         <option value="pending">대기</option>
       </select>
+      <input type="date" id="fDateFrom" title="시작일"/>
+      <span class="muted">~</span>
+      <input type="date" id="fDateTo" title="종료일"/>
       <span class="count" id="artCount"></span>
     </div>
     <div class="tablewrap"><table id="artTable"></table></div>
@@ -149,7 +152,9 @@
     if(key){artSort=key;artDir=d;}
     const q=document.getElementById('q').value.toLowerCase();
     const cc=fc.value, dec=document.getElementById('fDecision').value;
-    let rows=arts.filter(a=>(!q||(a.t||'').toLowerCase().includes(q))&&(!cc||a.cc===cc)&&(!dec||a.decision===dec));
+    const dFrom=document.getElementById('fDateFrom').value, dTo=document.getElementById('fDateTo').value;
+    let rows=arts.filter(a=>(!q||(a.t||'').toLowerCase().includes(q))&&(!cc||a.cc===cc)&&(!dec||a.decision===dec)
+      &&(!dFrom||(a.date||'')>=dFrom)&&(!dTo||(a.date||'')<=dTo));
     rows.sort((a,b)=>{let x=a[artSort],y=b[artSort];if(x==null)x='';if(y==null)y='';return (x>y?1:x<y?-1:0)*artDir;});
     document.getElementById('artCount').textContent=rows.length.toLocaleString()+' 건';
     const h=['cc|국가','src|매체','date|날짜','t|제목','decision|판정','score|점수','ai|AI','topics|토픽'];
@@ -163,7 +168,7 @@
   }
   makeSortable(document.getElementById('artTable'));
   document.getElementById('artTable').addEventListener('click',e=>{const th=e.target.closest('th');if(th&&th.dataset.k){renderArts(th.dataset.k, artSort===th.dataset.k?-artDir:1);}});
-  ['q','fCountry','fDecision'].forEach(id=>document.getElementById(id).addEventListener('input',()=>renderArts()));
+  ['q','fCountry','fDecision','fDateFrom','fDateTo'].forEach(id=>document.getElementById(id).addEventListener('input',()=>renderArts()));
   document.getElementById('artNote').textContent='최근 '+arts.length.toLocaleString()+'건 표본 (전체는 DB). 최대 1,500행 표시.';
   renderArts();
 
