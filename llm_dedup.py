@@ -60,7 +60,8 @@ _PAIR_SYSTEM = (
     "자산 움직임을 같은 원인으로 보도한 기사, 같은 수치를 반올림하거나 후속 기사에서 갱신한 경우. "
     "예: BOJ 금리인상 전망 ↔ 실제 금리인상 ↔ 그 결정 직후 엔화 반응은 SAME이다. 게시일 차이는 "
     "신디케이션·후속보도일 수 있으므로 그것만으로 DIFFERENT로 두지 마라. 서로 다른 기업·기관·지표·"
-    "정책, 같은 기관의 별도 발표, 같은 국가·분야라는 공통점만 있는 기사는 DIFFERENT다. "
+    "정책, 같은 기관의 별도 발표, 같은 국가·분야라는 공통점만 있는 기사는 DIFFERENT다. 특히 "
+    "여러 기업의 IPO 동향·주간 시장전망 같은 종합기사와 특정 기업의 개별 IPO·거래는 DIFFERENT다. "
     "제목이 다른 표현을 쓰더라도 주체·핵심 사건·시기가 맞으면 SAME으로 판정하라. "
     "모든 입력 pair_id를 정확히 한 번씩 판정해야 한다. JSON만 출력한다: "
     "{\"decisions\": [{\"pair_id\": \"p1\", \"same\": true}, "
@@ -80,6 +81,13 @@ _STOP = set("the and for with from that this are was were has have had will its 
             "more than also can may could would year years first two".split())
 _EVENT_GENERIC = {"rate", "rates", "hike", "cut", "decision", "policy", "market", "markets",
                   "bank", "banks", "central", "government", "economy", "economic", "financial"}
+_EVENT_GENERIC.update({
+    "ipo", "sebi", "company", "companies", "firm", "firms", "file", "filing", "stock", "stocks",
+    "share", "shares", "india", "indian", "japan", "japanese", "china", "chinese", "indonesia",
+    "indonesian", "vietnam", "vietnamese", "thailand", "thai", "singapore", "hong", "kong",
+    "britain", "british", "united", "states", "bangladesh", "cambodia", "laos", "myanmar",
+    "malaysia", "philippines", "australia", "canada", "uae",
+})
 
 # 사건 '전' 예고·프리뷰 헤드라인 — 같은 그룹에 결과 기사가 있으면 대표에서 뒤로 민다.
 _PREVIEW_RE = re.compile(
@@ -128,14 +136,13 @@ def is_preview(*titles: str | None) -> bool:
 
 
 def pick_rep(group, meta, subject: str | None = None) -> int:
-    """대표 = 예고/프리뷰 아님 → (subject 국가의) 현지언론 → ai_score 최고 → 게시 최신 → id 작은 것.
+    """대표 = 예고/프리뷰 아님 → ai_score 최고 → (동점이면) 현지언론 → 게시 최신 → id 작은 것.
     meta[aid] = {"score", "pub", "titles", "media_cc"}. 시간순 사건에서 결정 기사가 대표가 되게 하고,
-    국가 탭이 매체국적 기준이라 대표가 그 나라 현지언론이어야 탭에서 사라지지 않는다
-    (예: 인니 재무장관 교체 그룹의 대표가 Reuters가 되면 인도네시아 탭에서 통째로 빠진다)."""
+    주제국가 라우팅을 쓰므로 현지언론 우선은 같은 점수일 때만 적용한다."""
     return max(group, key=lambda aid: (
         not is_preview(*meta[aid]["titles"]),
-        bool(subject) and meta[aid].get("media_cc") == subject,
         meta[aid]["score"] or 0,
+        bool(subject) and meta[aid].get("media_cc") == subject,
         meta[aid]["pub"] or "",
         -aid,
     ))
@@ -285,6 +292,28 @@ def _groups_from_edges(edges, meta, subject: str | None = None) -> list[list[int
             groups.append(sorted(group))
         pending.difference_update(group)
     return groups
+
+
+def _preserved_groups(protected, meta) -> list[list[int]]:
+    """무효 LLM 청크에 걸린 기존 AI 그룹의 멤버십을 그대로 복원한다."""
+    old_edges = [(aid, m["old_rep"]) for aid, m in meta.items()
+                 if aid in protected and m.get("old_rep") in protected]
+    if not old_edges:
+        return []
+    parent = {aid: aid for aid in protected}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    for a, b in old_edges:
+        parent[find(a)] = find(b)
+    comps = {}
+    for aid in protected:
+        comps.setdefault(find(aid), []).append(aid)
+    return [g for g in comps.values() if len(g) >= 2]
 
 
 def _valid_same_pairs(response, lookup):
@@ -437,29 +466,22 @@ def run_dedup(conn, provider: LLMProvider | None = None,
 
         active_ids = {aid for aid in meta if aid not in protected}
         final_groups = _groups_from_edges(accepted_edges, meta, cc)
+        preserved_groups = _preserved_groups(protected, meta)
 
         if dry_run:
             # 무효 청크의 기존 그룹은 평가 결과에 보존 상태로 포함한다.
-            old_edges = [(aid, m["old_rep"]) for aid, m in meta.items()
-                         if aid in protected and m.get("old_rep") in protected]
-            if old_edges:
-                p2 = {aid: aid for aid in protected}
-                def f2(x):
-                    while p2[x] != x:
-                        p2[x] = p2[p2[x]]; x = p2[x]
-                    return x
-                for a, b in old_edges: p2[f2(a)] = f2(b)
-                old_comps = {}
-                for aid in protected: old_comps.setdefault(f2(aid), []).append(aid)
-                final_groups += [g for g in old_comps.values() if len(g) >= 2]
-            collected[cc] = final_groups
-            marked += sum(len(g) - 1 for g in final_groups)
+            collected[cc] = final_groups + preserved_groups
+            marked += sum(len(g) - 1 for g in final_groups + preserved_groups)
             continue
         with conn:
             conn.executemany(
                 "UPDATE articles_raw SET duplicate_of=NULL, dup_by_ai=0 "
                 "WHERE article_id=? AND dup_by_ai=1", [(aid,) for aid in active_ids])
-            for group in final_groups:
+            # 판정 실패 그룹은 멤버십은 보존하되 대표만 현재 점수/최신성으로 다시 선출한다.
+            conn.executemany(
+                "UPDATE articles_raw SET duplicate_of=NULL, dup_by_ai=0 "
+                "WHERE article_id=? AND dup_by_ai=1", [(aid,) for g in preserved_groups for aid in g])
+            for group in final_groups + preserved_groups:
                 rep = pick_rep(group, meta, cc)
                 others = [aid for aid in group if aid != rep]
                 conn.executemany(
@@ -481,7 +503,8 @@ def run_dedup(conn, provider: LLMProvider | None = None,
 
 
 def repair_existing(conn, threshold: float | None = None, apply: bool = False,
-                    sample: int = 12) -> dict:
+                    sample: int = 12, days: int | None = None,
+                    rep_ids: list[int] | None = None) -> dict:
     """이미 저장된 AI 그룹(dup_by_ai=1)에 가드·대표선정 규칙을 소급한다 — LLM 비용 0.
 
     ① 겹침 가드로 서로 이어지지 않는 기사는 그룹에서 풀어 화면에 되돌린다.
@@ -489,29 +512,55 @@ def repair_existing(conn, threshold: float | None = None, apply: bool = False,
        '결정 임박' 프리뷰가 대표로 남고 실제 결정 기사가 숨는 문제를 바로잡는다.
     ③ 대표가 바뀌면 키워드 중복(dup_by_ai=0)이 가리키던 대상도 새 대표로 옮긴다.
     apply=False(기본)면 DB를 바꾸지 않고 집계·표본만 돌려준다(dry-run)."""
-    rows = conn.execute(
-        "SELECT article_id, duplicate_of FROM articles_raw "
-        "WHERE dup_by_ai = 1 AND duplicate_of IS NOT NULL").fetchall()
+    if rep_ids:
+        roots = sorted({int(x) for x in rep_ids})
+        q = ",".join("?" * len(roots))
+        rows = conn.execute(
+            f"SELECT article_id, duplicate_of FROM articles_raw "
+            f"WHERE dup_by_ai=1 AND duplicate_of IN ({q})", roots).fetchall()
+    elif days:
+        roots = [r[0] for r in conn.execute(
+            """SELECT DISTINCT c.duplicate_of
+               FROM articles_raw c JOIN articles_raw r ON r.article_id=c.duplicate_of
+               WHERE c.dup_by_ai=1 AND c.duplicate_of IS NOT NULL
+                 AND (substr(c.published_at,1,10) >= date('now', ?)
+                      OR substr(r.published_at,1,10) >= date('now', ?))""",
+            (f"-{int(days)} days", f"-{int(days)} days"))]
+        if roots:
+            q = ",".join("?" * len(roots))
+            rows = conn.execute(
+                f"SELECT article_id, duplicate_of FROM articles_raw "
+                f"WHERE dup_by_ai=1 AND duplicate_of IN ({q})", roots).fetchall()
+        else:
+            rows = []
+    else:
+        rows = conn.execute(
+            "SELECT article_id, duplicate_of FROM articles_raw "
+            "WHERE dup_by_ai = 1 AND duplicate_of IS NOT NULL").fetchall()
     groups: dict[int, list[int]] = {}
     for r in rows:
         groups.setdefault(int(r["duplicate_of"]), []).append(int(r["article_id"]))
     ids = set(groups) | {c for ch in groups.values() for c in ch}
     meta: dict[int, dict] = {}
     titles: dict[int, str] = {}
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(articles_raw)")}
+    title_en_sql = "a.title_en" if "title_en" in cols else "NULL"
     for i in range(0, len(ids), 500):
         chunk = list(ids)[i:i + 500]
         q = ",".join("?" * len(chunk))
         for a in conn.execute(
-                f"SELECT a.article_id, a.title, a.title_ko, a.summary_en, a.ai_score, a.published_at, "
+                f"SELECT a.article_id, a.title, a.title_ko, {title_en_sql} AS title_en, "
+                f"a.ai_score, a.published_at, "
                 f"m.primary_country_code AS media_cc, "
                 f"COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) AS cc "
                 f"FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id "
                 f"WHERE a.article_id IN ({q})", chunk):
             aid = int(a["article_id"])
+            display_title = a["title_en"] or a["title"] or ""
             meta[aid] = {"score": a["ai_score"] or 0, "pub": a["published_at"] or "",
-                         "titles": [a["title_ko"], a["title"]], "media_cc": a["media_cc"],
+                         "titles": [a["title_ko"], a["title_en"], a["title"]], "media_cc": a["media_cc"],
                          "cc": a["cc"],
-                         "tok": _tokens((a["title"] or "") + " " + (a["summary_en"] or ""))}
+                         "title_tok": _tokens(display_title), "tok": _tokens(display_title)}
             titles[aid] = (a["title"] or "")[:90]
 
     updates: list[tuple[str, tuple]] = []     # (sql, params)

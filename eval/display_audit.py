@@ -225,16 +225,29 @@ def main() -> int:
             if ov < 0.12:
                 add("UNRELATED_LINKS", f"[{w}] {short(a, 34)} ↔ 관련: {(x.get('t') or '')[:40]} (겹침 {ov:.2f})")
 
-    # 9 HIDDEN_NEWER_REP (AI 중복판정에서 더 새롭고 점수 같거나 높은 기사가 오래된 대표 밑에 숨음)
+    # 9 HIDDEN_NEWER_REP (더 새 기사뿐 아니라 더 높은 점수의 기사나 ACTIVE 자식이
+    # 비노출 대표 밑에 숨은 경우도 포함한다. 대표>=55 조건을 걸면 가장 심각한 후자를 놓친다.)
     for r in conn.execute(
-            """SELECT c.article_id cid, c.title ct, c.published_at cp, c.ai_score cs,
-                      r.article_id rid, r.title rt, r.published_at rp, r.ai_score rs
+            """SELECT c.article_id cid, COALESCE(c.title_en,c.title) ct,
+                      c.published_at cp, c.ai_score cs,
+                      r.article_id rid, COALESCE(r.title_en,r.title) rt,
+                      r.published_at rp, r.ai_score rs
                FROM articles_raw c JOIN articles_raw r ON r.article_id = c.duplicate_of
-               WHERE c.dup_by_ai = 1 AND r.duplicate_of IS NULL AND r.ai_score >= ?
+               WHERE c.dup_by_ai = 1 AND r.duplicate_of IS NULL
                  AND r.published_at >= date(?, '-6 day')""",
-            (config.AI_SCORE_ACTIVE_THRESHOLD, today.isoformat())):
-        if (r["cp"] or "")[:10] > (r["rp"] or "")[:10] and (r["cs"] or 0) >= (r["rs"] or 0):
-            add("HIDDEN_NEWER_REP", f"대표 {r['rp'][:10]} '{(r['rt'] or '')[:40]}' 밑에 더 새 {r['cp'][:10]} '{(r['ct'] or '')[:40]}'")
+            (today.isoformat(),)):
+        child_score, rep_score = r["cs"] or 0, r["rs"] or 0
+        child_is_preview = L.is_preview(r["ct"])
+        newer_not_worse = ((r["cp"] or "")[:10] > (r["rp"] or "")[:10]
+                           and child_score >= rep_score and not child_is_preview)
+        active_hidden = (child_score >= config.AI_SCORE_ACTIVE_THRESHOLD
+                         and rep_score < config.AI_SCORE_ACTIVE_THRESHOLD
+                         and not child_is_preview)
+        if ((child_score > rep_score and not child_is_preview)
+                or newer_not_worse or active_hidden):
+            add("HIDDEN_NEWER_REP",
+                f"대표 {r['rp'][:10]} {rep_score}점 '{(r['rt'] or '')[:38]}' 밑에 "
+                f"자식 {r['cp'][:10]} {child_score}점 '{(r['ct'] or '')[:38]}'")
 
     # 10 THIN_TABS
     counts = {}

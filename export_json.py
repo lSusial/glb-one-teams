@@ -483,6 +483,7 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
                    a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name, a.primary_country
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.korean_fi IS NOT NULL AND a.korean_fi != '' AND a.duplicate_of IS NULL
+              AND (COALESCE(a.summary_ko, '') != '' OR COALESCE(a.summary_en, '') != '')
               AND a.link NOT LIKE '%/tag/%' AND a.link NOT LIKE '%/tags/%'
               AND a.link NOT LIKE '%/topic/%' AND a.link NOT LIKE '%/topics/%'
               AND m.primary_country_code IN ({ph}){dc}

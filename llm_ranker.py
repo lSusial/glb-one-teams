@@ -69,6 +69,45 @@ _PRIMARY_COUNTRY_BLOCK = (
     + ". If the article is genuinely global or about a country not in this list, output \"GLOBAL\"."
 )
 
+_SCORE_FACTORS_BLOCK = (
+    "\n\nscore_factors — score each dimension independently as an INTEGER 0-4; do not choose "
+    "the same value by default:\n"
+    "- directness: 0 unrelated, 1 indirect/global context, 2 relevant to the market, "
+    "3 direct host-market banking impact, 4 direct KB entity/host authority action.\n"
+    "- magnitude: 0 negligible, 1 small, 2 meaningful, 3 market-wide, 4 systemic/sovereign.\n"
+    "- urgency: 0 no action horizon, 1 long-term, 2 monitor this week, 3 brief today, "
+    "4 immediate response required.\n"
+    "- novelty: 0 repeated commentary, 1 routine update, 2 new data/development, "
+    "3 new decision/event, 4 unexpected regime change.\n"
+    "Python derives the final score from these factors. ai_score is retained only as a fallback, "
+    "so assess the four factors carefully and independently."
+)
+
+_SCORE_FACTOR_WEIGHTS = {"directness": 7, "magnitude": 6, "urgency": 5, "novelty": 4}
+
+
+def _score_from_data(data: dict) -> tuple[int, dict | None]:
+    """4개 품질 차원을 결정적 점수로 합산한다. 구 응답은 ai_score로 호환한다.
+
+    8 + 7D + 6M + 5U + 4N: 전부 2점인 일반 관심기사는 52점, 직접적·중대한
+    당일 조치(3,3,3,3)는 74점, 전 차원 최고는 96점이다.
+    """
+    raw = data.get("score_factors")
+    if isinstance(raw, dict):
+        factors = {}
+        for key in _SCORE_FACTOR_WEIGHTS:
+            value = raw.get(key)
+            if type(value) is not int or not 0 <= value <= 4:
+                break
+            factors[key] = value
+        else:
+            score = 8 + sum(_SCORE_FACTOR_WEIGHTS[k] * factors[k] for k in factors)
+            return max(0, min(100, score)), factors
+    try:
+        return max(0, min(100, int(data.get("ai_score")))), None
+    except (TypeError, ValueError):
+        return 50, None
+
 
 def ensure_columns(conn) -> None:
     db.ensure_columns(conn, "articles_raw", [
@@ -96,6 +135,8 @@ def ensure_columns(conn) -> None:
         # 주제 국가(기사가 '다루는' 국가, ISO2) — 매체 국적(m.primary_country_code)과 구분.
         # 신화통신의 인니 기사: media=CN, primary_country=ID. 2026-09-11 신설(피드백 7).
         ("primary_country",   "ALTER TABLE articles_raw ADD COLUMN primary_country   TEXT"),
+        # 점수 설명가능성·캘리브레이션용 4차원 원점수(JSON). 과거 행은 NULL 허용.
+        ("ai_score_factors", "ALTER TABLE articles_raw ADD COLUMN ai_score_factors TEXT"),
     ])
 
 
@@ -123,7 +164,8 @@ def _system_prompt() -> str:
     return (
         "You are a global intelligence analyst at KB Financial Group. "
         "Analyze one overseas news article and output ONLY this JSON:\n"
-        '{"ai_score": (KB business importance, integer 0-100), '
+        '{"ai_score": (KB business importance fallback, integer 0-100), '
+        '"score_factors": {"directness": 0-4, "magnitude": 0-4, "urgency": 0-4, "novelty": 0-4}, '
         '"title_ko": "15자 이내 신문 헤드라인 스타일 한국어 제목", '
         '"title_en": "one-line dry English newspaper headline (max ~70 chars)", '
         '"summary_en": "2-4 sentence English summary", '
@@ -137,6 +179,7 @@ def _system_prompt() -> str:
         + taxonomy.event_prompt_reference()
         + _TOPIC_DISAMBIG_BLOCK
         + _PRIMARY_COUNTRY_BLOCK
+        + _SCORE_FACTORS_BLOCK
         + "\n\nai_score rubric — use the FULL 0-100 range and DIFFERENTIATE. Do NOT cluster scores "
         "in a narrow band: most routine articles belong below 55, and a typical day yields only a "
         "handful of 80+ items. Score THIS article's specific importance (directness × magnitude × "
@@ -166,7 +209,8 @@ def _system_prompt_light() -> str:
         "You are a global intelligence analyst at KB Financial Group. KB has NO branch in "
         "this market — you are scanning it only because Korean competitor banks operate there. "
         "Analyze one news article and output ONLY this JSON:\n"
-        '{"ai_score": (importance, integer 0-100), '
+        '{"ai_score": (importance fallback, integer 0-100), '
+        '"score_factors": {"directness": 0-4, "magnitude": 0-4, "urgency": 0-4, "novelty": 0-4}, '
         '"title_ko": "15자 이내 신문 헤드라인 스타일 한국어 제목", '
         '"title_en": "one-line dry English newspaper headline (max ~70 chars)", '
         '"summary_en": "2-4 sentence English summary", '
@@ -180,6 +224,7 @@ def _system_prompt_light() -> str:
         + taxonomy.event_prompt_reference()
         + _TOPIC_DISAMBIG_BLOCK
         + _PRIMARY_COUNTRY_BLOCK
+        + _SCORE_FACTORS_BLOCK
         + "\n\nai_score rubric — score general macro/financial materiality for a market with "
         "no KB entity (assign the highest tier that applies):\n"
         "75-100  Major sovereign/macro event: central bank decision, currency crisis, "
@@ -313,10 +358,7 @@ def run_rank(conn, provider: LLMProvider | None = None,
     for cid, r in row_by_id.items():
         data = results.get(cid) or {}
         # ── 폴백 포함 파싱 ──
-        try:
-            score = max(0, min(100, int(data.get("ai_score"))))
-        except (TypeError, ValueError):
-            score = 50
+        score, score_factors = _score_from_data(data)
         title_ko = str(data.get("title_ko") or "")[:60]
         summary_en = str(data.get("summary_en") or "")[:1500]
         topics = taxonomy.validate(data.get("topics", []))
@@ -333,11 +375,12 @@ def run_rank(conn, provider: LLMProvider | None = None,
 
         cur.execute(
             """UPDATE articles_raw
-               SET ai_score = ?, title_ko = ?, title_en = ?, summary_en = ?, topics = ?,
+               SET ai_score = ?, ai_score_factors = ?, title_ko = ?, title_en = ?, summary_en = ?, topics = ?,
                    event_type = ?, source_links = ?,
                    primary_country = ?, ai_model = ?
                WHERE article_id = ?""",
-            (score, title_ko, title_en, summary_en, ",".join(topics), ",".join(event_types),
+            (score, json.dumps(score_factors, ensure_ascii=False) if score_factors else None,
+             title_ko, title_en, summary_en, ",".join(topics), ",".join(event_types),
              source_links, primary_country, provider.model_id, r["article_id"]),
         )
         if redo_days:

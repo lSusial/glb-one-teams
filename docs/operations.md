@@ -19,7 +19,7 @@ wrangler pages deploy data/export --project-name kb-global-daily --commit-dirty=
 - 주 1회: `python main.py indicators-history`(6개월 주봉 백필, 맥북). 필요 시 `korean-fi` · `personnel` · `backfill-country` 태깅.
 - 서버 동기화(`sync_to_server.sh`, `deploy_web.sh` 내 rsync)는 Oracle Cloud SSH 22번 타임아웃으로 **2026-08-24부터 비활성**. 복구되면 `deploy_web.sh`의 주석 블록 해제.
 - 평가: `python main.py eval --mode prefilter|ranker` (`eval/`). 품질 회귀: `python -m unittest discover -s tests -v`.
-- **AI 중복판정 신뢰성(2026-09-21)**: 저장분 오묶음률이 라벨 표본 기준 약 44%였고, 점수 동점 시 가장 오래된 기사(예: '결정 임박' 프리뷰)가 대표가 돼 실제 결정 기사가 숨는 결함이 있었다. 코드는 대표 재선정 + 겹침 가드로 고쳤다. **기존 저장분 소급은 맥북에서**: `python3 main.py dedup-repair`(dry-run, DB 무변경) → `python3 main.py dedup-repair --apply`(백업 후 반영, LLM 비용 0). 새 프롬프트+가드를 실제 LLM으로 평가하려면 `python3 eval/eval_dedup_guard.py --live --days 8`(DB 무변경, 소액). 결과·해석은 `eval/eval_dedup_guard.py` 머리말과 `docs/work_log.md`.
+- **AI 중복판정 신뢰성**: 저장분 소급은 먼저 `python3 main.py dedup-repair --days 1`로 dry-run한 뒤 `--apply --days 1`로 백업·적용한다. 특정 그룹만 고치려면 `--rep-id ARTICLE_ID`를 여러 번 지정할 수 있다. 전체 무범위 적용은 과거 그룹을 대량 변경하므로 피한다. 새 프롬프트 실측은 `python3 eval/eval_dedup_guard.py --labeled-live`(라벨 70쌍) 또는 `--live --days 8`(DB 무변경).
 - 물량 병목 주의: `PREFILTER_LIMIT=1600`, `RANK_LIMIT=700`(2026-09-08 상향). 초과분은 `--days 2` 창 밖으로 밀려 영구 미처리되므로 수집량이 늘면 재점검.
 
 ## 2. 결정 필요 — 주 대상 독자와 채널

@@ -8,6 +8,7 @@ from unittest.mock import patch
 import briefing
 import export_json
 import llm_dedup
+import llm_ranker
 import llm_translate
 
 
@@ -52,6 +53,16 @@ class QualityTests(unittest.TestCase):
 
     def links(self):
         return {r[0]: r[1] for r in self.db.execute('SELECT article_id,duplicate_of FROM articles_raw')}
+
+    def test_rank_score_factors_are_deterministic_and_differentiated(self):
+        score, factors = llm_ranker._score_from_data({"score_factors": {
+            "directness": 3, "magnitude": 2, "urgency": 3, "novelty": 2,
+        }, "ai_score": 62})
+        self.assertEqual(score, 64)
+        self.assertEqual(factors["directness"], 3)
+
+    def test_rank_score_falls_back_to_legacy_value(self):
+        self.assertEqual(llm_ranker._score_from_data({"ai_score": 72}), (72, None))
 
     def test_scoped_dedup_preserves_other_country_and_old_rows(self):
         self.add(1); self.add(2, duplicate=1, ai=1)

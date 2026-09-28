@@ -21,8 +21,8 @@ fetch → keyword_filter(통과≥2, SOCIETY 독립경로) → dedup → prefilt
 | 키워드 필터·중복 | `keyword_filter.py` | ✅ 인사동향(역할어×교체신호어 AND)·한국계 금융기관·주제국가 폴백 태깅 포함 |
 | LLM 1차 관문 | `llm_prefilter.py` | ✅ F1 0.542→0.708 |
 | 본문 추출 | `fulltext.py` | ✅ 노출 기사 기준 약 48% 성공(Reuters/Bloomberg/WSJ 페이월). 실패 사유 미기록(§6) |
-| AI 분석 | `llm_ranker.py` | ✅ ai_score·요약(en)·주제 6종·이벤트유형 4종·`primary_country`·KB 시사점 |
-| 근접중복 | `llm_dedup.py` | ✅ 9/16 신설, 9/21 범위 보존·대표 재선정·겹침 가드, **9/28 기사쌍 단위 소청크로 재설계**(국가 전체 응답무효→전체실패 구조 해소). 실 DB 적용·검증·배포 완료(recall 0.87/precision 0.94, `eval/eval_dedup_guard.py --labeled-live`) |
+| AI 분석 | `llm_ranker.py` | ✅ 요약(en)·주제 6종·이벤트유형 4종·`primary_country`. 9/28부터 중요도를 4차원(직접성·규모·긴급성·신규성 0~4)으로 받고 코드가 ai_score를 합산·근거 JSON 저장(다음 rank부터 적용) |
+| 근접중복 | `llm_dedup.py` | ✅ 기사쌍 단위 소청크(recall 0.87/precision 0.94), 전이 병합 차단. 9/28 소급 보정도 제목 전용으로 변경하고 `--days`/`--rep-id` 범위 지원; 오늘 오병합 해제·숨은 고점 대표 4→0 적용 |
 | 긴 요약·번역 | `llm_expand.py` `llm_translate.py` | ✅ 모달 3~4문단(얇은 소스는 경량 분기), 표시분 한국어 |
 | 브리핑 | `briefing.py` | ✅ 국가 일일/주간 + Top10. 9/21 적격 기준(주제국가·55점·요약 보유) 강화, 적격 0건은 안내 저장 |
 | 랭킹 | `ranking.py` | ✅ 표시 정렬 rank_score(`docs/rank_score_spec.md`), 게이트는 ai_score≥55 |
@@ -86,6 +86,7 @@ fetch → keyword_filter(통과≥2, SOCIETY 독립경로) → dedup → prefilt
 - DB integrity check 실패 이력(인덱스 손상) → `REINDEX idx_articles_dedup`로 복구했음. 재발 시 동일 조치.
 - **품질 감사(9/18) 잔여 P2**: 다매체 가중치가 동일 매체 반복 보도에 과대 반영(발행사 기준 집계 필요) · 본문 추출 실패/미시도 구분 불가 및 나중에 확보한 본문이 재분석에 반영되지 않음 · F1 평가가 운영 랭커 프롬프트를 평가하지 않음. 상세 `docs/quality_audit_2026-09-18.md`. (P1 3건은 9/21 코드 반영 후 재생성·배포까지 완료)
 - ~~AI 중복판정 오묶음~~ **(9/28 재설계로 해소)**: 국가 전체를 한 번에 LLM에 넣던 방식이 응답 무효 시 국가 전체를 실패보존시켜 recall이 무너지는 구조였다(라이브 평가 recall 0.28). 기사쌍 단위 소청크 요청으로 재설계(`llm_dedup.py`) — 실 DB 적용 결과 실패보존 0건, 라벨 회귀평가 recall 0.87/precision 0.94. `eval/eval_dedup_guard.py --labeled-live`로 저비용 회귀평가 가능.
+- **ai_score 양자화 개선(9/28 코드 반영)**: 기존 최종 숫자 직접 생성은 오늘 ACTIVE 20건이 62/72 두 값에 집중됐다. `directness·magnitude·urgency·novelty` 각 0~4를 받아 Python 가중합(8~96)으로 산출하고 `ai_score_factors`에 저장하도록 변경. 기존 응답은 `ai_score` 폴백. 다음 정규 rank부터 실데이터 분포를 재측정한다.
 - **SDK 호환**: `anthropic` 1.x는 파이프라인의 `temperature` 인자를 받지 않아 호출이 실패한다(2026-09-21 확인). `requirements.txt`를 `anthropic>=0.40.0,<1`로 고정. 새 가상환경 구성 시 주의.
 - **TH·LA 국가 화면 빈 상태**: 채점분 최고점 45/35로 55점 게이트 미달. 관심시장용 적격 기준을 별도로 검토(표본 사람 검토 후 게이트·쿼리 조정, 점수 하향/억지 채우기는 지양).
 - 라오스 정책금리 시드값 미확보 · 국채는 미국만 수집.
@@ -101,5 +102,5 @@ fetch → keyword_filter(통과≥2, SOCIETY 독립경로) → dedup → prefilt
 2. **품질 감사 잔여 P2 + TH·LA 적격 기준** — 발행사 집계, 본문 추출 상태 추적, 랭커 평가 연결
 3. **시연 준비** — #14 문구 반영, #12 결정
 4. **Telegram 정기 발송** — 채널·독자 결정 후 파이프라인 연결
-5. **rank_score 재튜닝** — 라벨 30건 기반(`docs/rank_score_spec.md` §8), 라벨 확대 후 재실행
+5. **4차원 ai_score·rank_score 재튜닝** — 다음 정규 실행에서 factor 분포와 국가별 55점 통과율 측정 후, 라벨 확대해 가중치 재조정
 6. 소스 보강 — 태국·라오스 매체, 국내 언론 글로벌 기사(#4 잔여). OFFICIAL 당국 피드는 보류 원칙 유지

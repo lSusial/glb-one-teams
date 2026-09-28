@@ -73,6 +73,10 @@ class DedupGuardTests(unittest.TestCase):
         self.assertEqual(L.pick_rep([1, 2], m, 'US'), 2)
         self.assertEqual(L.pick_rep([1, 2], m), 1)   # subject 미지정이면 최신
 
+    def test_pick_rep_score_beats_local_media(self):
+        m = {1: self.meta(score=72, media_cc='GLOBAL'), 2: self.meta(score=28, media_cc='US')}
+        self.assertEqual(L.pick_rep([1, 2], m, 'US'), 1)
+
     def test_pick_rep_old_tiebreak_keeps_lower_id(self):
         m = {1: self.meta(), 2: self.meta()}
         self.assertEqual(L.pick_rep([1, 2], m), 1)
@@ -201,6 +205,20 @@ class DedupGuardTests(unittest.TestCase):
         # 재실행해도 바뀌지 않는다(멱등)
         L.repair_existing(self.db, apply=True)
         self.assertEqual(self.links(), links)
+
+    def test_repair_days_limits_groups(self):
+        self.add(1, FED_PREVIEW, FED_SUMMARY, day='2000-01-01')
+        self.add(2, FED_DECISION, FED_SUMMARY, day='2000-01-01', duplicate=1, ai=1)
+        self.add(3, FED_PREVIEW, FED_SUMMARY, day=date.today().isoformat())
+        self.add(4, FED_DECISION, FED_SUMMARY, day=date.today().isoformat(), duplicate=3, ai=1)
+        s = L.repair_existing(self.db, apply=False, days=1)
+        self.assertEqual(s['groups'], 1)
+
+    def test_repair_rep_ids_limits_groups(self):
+        self.seed_old_groups()
+        s = L.repair_existing(self.db, apply=False, rep_ids=[4])
+        self.assertEqual(s['groups'], 1)
+        self.assertEqual(s['released'], 1)
 
 
 if __name__ == '__main__':
