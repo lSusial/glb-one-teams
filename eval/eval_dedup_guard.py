@@ -41,15 +41,19 @@ def load_groups(conn):
         groups.setdefault(r["rid"], []).append(r["cid"])
     ids = set(groups) | {c for ch in groups.values() for c in ch}
     meta = {}
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(articles_raw)")}
+    title_en_sql = "title_en" if "title_en" in cols else "NULL AS title_en"
     for aid in ids:
         a = conn.execute(
-            "SELECT article_id, title, summary_en, ai_score, published_at "
+            f"SELECT article_id, title, {title_en_sql}, ai_score, published_at "
             "FROM articles_raw WHERE article_id=?", (aid,)).fetchone()
         if not a:
             continue
+        # repair_existing과 같은 기준: 복제된 요약이 아니라 제목(영문 우선)만으로 가드한다(2026-09-28)
+        tok = L._tokens(a["title_en"] or a["title"] or "")
         meta[aid] = {"score": a["ai_score"], "pub": a["published_at"] or "",
                      "titles": [a["title"]], "media_cc": None,
-                     "tok": L._tokens((a["title"] or "") + " " + (a["summary_en"] or ""))}
+                     "tok": tok, "title_tok": tok}
     return {r: [r] + ch for r, ch in groups.items() if r in meta}, meta
 
 
