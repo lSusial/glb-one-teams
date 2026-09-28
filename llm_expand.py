@@ -163,7 +163,7 @@ def run_expand(conn, provider: LLMProvider | None = None,
         ko = str(data.get("expanded_summary_ko") or "").strip()[:7000]
         if not (en or ko):
             continue
-        if en and ko and numeric_guard.usd_mismatch(en, ko):
+        if en and ko and numeric_guard.amount_mismatch(en, ko):
             # 한국어 금액 단위 오변환($18.65 billion → "$18.65억") — 영문만 저장, 한국어는 다음 실행에서 재생성
             log.warning("긴 요약 금액 불일치 — 한국어 저장 안 함(article_id=%s)", r["article_id"])
             ko = ""

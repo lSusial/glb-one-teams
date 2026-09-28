@@ -331,6 +331,44 @@ class NumericGuardTests(unittest.TestCase):
         self.assertIsNone(row['expanded_summary'])
         self.assertEqual(row['expanded_summary_en'], 'The RBI purchased a net $18.65 billion in July.')
 
+    def test_inr_crore_and_korean_rupee_units_are_parsed(self):
+        self.assertEqual(numeric_guard.inr_values('Rs 10,000 crore IPO'), [1e11])
+        self.assertEqual(numeric_guard.inr_values('a Rs 22,568-crore IPO at Rs 1,785 per share'),
+                         [2.2568e11, 1785])
+        self.assertEqual(numeric_guard.inr_values('₹2,000 fee and 38.5 lakh applications'), [2000, 3.85e6])
+        self.assertEqual(numeric_guard.inr_values('2조 2,568억 루피, 주당 1,785루피'), [2.2568e12, 1785])
+        self.assertEqual(numeric_guard.inr_values('Rp 5,000 / 5,000루피아'), [])   # 인도네시아 루피아 제외
+
+    def test_crore_mistranslations_are_flagged(self):
+        # 2026-09-28 라이브: crore(1천만)를 억(1억)으로 옮긴 10배 오류들
+        self.assertTrue(numeric_guard.amount_mismatch('Inox to file Rs 10,000 crore IPO', '인옥스 1조 루피 IPO'))
+        self.assertTrue(numeric_guard.amount_mismatch('raised Rs 6,746 crore', '6,746억 루피를 조달'))
+        self.assertFalse(numeric_guard.amount_mismatch('raised Rs 6,746 crore', '674.6억 루피를 조달'))
+        self.assertTrue(numeric_guard.amount_mismatch('$96 billion', '96억 달러'))   # USD도 함께 본다
+
+    def test_ranker_drops_korean_title_with_wrong_amount(self):
+        self.assertEqual(llm_ranker._checked_title_ko(
+            '인옥스 1조 루피 IPO 추진', 'Inox to file Rs 10,000 crore IPO', '', ''), '')
+        self.assertEqual(llm_ranker._checked_title_ko(
+            '인옥스 1,000억 루피 IPO 추진', 'Inox to file Rs 10,000 crore IPO', '', ''), '인옥스 1,000억 루피 IPO 추진')
+
+    def test_translation_rejects_wrong_rupee_amount(self):
+        db = sqlite3.connect(':memory:')
+        db.row_factory = sqlite3.Row
+        self.addCleanup(db.close)
+        db.executescript("""
+            CREATE TABLE media_sources(source_id INTEGER PRIMARY KEY, primary_country_code TEXT);
+            INSERT INTO media_sources VALUES(1,'IN');
+            CREATE TABLE articles_raw(article_id INTEGER PRIMARY KEY, source_id INTEGER, title TEXT,
+                title_ko TEXT, summary_en TEXT, summary_ko TEXT, ai_score INTEGER, duplicate_of INTEGER,
+                published_at TEXT, primary_country TEXT);
+        """)
+        db.execute("INSERT INTO articles_raw VALUES(1,1,'NSE IPO',NULL,'NSE raised Rs 6,746 crore.',NULL,70,NULL,?,'IN')",
+                   (date.today().isoformat(),))
+        db.commit()
+        llm_translate.run_translate(db, Provider({'title_ko': 'NSE IPO', 'summary': 'NSE가 6,746억 루피를 조달했다.'}))
+        self.assertIsNone(db.execute('SELECT summary_ko FROM articles_raw').fetchone()['summary_ko'])
+
     def test_dollar_sign_without_digits_does_not_raise(self):
         self.assertEqual(numeric_guard.usd_values('priced in US$, analysts said. Up to $5...'), [5.0])
 

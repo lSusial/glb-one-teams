@@ -28,6 +28,7 @@ import logging
 import config
 import db
 import kb_network
+import numeric_guard
 import taxonomy
 from llm_provider import LLMProvider, get_provider
 
@@ -84,6 +85,15 @@ _SCORE_FACTORS_BLOCK = (
 )
 
 _SCORE_FACTOR_WEIGHTS = {"directness": 7, "magnitude": 6, "urgency": 5, "novelty": 4}
+
+
+def _checked_title_ko(title_ko: str, title: str, title_en: str, summary_en: str) -> str:
+    """한국어 제목의 금액(USD·INR)이 원문 제목·영문 제목·요약과 어긋나면 버린다.
+    빈 title_ko는 llm_translate가 금액 검증을 거쳐 다시 채운다(예: Rs 10,000 crore → "1조 루피")."""
+    if title_ko and numeric_guard.amount_mismatch(" ".join((title, title_en, summary_en)), title_ko):
+        log.warning("제목 금액 불일치 — title_ko 버림: %s", title_ko)
+        return ""
+    return title_ko
 
 
 def _score_from_data(data: dict) -> tuple[int, dict | None]:
@@ -372,6 +382,7 @@ def run_rank(conn, provider: LLMProvider | None = None,
         source_links = json.dumps(links, ensure_ascii=False) if links else None
 
         title_en = str(data.get("title_en") or "")[:300]
+        title_ko = _checked_title_ko(title_ko, r["title"] or "", title_en, summary_en)
 
         cur.execute(
             """UPDATE articles_raw
