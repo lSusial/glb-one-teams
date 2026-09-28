@@ -1,6 +1,6 @@
 # 현황 — glb-one-teams
 
-> **최종 갱신 2026-09-21** (전면 갱신: 9/8 이후 6카테고리·제재·지표 탭·AI 중복판정·품질 감사 반영, 구 `feedback_status.md` 통합) | For Internal Use Only
+> **최종 갱신 2026-09-28** (9/21 전면 갱신 이후 항목: 카테고리 주/보조 분리·모달 음영·KB 시사점 제거·홈 탑이슈 출처검증·국가피드 전일+당일 제한·국가탭 primary_country 라우팅·AI 중복판정 쌍단위 재설계·금액검증(번역+브리핑) — 전부 Cloudflare 배포 완료, §6·§7 갱신) | For Internal Use Only
 >
 > 기획은 [`PLAN.md`](PLAN.md), 설계는 [`docs/design.md`](docs/design.md), 운영은 [`docs/operations.md`](docs/operations.md), 이력은 [`docs/work_log.md`](docs/work_log.md), UI 사양은 [`mockups/HANDOFF.md`](mockups/HANDOFF.md).
 
@@ -22,7 +22,7 @@ fetch → keyword_filter(통과≥2, SOCIETY 독립경로) → dedup → prefilt
 | LLM 1차 관문 | `llm_prefilter.py` | ✅ F1 0.542→0.708 |
 | 본문 추출 | `fulltext.py` | ✅ 노출 기사 기준 약 48% 성공(Reuters/Bloomberg/WSJ 페이월). 실패 사유 미기록(§6) |
 | AI 분석 | `llm_ranker.py` | ✅ ai_score·요약(en)·주제 6종·이벤트유형 4종·`primary_country`·KB 시사점 |
-| 근접중복 | `llm_dedup.py` | 🟡 9/16 신설, 9/21 범위 보존·40건 상한 제거 + **대표 재선정·겹침 가드·`dedup-repair`(소급)**. 코드 반영 완료, **실 DB 소급 적용(`main.py dedup-repair --apply`)·새 프롬프트 실측(`eval_dedup_guard.py --live`)은 맥북 실행 대기** |
+| 근접중복 | `llm_dedup.py` | ✅ 9/16 신설, 9/21 범위 보존·대표 재선정·겹침 가드, **9/28 기사쌍 단위 소청크로 재설계**(국가 전체 응답무효→전체실패 구조 해소). 실 DB 적용·검증·배포 완료(recall 0.87/precision 0.94, `eval/eval_dedup_guard.py --labeled-live`) |
 | 긴 요약·번역 | `llm_expand.py` `llm_translate.py` | ✅ 모달 3~4문단(얇은 소스는 경량 분기), 표시분 한국어 |
 | 브리핑 | `briefing.py` | ✅ 국가 일일/주간 + Top10. 9/21 적격 기준(주제국가·55점·요약 보유) 강화, 적격 0건은 안내 저장 |
 | 랭킹 | `ranking.py` | ✅ 표시 정렬 rank_score(`docs/rank_score_spec.md`), 게이트는 ai_score≥55 |
@@ -84,20 +84,20 @@ fetch → keyword_filter(통과≥2, SOCIETY 독립경로) → dedup → prefilt
 
 - Oracle Cloud SSH 22번 간헐적 타임아웃 → 서버 동기화 비활성. 원인 미파악.
 - DB integrity check 실패 이력(인덱스 손상) → `REINDEX idx_articles_dedup`로 복구했음. 재발 시 동일 조치.
-- **품질 감사(9/18) 잔여 P2**: 다매체 가중치가 동일 매체 반복 보도에 과대 반영(발행사 기준 집계 필요) · 본문 추출 실패/미시도 구분 불가 및 나중에 확보한 본문이 재분석에 반영되지 않음 · F1 평가가 운영 랭커 프롬프트를 평가하지 않음. 상세 `docs/quality_audit_2026-09-18.md`. (P1 3건은 9/21 코드 반영, 재생성·배포는 미실행)
-- **AI 중복판정 오묶음(9/21 발견)**: 저장분 표본 기준 오묶음 약 44%(라벨 70쌍, `eval/dedup_pairs_labeled.json`), 대표가 '결정 임박' 프리뷰로 남아 결정 기사가 숨는 결함. 코드 수정 완료·저장분 소급은 맥북에서 `python3 main.py dedup-repair --apply`. 소급 시뮬레이션(스크래치 복사본): 표시 감사 관련링크 무관 11→2, 프리뷰 노출 1→0, 더 새 기사 숨음 16→1.
-- **표시 감사(9/21 신설 `eval/display_audit.py`) 상시 지표**: 요약 없는 카드(사회 예외경로 45~52점, IN 2·KH 1) · 3일 넘은 기사 노출(11/29) · 국가 탭에 그 나라 이야기가 아닌 기사(GB·US·SG 탭의 BOJ 등 3~5건, 진출국 탭이 매체국적 기준이라 발생 — **정책 결정 대기**) · 일본 탭 BOJ 동일 사건 4~5건.
+- **품질 감사(9/18) 잔여 P2**: 다매체 가중치가 동일 매체 반복 보도에 과대 반영(발행사 기준 집계 필요) · 본문 추출 실패/미시도 구분 불가 및 나중에 확보한 본문이 재분석에 반영되지 않음 · F1 평가가 운영 랭커 프롬프트를 평가하지 않음. 상세 `docs/quality_audit_2026-09-18.md`. (P1 3건은 9/21 코드 반영 후 재생성·배포까지 완료)
+- ~~AI 중복판정 오묶음~~ **(9/28 재설계로 해소)**: 국가 전체를 한 번에 LLM에 넣던 방식이 응답 무효 시 국가 전체를 실패보존시켜 recall이 무너지는 구조였다(라이브 평가 recall 0.28). 기사쌍 단위 소청크 요청으로 재설계(`llm_dedup.py`) — 실 DB 적용 결과 실패보존 0건, 라벨 회귀평가 recall 0.87/precision 0.94. `eval/eval_dedup_guard.py --labeled-live`로 저비용 회귀평가 가능.
 - **SDK 호환**: `anthropic` 1.x는 파이프라인의 `temperature` 인자를 받지 않아 호출이 실패한다(2026-09-21 확인). `requirements.txt`를 `anthropic>=0.40.0,<1`로 고정. 새 가상환경 구성 시 주의.
 - **TH·LA 국가 화면 빈 상태**: 채점분 최고점 45/35로 55점 게이트 미달. 관심시장용 적격 기준을 별도로 검토(표본 사람 검토 후 게이트·쿼리 조정, 점수 하향/억지 채우기는 지양).
 - 라오스 정책금리 시드값 미확보 · 국채는 미국만 수집.
-- 9/21 변경분(품질 감사 후속)은 로컬 코드에만 반영, 다음 실행부터 적용. 커밋 전 `git status`의 `.qbak` 임시 파일·`.claude/`·`resources/`·`web/intro_new.mp4` 등 미추적 항목 정리 필요.
-- **관련 기사 링크 제목 불일치(9/22 발견·수정)**: 자기참조(같은 기사, url 동일)가 카드 헤드라인이 아닌 원문 스크래핑 제목으로 표시되어 다른 기사처럼 보임(인도 탭 '러시아 제재법' 등). `export_json.py` 수정 완료·`display_audit.py`에 SELF_TITLE_MISMATCH 점검 추가. **로컬 export 완료·Cloudflare 배포 미실행**.
-- **홈 탑이슈 출처 직접 연결(9/22)**: `daily_highlights`가 국가 코드만 저장해 프론트가 같은 국가 상위 기사를 관련 링크로 추측하던 결함 수정. 생성 시 검증된 `source_article_ids`를 저장하고 export가 실제 기사 카드를 직접 포함한다. 무효 ID·출처 없음·근거와 다른 USD 금액은 저장 전 제외하며, 배포는 `display_audit.py --strict`의 출처 무결성 검사를 통과해야 한다. 현재 데이터 재생성·export 완료, 탑이슈 9건 모두 출처 검사 통과(베트남 190억 달러 오생성 1건은 금액 검증으로 제외). **Cloudflare 배포는 미실행**.
+- **국가 피드 노출 기간(9/22 확정)**: 얇은 거점을 최대 7일까지 소급 보충하던 COVERAGE_FLOOR·SOCIETY 14일 예외를 제거하고 전일+당일로 통일. 수집이 매일 안 돌면(예: 9/28처럼 6일 공백) 그만큼 국가탭이 정직하게 비는 게 정상 — 표시 감사 THIN_TABS는 이 트레이드오프를 반영한 지표.
+- **국가 탭 라우팅(9/22 수정)**: 매체국적 대신 AI 주제국가(`primary_country`, 없으면 매체국적)로 통일 — 미국 매체가 쓴 한국 기사가 US 탭에 뜨는 등 오분류 해소(COUNTRY_MISMATCH 0건).
+- **금액(USD) 표기 검증**: 기사 번역(`llm_translate.py`)·홈 탑이슈(`briefing.generate_daily_highlights`)·국가 브리핑(`briefing.run_briefing`) 3곳 모두 `numeric_guard.py`로 원문 대비 금액 불일치 시 저장 안 함. 9/28 실전에서 "$30억"(정답 $300억) 등 달러기호+한국어 단위 혼합 표기 누락을 발견해 패턴 추가.
+- Google News 링크 해소(collector.py의 구식 redirect-follow)가 9/28 한때 0/4,462건 실패(Google 쪽 API 변경 추정) — `fulltext.py`의 `googlenewsdecoder` 경로는 정상 동작(140/257, 역사적 기준치 수준)해 실질 영향은 적음. 재발 시 `googlenewsdecoder` 최신 버전(0.2.1)도 동일 실패 확인됨 — Google 쪽 문제로 추정, 재현 시 재확인 필요.
+- 커밋 전 `git status`의 `.qbak` 임시 파일·`.claude/`·`resources/` 등 미추적 항목 정리 필요.
 
 ## 7. 다음 과제 (우선순위)
 
-0. **(맥북에서 즉시)** `python3 main.py dedup-repair` → `--apply` → `python3 eval/eval_dedup_guard.py --live --days 8` → `./deploy_web.sh`(export 후 표시 감사 자동 출력). 상세 `docs/operations.md` §1. (9/22 관련링크 제목 불일치 수정도 이 export/배포에 함께 반영됨)
-1. **정기 자동화** — 단기 맥북 launchd, 중기 native RSS 전환 + GitHub Actions (`docs/operations.md` §4)
+1. **정기 자동화** — 단기 맥북 launchd, 중기 native RSS 전환 + GitHub Actions (`docs/operations.md` §4). 9/22→9/28처럼 실행을 건너뛰면 그 기간 데이터가 영구 공백이 되므로 우선순위 높음.
 2. **품질 감사 잔여 P2 + TH·LA 적격 기준** — 발행사 집계, 본문 추출 상태 추적, 랭커 평가 연결
 3. **시연 준비** — #14 문구 반영, #12 결정
 4. **Telegram 정기 발송** — 채널·독자 결정 후 파이프라인 연결
