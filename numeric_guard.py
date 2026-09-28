@@ -11,23 +11,28 @@ import re
 
 _UNITS = {"": 1, "m": 1e6, "million": 1e6, "bn": 1e9,
           "billion": 1e9, "trillion": 1e12}
+_KO_UNITS = {"조": 1e12, "억": 1e8, "천만": 1e7, "백만": 1e6, "만": 1e4}
+# 숫자는 반드시 숫자로 시작·끝나야 한다("US$, " 같은 문장부호만 잡혀 float 변환이 터지는 것 방지)
+_NUM = r"\d+(?:[,.]\d+)*"
+_KO_PART = rf"({_NUM})\s*(조|억|천만|백만|만)"
 
 
 def usd_values(text: str) -> list[float]:
-    """텍스트에서 달러 금액을 전부 뽑아 절대값(USD) 리스트로 반환. 영어(달러기호·billion 등
-    단위어)와 한국어(조/억 달러) 표기를 모두 인식한다."""
+    """텍스트에서 달러 금액을 전부 뽑아 절대값(USD) 리스트로 반환. 영어(달러기호·USD·billion 등
+    단위어)와 한국어(조/억/만 달러, "1억9천만 달러" 같은 복합) 표기를 모두 인식한다."""
     text = text or ""
     values: list[float] = []
-    for m in re.finditer(r"\$\s*([\d,.]+)\s*(trillion|billion|million|bn|m)?\b", text, re.I):
+    for m in re.finditer(rf"(?:\$|\bUSD)\s*({_NUM})\s*(trillion|billion|million|bn|m)?\b", text, re.I):
         values.append(float(m.group(1).replace(",", "")) * _UNITS[(m.group(2) or "").lower()])
     for m in re.finditer(
-            r"([\d,.]+)\s*[- ]?(trillion|billion|million|bn|m)\s*[- ]?(?:USD|US dollars?)\b",
+            rf"({_NUM})\s*[- ]?(trillion|billion|million|bn|m)\s*[- ]?(?:USD|US dollars?)\b",
             text, re.I):
         values.append(float(m.group(1).replace(",", "")) * _UNITS[m.group(2).lower()])
-    for m in re.finditer(r"([\d,.]+)\s*(조|억)\s*달러", text):
-        values.append(float(m.group(1).replace(",", "")) * (1e12 if m.group(2) == "조" else 1e8))
-    for m in re.finditer(r"\$\s*([\d,.]+)\s*(조|억)\b", text):
-        values.append(float(m.group(1).replace(",", "")) * (1e12 if m.group(2) == "조" else 1e8))
+    for m in re.finditer(rf"((?:{_KO_PART}\s*)+)달러", text):
+        values.append(sum(float(n.replace(",", "")) * _KO_UNITS[u]
+                          for n, u in re.findall(_KO_PART, m.group(1))))
+    for m in re.finditer(rf"\$\s*({_NUM})\s*(조|억)", text):
+        values.append(float(m.group(1).replace(",", "")) * _KO_UNITS[m.group(2)])
     return values
 
 

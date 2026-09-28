@@ -10,6 +10,7 @@ import export_json
 import llm_dedup
 import llm_ranker
 import llm_translate
+import numeric_guard
 
 
 class Provider:
@@ -286,6 +287,24 @@ class QualityTests(unittest.TestCase):
             self.db, Provider({'title_ko': '베트남 국채 발행', 'summary': '베트남이 1,330억 달러 국채를 발행했다.'}))
         row = self.db.execute('SELECT summary_ko FROM articles_raw WHERE article_id=1').fetchone()
         self.assertEqual(row['summary_ko'], '베트남이 1,330억 달러 국채를 발행했다.')
+
+
+class NumericGuardTests(unittest.TestCase):
+    def test_usd_prefix_and_korean_man_units_are_parsed(self):
+        self.assertEqual(numeric_guard.usd_values('USD 190 million'), [190e6])
+        self.assertEqual(numeric_guard.usd_values('1,900만 달러'), [19e6])
+        self.assertEqual(numeric_guard.usd_values('1억9천만 달러'), [190e6])
+        self.assertEqual(numeric_guard.usd_values('1조 2,000억 달러'), [1.2e12])
+        self.assertEqual(numeric_guard.usd_values('$30억의 투자'), [3e9])
+
+    def test_mistranslated_amounts_are_flagged(self):
+        self.assertTrue(numeric_guard.usd_mismatch('The firm raised USD 190 million', '베트남 190억 달러'))
+        self.assertTrue(numeric_guard.usd_mismatch('a $19 million deal', '19만 달러 거래'))
+        self.assertFalse(numeric_guard.usd_mismatch('a $19 million deal', '1,900만 달러 거래'))
+        self.assertFalse(numeric_guard.usd_mismatch('$1.2 trillion', '1조 2,000억 달러'))
+
+    def test_dollar_sign_without_digits_does_not_raise(self):
+        self.assertEqual(numeric_guard.usd_values('priced in US$, analysts said. Up to $5...'), [5.0])
 
 
 if __name__ == '__main__':
