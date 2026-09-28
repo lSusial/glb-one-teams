@@ -26,6 +26,8 @@ def usd_values(text: str) -> list[float]:
         values.append(float(m.group(1).replace(",", "")) * _UNITS[m.group(2).lower()])
     for m in re.finditer(r"([\d,.]+)\s*(조|억)\s*달러", text):
         values.append(float(m.group(1).replace(",", "")) * (1e12 if m.group(2) == "조" else 1e8))
+    for m in re.finditer(r"\$\s*([\d,.]+)\s*(조|억)\b", text):
+        values.append(float(m.group(1).replace(",", "")) * (1e12 if m.group(2) == "조" else 1e8))
     return values
 
 

@@ -171,7 +171,7 @@ def run_briefing(
 
     # 국가별 기사 수집 → 요청 일괄 구성(배치 제출) → custom_id=cc 로 결과 수거
     stats = dict(countries=0, written=0)
-    requests, meta = [], {}
+    requests, meta, bullets_by_cc = [], {}, {}
     cm = ranking.cluster_sizes(conn)
     for cc in ccs:
         arts = conn.execute(
@@ -198,6 +198,7 @@ def run_briefing(
             f"- [{a['published_at']}] ({a['ai_score']}) {a['title']} :: {((a['summary_ko'] or a['summary_en']) or '')}"
             for a in arts
         )
+        bullets_by_cc[cc] = bullets
         user = f"국가: {cc} ({kb_network.context_for(cc)})\n기사 목록:\n{bullets}"
         # weekly는 한/영 요약+이슈 3~4개+전망+키워드까지 daily보다 필드가 훨씬 많아
         # 900으로는 잘려서 JSON 파싱이 깨진다(생성 도중 max_tokens 도달) — 여유를 둔다.
@@ -228,6 +229,14 @@ def run_briefing(
             keywords_en = json.dumps(data.get("keywords_en") or [], ensure_ascii=False)
             key_stat   = str(data.get("key_stat_ko") or data.get("key_stat") or "")[:200]
             key_stat_en = str(data.get("key_stat_en") or "")[:200]
+
+        if arts:
+            generated = " ".join((summary, summary_en, issues, issues_en,
+                                  outlook, outlook_en, key_stat, key_stat_en))
+            if numeric_guard.usd_mismatch(bullets_by_cc.get(cc, ""), generated):
+                log.warning("브리핑 금액 불일치 — 저장 안 함(국가=%s, %s): %s",
+                            cc, briefing_type, summary[:80])
+                continue
 
         cur.execute(
             """

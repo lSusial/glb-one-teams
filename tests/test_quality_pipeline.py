@@ -172,6 +172,16 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(row[0], 1)
         self.assertEqual(json.loads(row[1]), ['https://example.com/1'])
 
+    def test_briefing_rejects_summary_with_mismatched_amount(self):
+        self.add(1, cc='US', score=65)
+        self.db.execute("UPDATE articles_raw SET summary_ko=?, summary_en=? WHERE article_id=1",
+                        ('연준이 300억 달러 규모 기구를 발표했다.', 'The Fed announced a $30 billion facility.'))
+        self.db.commit()
+        p = Provider({'summary_ko': '연준이 $30억 규모 기구를 발표했다.',
+                      'summary_en': 'The Fed announced a $30 billion facility.'})
+        briefing.run_briefing(self.db, p, briefing_type='daily', countries=['US'])
+        self.assertIsNone(self.db.execute('SELECT 1 FROM country_briefings').fetchone())
+
     def test_empty_briefing_is_explicit_without_llm(self):
         self.add(1, source=3, cc='LA', score=8)
         p = Provider()
@@ -207,6 +217,16 @@ class QualityTests(unittest.TestCase):
         out = briefing._validate_highlight_sources(items, rows, 10)
         self.assertEqual(len(out), 1)
         self.assertIn('$190 million', out[0]['headline_en'])
+
+    def test_highlight_rejects_dollar_sign_with_korean_unit_mismatch(self):
+        rows = [{'article_id': 10, 'title': 'US, China reach $30 billion tariff deal',
+                 'title_ko': '', 'summary_ko': '',
+                 'summary_en': 'The deal covers $30 billion in goods.'}]
+        items = [{'headline_ko': '미국-중국 $30억 관세 협상 타결',
+                  'headline_en': 'U.S.-China reach $30 billion tariff deal',
+                  'source_article_ids': [10]}]
+        out = briefing._validate_highlight_sources(items, rows, 10)
+        self.assertEqual(out, [])
 
     def test_export_resolves_highlight_source_id_to_exact_article(self):
         conn = sqlite3.connect(':memory:')
