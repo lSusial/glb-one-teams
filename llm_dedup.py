@@ -87,6 +87,7 @@ _EVENT_GENERIC.update({
     "indonesian", "vietnam", "vietnamese", "thailand", "thai", "singapore", "hong", "kong",
     "britain", "british", "united", "states", "bangladesh", "cambodia", "laos", "myanmar",
     "malaysia", "philippines", "australia", "canada", "uae",
+    "korea", "korean", "south",   # 한국계 금융기관 기사가 많아 '한국'만 겹친 별개 기사가 묶이던 문제
 })
 
 # 사건 '전' 예고·프리뷰 헤드라인 — 같은 그룹에 결과 기사가 있으면 대표에서 뒤로 민다.
@@ -148,27 +149,18 @@ def pick_rep(group, meta, subject: str | None = None) -> int:
     ))
 
 
-def split_by_overlap(group, meta, threshold: float | None = None) -> list[list[int]]:
-    """LLM이 묶은 그룹을 겹침 그래프의 연결요소로 쪼갠다(간선: 요약·제목 토큰 겹침 ≥ 임계).
-    서로 이어지지 않는 기사는 다른 요소가 되어, 단독이면 그룹에서 풀린다(그대로 노출)."""
+def split_by_overlap(group, meta, threshold: float | None = None,
+                     subject: str | None = None) -> list[list[int]]:
+    """LLM이 묶은 그룹을 겹침 가드 간선으로 다시 쪼갠다(간선: 제목 토큰 겹침 ≥ 임계 + 공통 고유주체).
+    run_dedup과 같은 규칙(_groups_from_edges)으로 대표와 직접 이어진 기사만 묶어, A-B·B-C만으로
+    A-C까지 묶이는 전이 병합을 막는다. 대표와 이어지지 않는 기사는 단독 요소가 되어 풀린다."""
     th = config.DEDUP_MIN_OVERLAP if threshold is None else threshold
     ids = list(group)
-    parent = {a: a for a in ids}
-
-    def find(x):
-        while parent[x] != x:
-            parent[x] = parent[parent[x]]
-            x = parent[x]
-        return x
-
-    for i, a in enumerate(ids):
-        for b in ids[i + 1:]:
-            if pair_passes_guard(a, b, meta, th):
-                parent[find(a)] = find(b)
-    comps: dict[int, list[int]] = {}
-    for a in ids:
-        comps.setdefault(find(a), []).append(a)
-    return list(comps.values())
+    edges = [(a, b) for i, a in enumerate(ids) for b in ids[i + 1:]
+             if pair_passes_guard(a, b, meta, th)]
+    comps = _groups_from_edges(edges, meta, subject)
+    grouped = {a for c in comps for a in c}
+    return comps + [[a] for a in ids if a not in grouped]
 
 
 def _normalize_groups(groups):
@@ -576,7 +568,7 @@ def repair_existing(conn, threshold: float | None = None, apply: bool = False,
         stats["children"] += len(members) - 1
         subject = Counter(meta[m]["cc"] for m in members).most_common(1)[0][0]
         new_root_of: dict[int, int] = {}        # 옛 멤버 → 새 대표(또는 자기 자신)
-        for comp in split_by_overlap(members, meta, threshold):
+        for comp in split_by_overlap(members, meta, threshold, subject):
             if len(comp) < 2:
                 aid = comp[0]
                 new_root_of[aid] = aid

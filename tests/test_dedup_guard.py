@@ -83,7 +83,7 @@ class DedupGuardTests(unittest.TestCase):
 
     # ── 가드 ────────────────────────────────────────────────────
     def tok_meta(self, *texts):
-        return {i + 1: {'tok': L._tokens(t)} for i, t in enumerate(texts)}
+        return {i + 1: self.meta(tok=L._tokens(t)) for i, t in enumerate(texts)}
 
     def test_split_releases_unrelated_member(self):
         meta = self.tok_meta(FED_DECISION + ' ' + FED_SUMMARY, FED_SUMMARY + ' Fed decision Warsh',
@@ -91,12 +91,14 @@ class DedupGuardTests(unittest.TestCase):
         comps = sorted(sorted(c) for c in L.split_by_overlap([1, 2, 3], meta, 0.25))
         self.assertEqual(comps, [[1, 2], [3]])
 
-    def test_split_keeps_chain_connected(self):
+    def test_split_does_not_merge_transitively(self):
         a = 'alpha bravo charlie delta echo foxtrot golf hotel'
         b = 'echo foxtrot golf hotel india juliet kilo lima'   # a와 겹침 0.5
         c = 'india juliet kilo lima mike november oscar papa'  # a와 0, b와 0.5
         meta = self.tok_meta(a, b, c)
-        self.assertEqual([sorted(x) for x in L.split_by_overlap([1, 2, 3], meta, 0.25)], [[1, 2, 3]])
+        # 대표(1)와 직접 이어진 2만 묶고, 2를 거쳐서만 이어지는 3은 풀린다(run_dedup과 동일 규칙)
+        comps = sorted(sorted(x) for x in L.split_by_overlap([1, 2, 3], meta, 0.25))
+        self.assertEqual(comps, [[1, 2], [3]])
 
     def test_pair_guard_allows_same_named_event_below_global_threshold(self):
         meta = {
@@ -115,6 +117,13 @@ class DedupGuardTests(unittest.TestCase):
                 'title_tok': L._tokens('bank rate decision')},
         }
         self.assertFalse(L.pair_passes_guard(1, 2, meta, 0.8))
+
+    def test_pair_guard_rejects_only_korea_in_common(self):
+        meta = {
+            1: {'tok': set(), 'title_tok': L._tokens('South Korea lenders expand Vietnam lending')},
+            2: {'tok': set(), 'title_tok': L._tokens('South Korea exporters face tariff hit')},
+        }
+        self.assertFalse(L.pair_passes_guard(1, 2, meta, 0.08))
 
     def test_normalize_groups_accepts_both_formats_and_rejects_bad(self):
         self.assertEqual(L._normalize_groups([[1, 2]]), [[1, 2]])
