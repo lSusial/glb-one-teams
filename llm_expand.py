@@ -20,6 +20,7 @@ import logging
 
 import config
 import db
+import numeric_guard
 from llm_provider import LLMProvider, get_provider
 from llm_ranker import _cluster_sources, _source_snippet
 
@@ -162,6 +163,10 @@ def run_expand(conn, provider: LLMProvider | None = None,
         ko = str(data.get("expanded_summary_ko") or "").strip()[:7000]
         if not (en or ko):
             continue
+        if en and ko and numeric_guard.usd_mismatch(en, ko):
+            # 한국어 금액 단위 오변환($18.65 billion → "$18.65억") — 영문만 저장, 한국어는 다음 실행에서 재생성
+            log.warning("긴 요약 금액 불일치 — 한국어 저장 안 함(article_id=%s)", r["article_id"])
+            ko = ""
         cur.execute(
             "UPDATE articles_raw SET expanded_summary = ?, expanded_summary_en = ? WHERE article_id = ?",
             (ko or None, en or None, r["article_id"]),

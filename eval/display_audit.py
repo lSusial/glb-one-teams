@@ -22,6 +22,8 @@ LLM 호출·DB 쓰기 없음. export 직후 돌린다:
                         (2026-09-22 인도 탭 '러시아 제재법' 기사에서 실제 발견)
  12 HIGHLIGHT_SOURCE_MISSING 홈 탑이슈에 검증된 source_article_ids가 없음
  13 HIGHLIGHT_SOURCE_INVALID 저장된 근거 ID가 DB·export 근거 기사와 일치하지 않음
+ 14 AMOUNT_MISMATCH    카드 한국어(제목·요약·모달)의 달러 금액이 영문과 다름 — 단위 오변환
+                        (2026-09-28 인도 RBI 기사 모달에서 $18.65 billion → "$18.65억" 실제 발견)
 '점검 통과'가 '정확함'을 뜻하진 않는다 — 규칙으로 잡히는 결함만 센다.
 """
 from __future__ import annotations
@@ -39,6 +41,7 @@ sys.path.insert(0, str(ROOT))
 
 import config  # noqa: E402
 import llm_dedup as L  # noqa: E402
+import numeric_guard  # noqa: E402
 
 JUNK_RE = re.compile(
     r"^index of /|wp-content|^404\b|not found|just a moment|access denied|attention required|"
@@ -262,9 +265,20 @@ def main() -> int:
     except Exception:
         pass
 
+    # 14 AMOUNT_MISMATCH — 저장 시점에 검증이 없던 필드(모달 긴 요약 등)도 화면 기준으로 다시 본다
+    seen_amount = set()
+    for f, w, cc, a in cards:
+        if a.get("u") in seen_amount:
+            continue
+        seen_amount.add(a.get("u"))
+        for en, ko in (("t_en", "t"), ("q_en", "q"), ("expanded_summary_en", "expanded_summary")):
+            if a.get(en) and a.get(ko) and numeric_guard.usd_mismatch(a[en], a[ko]):
+                add("AMOUNT_MISMATCH", f"{w} {ko}: {short(a)} · {a.get('u', '')[:70]}")
+
     order = ["EMPTY_SUMMARY", "STALE", "PREVIEW_SHOWN", "COUNTRY_MISMATCH", "NEAR_DUP_IN_TAB",
              "JUNK_TITLE", "UNRELATED_LINKS", "TITLE_SUMMARY_GAP", "HIDDEN_NEWER_REP", "THIN_TABS",
-             "SELF_TITLE_MISMATCH", "HIGHLIGHT_SOURCE_MISSING", "HIGHLIGHT_SOURCE_INVALID"]
+             "SELF_TITLE_MISMATCH", "HIGHLIGHT_SOURCE_MISSING", "HIGHLIGHT_SOURCE_INVALID",
+             "AMOUNT_MISMATCH"]
     print(f"표시 감사 — 기준일 {today} · 카드 {len(cards)}장 (국가탭 {len(tabs)}장) · export={export_dir}")
     print("-" * 78)
     for k in order:
