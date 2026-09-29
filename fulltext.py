@@ -158,21 +158,24 @@ def run_fulltext(conn, limit: int | None = None, days: int | None = None,
 
 
 def resolve_display_links(conn, days: int | None = None, limit: int | None = None) -> dict:
-    """채점된(화면 노출 후보) 기사 중 아직 Google News 링크인 것을 점수순으로 해소한다.
+    """채점된(화면 노출 후보) 기사와 그 형제(관련 기사 링크) 중 아직 Google News 링크인 것을 해소한다.
 
     본문 추출은 keep 상위 FULLTEXT_LIMIT건만 돌아, 한도 밖(미진출국·주제확장 피드 등)은 GN 링크
     그대로 화면에 나갔다(2026-09-29 노출 107건 중 46건). rank 이후 실제 노출될 기사부터 채운다.
     """
     limit = limit or config.DISPLAY_LINK_RESOLVE_LIMIT
     date_clause, params = db.days_clause_now(days)
+    # 대표(채점된 비중복 기사) 먼저 점수순, 그다음 그 대표에 묶인 형제(모달 '관련 기사 링크') —
+    # 형제는 미채점 키워드 중복도 있어 대표 점수로 정렬한다.
     rows = conn.execute(
         f"""
         SELECT a.article_id, a.link
         FROM articles_raw a
-        WHERE a.ai_score IS NOT NULL
-          AND a.duplicate_of IS NULL
-          AND a.link LIKE '%news.google.%'{date_clause}
-        ORDER BY a.ai_score DESC, a.published_at DESC
+        LEFT JOIN articles_raw p ON p.article_id = a.duplicate_of
+        WHERE a.link LIKE '%news.google.%'{date_clause}
+          AND ((a.duplicate_of IS NULL AND a.ai_score IS NOT NULL)
+               OR (p.duplicate_of IS NULL AND p.ai_score IS NOT NULL))
+        ORDER BY (a.duplicate_of IS NULL) DESC, COALESCE(a.ai_score, p.ai_score) DESC, a.published_at DESC
         LIMIT ?
         """,
         (*params, limit),

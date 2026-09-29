@@ -43,9 +43,9 @@ class LinkTests(unittest.TestCase):
         ''')
         self.addCleanup(self.db.close)
 
-    def add(self, aid, link, score=None, keep='keep', fscore=1.0):
-        self.db.execute('INSERT INTO articles_raw VALUES(?,?,?,NULL,?,?,?,NULL)',
-                        (aid, link, score, date.today().isoformat(), keep, fscore))
+    def add(self, aid, link, score=None, keep='keep', fscore=1.0, dup=None):
+        self.db.execute('INSERT INTO articles_raw VALUES(?,?,?,?,?,?,?,NULL)',
+                        (aid, link, score, dup, date.today().isoformat(), keep, fscore))
         self.db.commit()
 
     def link(self, aid):
@@ -77,6 +77,19 @@ class LinkTests(unittest.TestCase):
         self.assertEqual(self.link(2), 'https://real/2')   # 점수 높은 것부터
         self.assertEqual(self.link(1), f'{GN}1')           # 한도 밖
         self.assertEqual(dec.calls, [f'{GN}2'])
+
+    def test_display_links_include_siblings_after_representatives(self):
+        # 모달 '관련 기사 링크'는 대표 기사에 묶인 형제(duplicate_of)라 대표만 해소하면 GN 링크가 남는다
+        self.add(1, f'{GN}1', score=80)                 # 대표
+        self.add(2, f'{GN}2', score=None, dup=1)        # 대표의 형제(미채점 키워드 중복 포함)
+        self.add(3, f'{GN}3', score=30)                 # 다른 대표(점수 낮음)
+        self.add(4, f'{GN}4', score=None, dup=99)       # 존재하지 않는 대표의 자식 — 대상 아님
+        dec = FakeDecoder({f'{GN}{i}': f'https://real/{i}' for i in range(1, 5)})
+        with install(dec):
+            s = fulltext.resolve_display_links(self.db, days=2, limit=10)
+        self.assertEqual(dec.calls, [f'{GN}1', f'{GN}3', f'{GN}2'])   # 대표 먼저(점수순) → 형제
+        self.assertEqual(s['resolved'], 3)
+        self.assertEqual(self.link(4), f'{GN}4')
 
     def test_fulltext_does_not_extract_unresolved_google_links(self):
         self.add(1, f'{GN}1')
