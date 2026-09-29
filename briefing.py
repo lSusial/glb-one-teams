@@ -306,13 +306,14 @@ def _validate_highlight_sources(items: list, rows, limit: int) -> list[dict]:
     """
     allowed = {int(r["article_id"]): r for r in rows}
 
+    def val_of(r, key) -> str:
+        try:
+            return r[key] or ""
+        except (KeyError, TypeError, IndexError):
+            return ""
+
     def row_text(r) -> str:
-        def val(key):
-            try:
-                return r[key] or ""
-            except (KeyError, TypeError, IndexError):
-                return ""
-        return " ".join(val(k) for k in ("title", "title_ko", "summary_ko", "summary_en"))
+        return " ".join(val_of(r, k) for k in ("title", "title_ko", "summary_ko", "summary_en"))
 
     out = []
     for item in items[:limit]:
@@ -341,6 +342,15 @@ def _validate_highlight_sources(items: list, rows, limit: int) -> list[dict]:
             continue
         clean = dict(item)
         clean["source_article_ids"] = valid
+        # 국가 태그가 근거 기사 주제국가와 하나도 겹치지 않으면 근거 기사 기준으로 바로잡는다
+        # (근거 기사는 CN뿐인데 JP로 태그돼 지도·칩에 일본으로 뜨던 문제)
+        src_ccs = {val_of(allowed[aid], "subject_cc") or val_of(allowed[aid], "cc") for aid in valid}
+        src_ccs -= {"", "GLOBAL"}
+        codes = item.get("country_codes") if isinstance(item.get("country_codes"), list) else []
+        if src_ccs and not src_ccs & set(codes):
+            log.warning("글로벌 핵심 국가 태그 교정 %s → %s: %s", codes, sorted(src_ccs),
+                        item.get("headline_ko", "")[:60])
+            clean["country_codes"] = sorted(src_ccs)
         out.append(clean)
     return out
 
@@ -366,7 +376,8 @@ def generate_daily_highlights(
         f"""
         SELECT a.article_id, a.title, a.title_ko, a.summary_ko, a.summary_en,
                a.topics, a.ai_score, a.published_at, a.event_type, a.korean_fi, a.personnel_move,
-               m.tier, m.primary_country_code AS cc
+               m.tier, m.primary_country_code AS cc,
+               COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) AS subject_cc
         FROM articles_raw a
         JOIN media_sources m ON m.source_id = a.source_id
         WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}{exc}
