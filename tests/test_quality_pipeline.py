@@ -321,6 +321,17 @@ class QualityTests(unittest.TestCase):
             (1, '2026-09-27', 'Japan to raise consumption tax'),
             (2, '2026-09-28', 'Fed postpones rate decision')]), set())
 
+    def test_archive_link_exclusion_filters_topic_and_tag_pages(self):
+        db = sqlite3.connect(':memory:')
+        self.addCleanup(db.close)
+        db.execute('CREATE TABLE articles_raw(article_id INTEGER, link TEXT)')
+        db.executemany('INSERT INTO articles_raw VALUES(?,?)', [
+            (1, 'https://economictimes.indiatimes.com/topic/pvr-inox-compensation-order'),
+            (2, 'https://vietnamnews.vn/tags/industrial-bank'),
+            (3, 'https://economictimes.indiatimes.com/markets/ipos/inox-clean-energy-ipo/articleshow/1.cms')])
+        kept = [r[0] for r in db.execute(f'SELECT article_id FROM articles_raw a WHERE 1=1{export_json._ARCHIVE_LINK_EXCL}')]
+        self.assertEqual(kept, [3])
+
     def test_related_links_capped_at_four_including_self(self):
         a = {'title_ko': '본 기사', 'title': 'raw', 'link': 'https://x/0', 'media_name': 'M0'}
         sibs = [{'t': f's{i}', 'u': f'https://x/{i}', 'src': f'M{i}'} for i in range(1, 7)]

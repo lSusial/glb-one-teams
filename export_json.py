@@ -365,6 +365,10 @@ def _dedup_country_feed(rows, cm):
     return reps, sizes, members
 
 
+# 매체 태그/토픽 아카이브 페이지는 실제 기사가 아니다(korean_fi·personnel과 같은 기준). 국가탭에도
+# 적용 — 2026-09-29 IN 탭 인옥스 IPO 기사 원문 링크가 ET 'pvr-inox-compensation-order' 토픽 페이지였음.
+_ARCHIVE_LINK_EXCL = (" AND a.link NOT LIKE '%/tag/%' AND a.link NOT LIKE '%/tags/%'"
+                      " AND a.link NOT LIKE '%/topic/%' AND a.link NOT LIKE '%/topics/%'")
 _RL_MAX = 4   # 모달 '관련 기사 링크' 최대 개수(본 기사 포함 — 원문 1 + 같은 사건 3). 2026-09-29 5→4
 
 
@@ -622,7 +626,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
             FROM articles_raw a
             JOIN media_sources m ON m.source_id = a.source_id
             WHERE COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) = ?
-              AND {where}{dc}
+              AND {where}{dc}{_ARCHIVE_LINK_EXCL}
             ORDER BY {order}
             LIMIT {60 if active_only else 20}
             """,
