@@ -87,6 +87,15 @@ _SCORE_FACTORS_BLOCK = (
 _SCORE_FACTOR_WEIGHTS = {"directness": 7, "magnitude": 6, "urgency": 5, "novelty": 4}
 
 
+def _checked_title_en(title_en: str, title: str, summary_en: str) -> str:
+    """영문 제목의 금액(USD·INR)이 원문 제목·영문 요약과 어긋나면 버린다(export는 원문 제목으로 폴백).
+    예: Rp 9.1조(약 $5.7억)를 "$9.1 trillion"으로 통화만 바꿔 쓴 제목."""
+    if title_en and numeric_guard.amount_mismatch(" ".join((title, summary_en)), title_en):
+        log.warning("영문 제목 금액 불일치 — title_en 버림: %s", title_en)
+        return ""
+    return title_en
+
+
 def _checked_title_ko(title_ko: str, title: str, title_en: str, summary_en: str) -> str:
     """한국어 제목의 금액(USD·INR)이 원문 제목·영문 제목·요약과 어긋나면 버린다.
     빈 title_ko는 llm_translate가 금액 검증을 거쳐 다시 채운다(예: Rs 10,000 crore → "1조 루피")."""
@@ -381,7 +390,7 @@ def run_rank(conn, provider: LLMProvider | None = None,
         links = source_links_by_id.get(cid)
         source_links = json.dumps(links, ensure_ascii=False) if links else None
 
-        title_en = str(data.get("title_en") or "")[:300]
+        title_en = _checked_title_en(str(data.get("title_en") or "")[:300], r["title"] or "", summary_en)
         title_ko = _checked_title_ko(title_ko, r["title"] or "", title_en, summary_en)
 
         cur.execute(

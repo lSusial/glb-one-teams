@@ -384,6 +384,29 @@ class NumericGuardTests(unittest.TestCase):
         self.assertEqual(llm_ranker._checked_title_ko(
             '인옥스 1,000억 루피 IPO 추진', 'Inox to file Rs 10,000 crore IPO', '', ''), '인옥스 1,000억 루피 IPO 추진')
 
+    def test_ranker_drops_english_title_with_wrong_currency(self):
+        # 2026-09-29 라이브: Rp 9.1조(약 $5.7억)를 영문 제목에 "$9.1 trillion"으로 표기
+        self.assertEqual(llm_ranker._checked_title_en(
+            'Indonesia records $9.1 trillion scam losses',
+            'Indonesia records Rp9.1 trillion in online scam losses',
+            'OJK reported losses of Rp 9.1 trillion (approximately $570 million USD).'), '')
+        self.assertEqual(llm_ranker._checked_title_en(
+            'Indonesia records Rp9.1 trillion scam losses', 'raw', 'about $570 million'),
+            'Indonesia records Rp9.1 trillion scam losses')
+
+    def test_highlight_country_codes_follow_source_articles(self):
+        # 2026-09-29 라이브: 근거 기사는 CN뿐인데 탑이슈 국가가 JP로 태그됨
+        rows = [{'article_id': 10, 'title': 'Trump offered arms sales to China', 'title_ko': '',
+                 'summary_ko': '', 'summary_en': '', 'cc': 'US', 'subject_cc': 'CN'},
+                {'article_id': 20, 'title': 'Fed cuts', 'title_ko': '', 'summary_ko': '',
+                 'summary_en': '', 'cc': 'GLOBAL', 'subject_cc': 'GLOBAL'}]
+        out = briefing._validate_highlight_sources([
+            {'headline_ko': '미국, 중국에 군사장비 판매 제안', 'country_codes': ['JP'], 'source_article_ids': [10]},
+            {'headline_ko': '미중 관세', 'country_codes': ['US', 'CN'], 'source_article_ids': [10]},
+            {'headline_ko': '연준', 'country_codes': ['US'], 'source_article_ids': [20]},
+        ], rows, 10)
+        self.assertEqual([h['country_codes'] for h in out], [['CN'], ['US', 'CN'], ['US']])
+
     def test_translation_rejects_wrong_rupee_amount(self):
         db = sqlite3.connect(':memory:')
         db.row_factory = sqlite3.Row

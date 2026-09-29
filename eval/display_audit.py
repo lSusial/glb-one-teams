@@ -276,7 +276,9 @@ def main() -> int:
         if a.get("u") in seen_amount:
             continue
         seen_amount.add(a.get("u"))
-        for en, ko in (("t_en", "t"), ("q_en", "q"), ("expanded_summary_en", "expanded_summary")):
+        # (q_en, t_en): 영문 제목 금액이 영문 요약과 다름(Rp 9.1조 → "$9.1 trillion" 같은 통화 바꿔치기)
+        for en, ko in (("t_en", "t"), ("q_en", "q"), ("expanded_summary_en", "expanded_summary"),
+                       ("q_en", "t_en")):
             if a.get(en) and a.get(ko) and numeric_guard.amount_mismatch(a[en], a[ko]):
                 add("AMOUNT_MISMATCH", f"{w} {ko}: {short(a)} · {a.get('u', '')[:70]}")
 
