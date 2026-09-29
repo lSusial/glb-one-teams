@@ -92,9 +92,12 @@ _EVENT_GENERIC.update({
 })
 
 # 사건 '전' 예고·프리뷰 헤드라인 — 같은 그룹에 결과 기사가 있으면 대표에서 뒤로 민다.
+# 원문(raw) 제목이 아니라 AI가 다듬은 제목만 검사 대상으로 넣어야 한다(그래야 "ahead of"가
+# 결과 기사의 원문 제목에만 남아있는 경우를 오탐하지 않는다 — 호출부 참고).
+# "전망"은 단독으로는 실적 가이던스 등 확정 소식에도 흔해 오탐이 잦아 제외했다.
 _PREVIEW_RE = re.compile(
     r"\b(ahead of|expected to|what to expect|preview|poised to|girds?|braces?|brace for|"
-    r"awaits?|looms?|counting the votes|to decide|will decide|likely to)\b|임박|앞두고|전망",
+    r"awaits?|looms?|counting the votes|to decide|will decide|likely to)\b|임박|앞두고",
     re.I)
 
 
@@ -437,7 +440,7 @@ def run_dedup(conn, provider: LLMProvider | None = None,
             continue
         meta = {a["article_id"]: {
             "score": a["ai_score"] or 0, "pub": a["published_at"] or "",
-            "titles": [a["t"], a["title_en"], a["raw_title"]], "media_cc": a["media_cc"],
+            "titles": [a["t"], a["title_en"]], "media_cc": a["media_cc"],
             "display_title": a["title_en"] or a["t"] or a["raw_title"] or "",
             "old_rep": a["duplicate_of"],
             # 기존 오병합 그룹은 같은 요약이 복제될 수 있다. 그 요약을 다시 후보·가드에
@@ -587,7 +590,7 @@ def repair_existing(conn, threshold: float | None = None, apply: bool = False,
             aid = int(a["article_id"])
             display_title = a["title_en"] or a["title"] or ""
             meta[aid] = {"score": a["ai_score"] or 0, "pub": a["published_at"] or "",
-                         "titles": [a["title_ko"], a["title_en"], a["title"]], "media_cc": a["media_cc"],
+                         "titles": [a["title_ko"], a["title_en"]], "media_cc": a["media_cc"],
                          "cc": a["cc"],
                          "title_tok": _tokens(display_title), "tok": _tokens(display_title)}
             titles[aid] = (a["title"] or "")[:90]

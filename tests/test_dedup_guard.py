@@ -81,6 +81,25 @@ class DedupGuardTests(unittest.TestCase):
         m = {1: self.meta(), 2: self.meta()}
         self.assertEqual(L.pick_rep([1, 2], m), 1)
 
+    def test_is_preview_ignores_earnings_outlook_language(self):
+        # "전망" 단독은 실적 가이던스 등 확정 소식에도 흔해 예고로 보면 안 된다.
+        self.assertFalse(L.is_preview('래드브로크스 모회사, 브라질 온라인 베팅 금지로 실적 전망 하향'))
+
+    def test_is_preview_still_detects_imminent_korean_phrases(self):
+        self.assertTrue(L.is_preview('캄보디아 최저임금 표결 임박'))
+        self.assertTrue(L.is_preview('RBA 금리 결정 앞두고 인플레이션 우려'))
+
+    def test_pick_rep_ignores_raw_title_preview_language(self):
+        # 원문(raw) 제목에만 남은 "ahead of"는 결과 기사를 예고로 오판시키면 안 된다.
+        # (titles에는 AI가 다듬은 title_ko/title_en만 넣어야 함 — 호출부 참고)
+        m = {
+            1: self.meta(score=43, titles=["VIDEO: Cambodia's 2027 minimum wage to be decided "
+                                            'by vote on September 30 - Khmer Times']),
+            2: self.meta(score=64, titles=['캄보디아 2027년 최저임금 협상 결렬',
+                                            'Cambodia minimum wage talks collapse before parliamentary vote']),
+        }
+        self.assertEqual(L.pick_rep([1, 2], m), 2)
+
     # ── 가드 ────────────────────────────────────────────────────
     def tok_meta(self, *texts):
         return {i + 1: self.meta(tok=L._tokens(t)) for i, t in enumerate(texts)}
