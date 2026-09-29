@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 
 import config
 import db
+import llm_dedup
 import ranking
 import taxonomy
 
@@ -576,7 +577,7 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
     return out
 
 
-_SOCIETY_ACTIVE_FLOOR = 45   # 사회뉴스 전용 노출 floor(금융55보다 낮게 — 최저임금·노조·실업 등 금융인접 중요건만)
+_SOCIETY_ACTIVE_FLOOR = config.SOCIETY_ACTIVE_FLOOR   # 사회뉴스 전용 노출 floor(금융55보다 낮게 — 최저임금·노조·실업 등 금융인접 중요건만)
 _SOCIETY_MAX_PER = 3         # 국가당 되살릴 사회기사 최대 수
 
 
@@ -633,6 +634,10 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
             ordered = ranking.order(conn, rows, cluster_map=cm)   # 표시 정렬 = 복합 rank_score
             # 근접중복 스토리 축소(같은 사건 여러 각도 → 대표 1건). UPI·Fed 류 홍수 방지.
             ordered, dedup_n, story_mem = _dedup_country_feed(ordered, cm)
+            # 연기·취소 등 후속 기사가 있으면 그 전 예고성 기사를 내린다(파업 '개시'와 '연기'가 같이 뜨던 문제)
+            gone = llm_dedup.superseded_ids([(a["article_id"], a["published_at"] or "",
+                                              a["title_en"] or a["title"] or "") for a in ordered])
+            ordered = [a for a in ordered if a["article_id"] not in gone]
             rows = ordered[:config.COUNTRY_MAX_ARTICLES]        # 국가당 노출 상한
             # 상한에서 밀린 사회기사 몇 건 되살림(위 where로 이미 후보에 포함됨).
             have = {a["article_id"] for a in rows}

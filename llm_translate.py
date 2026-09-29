@@ -80,7 +80,10 @@ def run_translate(conn, provider: LLMProvider | None = None,
         JOIN media_sources m ON m.source_id = a.source_id
         WHERE a.duplicate_of IS NULL
           AND ( a.ai_score >= ?
-             OR (m.primary_country_code IN ({np_in}) AND a.ai_score IS NOT NULL) )
+             OR (m.primary_country_code IN ({np_in}) AND a.ai_score IS NOT NULL)
+             -- 55점 미만이어도 화면에 나가는 경로: 국가탭 사회 예외·인사동향·한국계 금융기관(export_json)
+             OR (a.topics LIKE '%SOCIETY%' AND a.ai_score >= ?)
+             OR (a.ai_score IS NOT NULL AND (a.personnel_move = 1 OR COALESCE(a.korean_fi, '') <> '')) )
           AND ( (COALESCE(a.summary_en,'')  <> '' AND COALESCE(a.summary_ko,'') = '')
              OR (COALESCE(a.summary_ko,'')  <> '' AND COALESCE(a.summary_en,'') = '')
              OR (COALESCE(a.summary_ko,'')  <> '' AND COALESCE(a.title_ko,'')   = '') )
@@ -88,7 +91,8 @@ def run_translate(conn, provider: LLMProvider | None = None,
         ORDER BY a.ai_score DESC
         LIMIT ?
         """,
-        (config.AI_SCORE_ACTIVE_THRESHOLD, *config.NON_PRESENCE_CODES, *params, limit),
+        (config.AI_SCORE_ACTIVE_THRESHOLD, *config.NON_PRESENCE_CODES, config.SOCIETY_ACTIVE_FLOOR,
+         *params, limit),
     ).fetchall()
 
     stats = dict(total=len(rows), ko=0, en=0)
@@ -117,6 +121,7 @@ def run_translate(conn, provider: LLMProvider | None = None,
         data = results.get(cid) or {}
         s = str(data.get("summary") or "")[:1500]
         if not s:
+            log.warning("번역 응답 없음/무효 — 저장 안 함(article_id=%s)", article_id)
             continue
         if target == "ko":
             t_ko = str(data.get("title_ko") or "")[:60]

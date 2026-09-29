@@ -23,6 +23,7 @@ from __future__ import annotations
 import logging
 import re
 from collections import Counter
+from datetime import date
 
 import config
 import db
@@ -130,6 +131,42 @@ def pair_passes_guard(a: int, b: int, meta, threshold: float | None = None) -> b
     common = ta & tb
     anchors = common - _EVENT_GENERIC
     return sim >= th and bool(anchors)
+
+
+# 후속 전개(연기·취소·철회 등)를 알리는 헤드라인 — 같은 사건의 이전 예고성 기사를 대체한다.
+_SUPERSEDE_RE = re.compile(
+    r"\b(defer(?:s|red|ring)?|postpon(?:e|es|ed|ing)|call(?:s|ed)? off|cancel(?:s|led|ed|ling)?|"
+    r"scrap(?:s|ped)?|shelve[sd]?|withdr(?:aw|aws|awn|ew)|avert(?:s|ed)?|revok(?:e|es|ed))\b"
+    r"|연기|취소|철회|보류", re.I)
+_SUPERSEDE_MIN_OVERLAP = 0.2
+_SUPERSEDE_WINDOW_DAYS = 3   # 예고→후속 전개는 며칠 안에 일어난다(오래된 별개 기사와 엮이지 않게)
+# 후속 헤드라인에 흔히 붙는 경위 표현 — 이것만 겹친 별개 사건을 잇지 않는다("after agreement with…")
+_SUPERSEDE_GENERIC = {"agreement", "agreements", "deal", "deals", "talks", "sign", "signs", "signed",
+                      "plan", "plans", "amid", "over", "day", "days", "week", "weeks"}
+
+
+def superseded_ids(items, threshold: float = _SUPERSEDE_MIN_OVERLAP) -> set:
+    """items=[(id, 게시일, 제목)] 한 탭의 카드. 같은 날 이후의 기사가 연기·취소 등 후속 전개를 알리고
+    제목에 공통 고유주체(국가명·일반어 제외)가 있으면, 그런 신호가 없는 이전 기사 id를 돌려준다."""
+    def day(d):
+        try:
+            return date.fromisoformat((d or "")[:10])
+        except ValueError:
+            return None
+
+    rows = [(i, day(d), t or "", _tokens(t)) for i, d, t in items]
+    gone = set()
+    for nid, nd, nt, ntok in rows:
+        if nd is None or not _SUPERSEDE_RE.search(nt):
+            continue
+        for oid, od, ot, otok in rows:
+            if (oid == nid or od is None or od > nd or (nd - od).days > _SUPERSEDE_WINDOW_DAYS
+                    or _SUPERSEDE_RE.search(ot)):
+                continue
+            if (overlap(ntok, otok) >= threshold
+                    and (ntok & otok) - _EVENT_GENERIC - _SUPERSEDE_GENERIC):
+                gone.add(oid)
+    return gone
 
 
 def is_preview(*titles: str | None) -> bool:

@@ -26,6 +26,9 @@ LLM 호출·DB 쓰기 없음. export 직후 돌린다:
                         (2026-09-28 인도 RBI 모달 $18.65 billion → "$18.65억", Rs 10,000 crore → "1조 루피" 등)
  15 STALE_WEEKLY       주간 탭이 기준일보다 14일 넘게 지난 주를 보여줌(주간 브리핑 미생성)
  16 STALE_SPARK        지표 탭 6개월 추세(주봉) 마지막 점이 기준일보다 13일 넘게 지남(주 1회 indicators-history 미실행)
+ 17 SUPERSEDED         같은 탭에 연기·취소 등 후속 기사가 있는데 이전 예고성 기사가 함께 노출
+                        (2026-09-28 IN 탭 '3일 파업 28일 개시' 옆에 '파업 연기'가 이미 있었음)
+ 18 KO_MISSING         한국어 요약(q)이 비어 한국어 화면에 영어 요약이 뜨는 카드 — 번역 대상 누락·거절
 '점검 통과'가 '정확함'을 뜻하진 않는다 — 규칙으로 잡히는 결함만 센다.
 """
 from __future__ import annotations
@@ -314,10 +317,28 @@ def main() -> int:
             if lag is not None and lag > 13:   # 주 1회 백필이면 정상 최대 13일
                 add("STALE_SPARK", f"{c['cc']} {i.get('label')} 마지막 {sp[-1]['d']} ({lag}일 전)")
 
+    # 17 SUPERSEDED — export와 같은 규칙(llm_dedup.superseded_ids)으로 국가 탭별 재확인
+    by_tab: dict[str, list] = {}
+    for w, cc, a in tabs:
+        by_tab.setdefault(cc, []).append(a)
+    for cc, arts in by_tab.items():
+        gone = L.superseded_ids([(i, a.get("d"), a.get("t_en") or a.get("t")) for i, a in enumerate(arts)])
+        for i in sorted(gone):
+            add("SUPERSEDED", f"{cc} {short(arts[i])}")
+
+    # 18 KO_MISSING
+    seen_ko = set()
+    for f, w, cc, a in cards:
+        if a.get("u") in seen_ko:
+            continue
+        seen_ko.add(a.get("u"))
+        if a.get("q_en") and not (a.get("q") or "").strip():
+            add("KO_MISSING", f"{w} {short(a)} (score={a.get('score')})")
+
     order = ["EMPTY_SUMMARY", "STALE", "PREVIEW_SHOWN", "COUNTRY_MISMATCH", "NEAR_DUP_IN_TAB",
              "JUNK_TITLE", "UNRELATED_LINKS", "TITLE_SUMMARY_GAP", "HIDDEN_NEWER_REP", "THIN_TABS",
              "SELF_TITLE_MISMATCH", "HIGHLIGHT_SOURCE_MISSING", "HIGHLIGHT_SOURCE_INVALID",
-             "AMOUNT_MISMATCH", "STALE_WEEKLY", "STALE_SPARK"]
+             "AMOUNT_MISMATCH", "STALE_WEEKLY", "STALE_SPARK", "SUPERSEDED", "KO_MISSING"]
     print(f"표시 감사 — 기준일 {today} · 카드 {len(cards)}장 (국가탭 {len(tabs)}장) · export={export_dir}")
     print("-" * 78)
     for k in order:
