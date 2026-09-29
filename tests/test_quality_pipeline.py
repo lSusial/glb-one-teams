@@ -41,12 +41,12 @@ class QualityTests(unittest.TestCase):
                 primary_country TEXT, title_ko TEXT, title TEXT, ai_score INTEGER,
                 ai_model TEXT, published_at TEXT, duplicate_of INTEGER, dup_by_ai INTEGER,
                 summary_ko TEXT, summary_en TEXT, link TEXT, event_type TEXT,
-                korean_fi TEXT, personnel_move INTEGER);
+                korean_fi TEXT, personnel_move INTEGER, topics TEXT);
         ''')
         self.addCleanup(self.db.close)
 
     def add(self, aid, source=1, cc='US', score=60, day=None, duplicate=None, ai=0):
-        self.db.execute('INSERT INTO articles_raw VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
+        self.db.execute('INSERT INTO articles_raw VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,NULL)',
                         (aid, source, cc, None, f'headline {aid}', score, 'test:model',
                          day or date.today().isoformat(), duplicate, ai,
                          '요약 근거 ' * 60, 'Evidence summary', f'https://example.com/{aid}',
@@ -289,6 +289,38 @@ class QualityTests(unittest.TestCase):
         row = self.db.execute('SELECT summary_ko FROM articles_raw WHERE article_id=1').fetchone()
         self.assertEqual(row['summary_ko'], '베트남이 1,330억 달러 국채를 발행했다.')
 
+    def test_translation_covers_displayed_items_below_active_threshold(self):
+        # 2026-09-28 라이브: 사회 예외(52점)·인사동향 카드가 번역 대상에서 빠져 한국어 화면에 영어 요약이 떴다
+        for aid in (1, 2, 3, 4):
+            self.add(aid, score=52)
+        self.db.execute("UPDATE articles_raw SET summary_ko=NULL, title_ko=NULL")
+        self.db.execute("UPDATE articles_raw SET topics='SOCIETY' WHERE article_id=1")
+        self.db.execute("UPDATE articles_raw SET personnel_move=1 WHERE article_id=2")
+        self.db.execute("UPDATE articles_raw SET korean_fi='SHINHAN' WHERE article_id=3")
+        self.db.execute("UPDATE articles_raw SET topics='ECONOMY' WHERE article_id=4")   # 노출 안 됨
+        self.db.commit()
+        llm_translate.run_translate(self.db, Provider({'title_ko': '제목', 'summary': '요약'}))
+        done = {r[0] for r in self.db.execute('SELECT article_id FROM articles_raw WHERE summary_ko IS NOT NULL')}
+        self.assertEqual(done, {1, 2, 3})
+
+    def test_superseded_story_is_detected(self):
+        items = [
+            (1, '2026-09-27', "India's 3-day bank strike may delay September salaries"),
+            (2, '2026-09-28', 'Indian bank unions defer nationwide strike after agreement with IBA'),
+            (3, '2026-09-27', 'Bank unions to begin 3-day strike from September 28'),
+            (4, '2026-09-27', 'RBI keeps repo rate unchanged'),
+            (5, '2026-09-21', 'Mutual Trust Bank signs agreement with Central Depository'),  # 'agreement'만 겹침
+            (6, '2026-09-20', 'Bank unions threaten nationwide strike'),                     # 3일 창 밖
+        ]
+        self.assertEqual(llm_dedup.superseded_ids(items), {1, 3})
+        # 후속 기사가 더 오래됐거나 연기·취소 신호가 없으면 내리지 않는다
+        self.assertEqual(llm_dedup.superseded_ids([
+            (1, '2026-09-28', "India's 3-day bank strike may delay September salaries"),
+            (2, '2026-09-27', 'Indian bank unions defer nationwide strike after agreement with IBA')]), set())
+        self.assertEqual(llm_dedup.superseded_ids([
+            (1, '2026-09-27', 'Japan to raise consumption tax'),
+            (2, '2026-09-28', 'Fed postpones rate decision')]), set())
+
 
 class NumericGuardTests(unittest.TestCase):
     def test_usd_prefix_and_korean_man_units_are_parsed(self):
@@ -361,9 +393,10 @@ class NumericGuardTests(unittest.TestCase):
             INSERT INTO media_sources VALUES(1,'IN');
             CREATE TABLE articles_raw(article_id INTEGER PRIMARY KEY, source_id INTEGER, title TEXT,
                 title_ko TEXT, summary_en TEXT, summary_ko TEXT, ai_score INTEGER, duplicate_of INTEGER,
-                published_at TEXT, primary_country TEXT);
+                published_at TEXT, primary_country TEXT, topics TEXT, personnel_move INTEGER, korean_fi TEXT);
         """)
-        db.execute("INSERT INTO articles_raw VALUES(1,1,'NSE IPO',NULL,'NSE raised Rs 6,746 crore.',NULL,70,NULL,?,'IN')",
+        db.execute("INSERT INTO articles_raw VALUES(1,1,'NSE IPO',NULL,'NSE raised Rs 6,746 crore.',NULL,70,NULL,?,'IN',"
+                   "NULL,0,'')",
                    (date.today().isoformat(),))
         db.commit()
         llm_translate.run_translate(db, Provider({'title_ko': 'NSE IPO', 'summary': 'NSE가 6,746억 루피를 조달했다.'}))
