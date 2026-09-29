@@ -327,6 +327,22 @@ class QualityTests(unittest.TestCase):
         rl = export_json._related_links(a, None, sibs, [])
         self.assertEqual([r['u'] for r in rl], ['https://x/0', 'https://x/1', 'https://x/2', 'https://x/3'])
 
+    def test_related_link_rejects_same_topic_but_different_event(self):
+        rep = {'title': 'Minutes: BOJ discussed faster rate hikes at July meeting',
+               'title_en': 'BOJ July minutes reveal board discussion of faster rate-hike pace',
+               'summary_en': 'Bank of Japan minutes from July show board members discussed accelerating rate hikes amid persistent inflation, with one member warning that delaying action could force rapid, substantial increases later. The BOJ subsequently raised its benchmark rate by 0.25 percentage points to around 1.25 percent in September. Governor Ueda signaled the bank plans to continue hiking rates to stabilize inflation at approximately 2 percent.'}
+        other = {'title': 'BOJ rate hike in October is a real possibility, ex-official says',
+                 'title_en': 'BOJ rate hike in October flagged as real possibility by ex-official',
+                 'summary_en': "A former Bank of Japan official has indicated that a rate hike in October is a genuine possibility, signaling potential monetary policy tightening ahead. The comment reflects ongoing debate within the BOJ about the timing and pace of further rate increases following recent policy adjustments. Such a move would have direct implications for yen strength, funding costs in Japan, and regional financial conditions affecting KB's Tokyo operations."}
+        same = {'title': 'Bank of Japan debated need for faster rate hikes, July minutes show',
+                'title_en': 'Bank of Japan debated faster rate hikes in July, minutes reveal',
+                'summary_en': 'The July meeting minutes show board members discussed accelerating interest rate increases as inflation pressures persist.'}
+        self.assertFalse(export_json._same_story_for_link(rep, other))
+        self.assertTrue(export_json._same_story_for_link(rep, same))
+
+    def test_no_news_signal_is_unknown(self):
+        self.assertEqual(export_json._signal_band(None), 'unknown')
+
 
 class NumericGuardTests(unittest.TestCase):
     def test_usd_prefix_and_korean_man_units_are_parsed(self):

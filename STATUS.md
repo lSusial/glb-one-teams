@@ -1,6 +1,6 @@
 # 현황 — glb-one-teams
 
-> **최종 갱신 2026-09-28** (9/21 전면 갱신 이후 항목: 카테고리 주/보조 분리·모달 음영·KB 시사점 제거·홈 탑이슈 출처검증·국가피드 전일+당일 제한·국가탭 primary_country 라우팅·AI 중복판정 쌍단위 재설계·금액검증(번역+브리핑) — 전부 Cloudflare 배포 완료, §6·§7 갱신) | For Internal Use Only
+> **최종 갱신 2026-09-29** (홈 지도 주제국가 라우팅·무데이터 상태 분리, 모달 관련링크 사건 유사도 검증은 로컬 반영·배포 대기) | For Internal Use Only
 >
 > 기획은 [`PLAN.md`](PLAN.md), 설계는 [`docs/design.md`](docs/design.md), 운영은 [`docs/operations.md`](docs/operations.md), 이력은 [`docs/work_log.md`](docs/work_log.md), UI 사양은 [`mockups/HANDOFF.md`](mockups/HANDOFF.md).
 
@@ -93,7 +93,8 @@ fetch → keyword_filter(통과≥2, SOCIETY 독립경로) → dedup → prefilt
 - **국가 피드 노출 기간(9/22 확정)**: 얇은 거점을 최대 7일까지 소급 보충하던 COVERAGE_FLOOR·SOCIETY 14일 예외를 제거하고 전일+당일로 통일. 수집이 매일 안 돌면(예: 9/28처럼 6일 공백) 그만큼 국가탭이 정직하게 비는 게 정상 — 표시 감사 THIN_TABS는 이 트레이드오프를 반영한 지표.
 - **국가 탭 라우팅(9/22 수정)**: 매체국적 대신 AI 주제국가(`primary_country`, 없으면 매체국적)로 통일 — 미국 매체가 쓴 한국 기사가 US 탭에 뜨는 등 오분류 해소(COUNTRY_MISMATCH 0건).
 - **금액(USD) 표기 검증**: 기사 번역(`llm_translate.py`)·홈 탑이슈(`briefing.generate_daily_highlights`)·국가 브리핑(`briefing.run_briefing`) 3곳 모두 `numeric_guard.py`로 원문 대비 금액 불일치 시 저장 안 함. 9/28 실전에서 "$30억"(정답 $300억) 등 달러기호+한국어 단위 혼합 표기 누락을 발견해 패턴 추가.
-- **Google News 링크 해소(9/29 재설계)**: collector의 구식 redirect 요청(성공률 0%)이 Google 요청 한도를 소진해 디코더까지 429로 막히던 문제 → collector 해소 제거, fulltext 디코딩 순차+429 연속 시 중단, rank 후 노출 기사 링크 점수순 추가 해소(`resolve-links`). 맥북 실측 대기.
+- **Google News 링크 해소(9/29 재설계)**: collector의 구식 redirect 요청(성공률 0%)이 Google 요청 한도를 소진해 디코더까지 429로 막히던 문제 → collector 해소 제거, fulltext 디코딩 순차+429 연속 시 중단, rank 후 노출 기사 링크 점수순 추가 해소(`resolve-links`). 9/29 배포에서 GN 링크 카드 46→7/107, 국가탭 0/33으로 감소 확인.
+- **홈 지도 상태·국가 보정(9/29 로컬, 배포 대기)**: 기사 없는 국가를 70점 `POSITIVE`로 표시하던 기본값을 `NO DATA`로 분리하고, 홈 핵심뉴스·국가 신호·상위 국가도 매체국가가 아닌 `primary_country`로 집계. AI 중복그룹의 관련링크는 사건 단서 겹침을 한 번 더 검사해 같은 기관·주제의 별개 기사를 모달 출처에서 제외.
 - 커밋 전 `git status`의 `.qbak` 임시 파일·`.claude/`·`resources/` 등 미추적 항목 정리 필요.
 
 ## 7. 다음 과제 (우선순위)

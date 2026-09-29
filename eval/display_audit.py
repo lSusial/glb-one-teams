@@ -236,7 +236,7 @@ def main() -> int:
     # 9 HIDDEN_NEWER_REP (더 새 기사뿐 아니라 더 높은 점수의 기사나 ACTIVE 자식이
     # 비노출 대표 밑에 숨은 경우도 포함한다. 대표>=55 조건을 걸면 가장 심각한 후자를 놓친다.)
     for r in conn.execute(
-            """SELECT c.article_id cid, COALESCE(c.title_en,c.title) ct,
+            """SELECT c.article_id cid, c.title craw, COALESCE(c.title_en,c.title) ct,
                       c.published_at cp, c.ai_score cs,
                       r.article_id rid, COALESCE(r.title_en,r.title) rt,
                       r.published_at rp, r.ai_score rs
@@ -245,7 +245,7 @@ def main() -> int:
                  AND r.published_at >= date(?, '-6 day')""",
             (today.isoformat(),)):
         child_score, rep_score = r["cs"] or 0, r["rs"] or 0
-        child_is_preview = L.is_preview(r["ct"])
+        child_is_preview = L.is_preview(r["craw"], r["ct"])
         newer_not_worse = ((r["cp"] or "")[:10] > (r["rp"] or "")[:10]
                            and child_score >= rep_score and not child_is_preview)
         active_hidden = (child_score >= config.AI_SCORE_ACTIVE_THRESHOLD

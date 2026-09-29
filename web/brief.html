@@ -242,8 +242,10 @@
     el.innerHTML = out;
   }
 
-  const STATE_LV = { go:'positive', warn:'watch', stop:'risk' };
-  const STATE_BADGE = EN ? {go:'POSITIVE', warn:'WATCH', stop:'RISK'} : {go:'안정', warn:'주의', stop:'경계'};
+  const STATE_LV = { go:'positive', warn:'watch', stop:'risk', unknown:'unknown' };
+  const STATE_BADGE = EN
+    ? {go:'POSITIVE', warn:'WATCH', stop:'RISK', unknown:'NO DATA'}
+    : {go:'안정', warn:'주의', stop:'경계', unknown:'데이터 없음'};
 
   function renderPulse(){
     const wrap = $('#map-wrap');
@@ -265,12 +267,12 @@
     const LEVEL_PRIORITY = { risk:0, watch:1, positive:2 };
     const withNews = signals
       .map((s) => {
-        const level = STATE_LV[s.state] || 'watch';
+        const level = STATE_LV[s.state] || 'unknown';
         const kw = EN ? (s.keyword_en || s.keyword) : (s.keyword || s.keyword_en);
         const noNews = /특이사항 없음|no notable news/i.test(kw || '');
         return { s, level, kw, noNews };
       })
-      .filter((x) => !(x.level === 'positive' && x.noNews));
+      .filter((x) => x.level !== 'unknown' && !(x.level === 'positive' && x.noNews));
     const popIds = new Set(
       withNews
         .slice()
@@ -279,11 +281,11 @@
         .map((x) => x.s.cc)
     );
 
-    let tally = { risk:0, watch:0, positive:0 };
+    let tally = { risk:0, watch:0, positive:0, unknown:0 };
     signals.forEach((s) => {
       const ll = LATLON[s.cc]; if (!ll) return;
       const { x, y } = project(ll[0], ll[1]);
-      const level = STATE_LV[s.state] || 'watch';
+      const level = STATE_LV[s.state] || 'unknown';
       tally[level] = (tally[level]||0) + 1;
 
       const mk = document.createElement('div');
@@ -308,6 +310,7 @@
       {k:'risk',label:'RISK',color:'var(--risk)'},
       {k:'watch',label:'WATCH',color:'var(--watch)'},
       {k:'positive',label:'POSITIVE',color:'var(--positive)'},
+      {k:'unknown',label:'NO DATA',color:'var(--faint)'},
     ].map((g) => `<span class="lg"><i style="background:${g.color}"></i>${g.label}<b>${tally[g.k]||0}</b></span>`).join('');
 
     requestAnimationFrame(() => layoutCards(wrap));

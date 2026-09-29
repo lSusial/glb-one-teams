@@ -366,6 +366,24 @@ def _dedup_country_feed(rows, cm):
 
 
 _RL_MAX = 4   # 모달 '관련 기사 링크' 최대 개수(본 기사 포함 — 원문 1 + 같은 사건 3). 2026-09-29 5→4
+_RELATED_MIN_OVERLAP = 0.12
+
+
+def _same_story_for_link(rep, child) -> bool:
+    """관련 링크는 대표 기사와 최소한의 사건 단서가 겹칠 때만 노출한다.
+
+    AI 중복판정이 BOJ라는 기관·금리 인상이라는 주제만 같은 별개 보도를 한 그룹으로
+    묶더라도, 모달에서는 근거가 다른 기사를 같은 사건의 출처처럼 보여주지 않는다.
+    """
+    def value(row, key):
+        try:
+            return row[key] or ""
+        except (KeyError, IndexError, TypeError):
+            return ""
+
+    rep_text = " ".join(value(rep, k) for k in ("title", "title_en", "summary_en"))
+    child_text = " ".join(value(child, k) for k in ("title", "title_en", "summary_en"))
+    return llm_dedup.overlap(llm_dedup._tokens(rep_text), llm_dedup._tokens(child_text)) >= _RELATED_MIN_OVERLAP
 
 
 def _story_links_map(conn) -> dict[int, list[dict]]:
@@ -376,12 +394,19 @@ def _story_links_map(conn) -> dict[int, list[dict]]:
     같은 기사인데도 다른 기사처럼 보이는 표시 불일치가 생긴다(2026-09-22 수정)."""
     out: dict[int, list[dict]] = {}
     for r in conn.execute(
-        "SELECT a.duplicate_of AS rep, a.title AS title, a.title_ko AS title_ko, "
-        "a.link AS link, m.media_name AS src "
-        "FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id "
+        "SELECT a.duplicate_of AS rep, a.title AS title, a.title_en AS title_en, "
+        "a.title_ko AS title_ko, a.summary_en AS summary_en, a.link AS link, "
+        "m.media_name AS src, p.title AS rep_title, p.title_en AS rep_title_en, "
+        "p.summary_en AS rep_summary_en "
+        "FROM articles_raw a JOIN articles_raw p ON p.article_id = a.duplicate_of "
+        "JOIN media_sources m ON m.source_id = a.source_id "
         "WHERE a.duplicate_of IS NOT NULL "
         "ORDER BY a.ai_score DESC, a.published_at DESC"
     ):
+        if not _same_story_for_link(
+                {"title": r["rep_title"], "title_en": r["rep_title_en"],
+                 "summary_en": r["rep_summary_en"]}, r):
+            continue
         disp = r["title_ko"] or r["title"]
         out.setdefault(int(r["rep"]), []).append(
             {"t": (disp or "")[:100], "u": r["link"], "src": r["src"]})
@@ -835,11 +860,16 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
     """
     dc, params = _date_clause(days)
     # KB 미진출국은 제외 — 이 블록은 진출 11개 거점 횡단 요약용.
-    exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
+    ph = ",".join("?" * len(config.NON_PRESENCE_CODES))
+    exc = (f" AND COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) NOT IN ({ph})"
+           if config.NON_PRESENCE_CODES else "")
+    exp = list(config.NON_PRESENCE_CODES)
     rows = conn.execute(
         f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en,
                    a.expanded_summary, a.expanded_summary_en, a.event_type, a.korean_fi, a.personnel_move, m.tier,
-                   a.topics, a.link, a.published_at, m.primary_country_code cc, m.media_name, a.primary_country
+                   a.topics, a.link, a.published_at,
+                   COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) cc,
+                   m.media_name, a.primary_country
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}{exc}
             ORDER BY a.ai_score DESC, a.published_at DESC LIMIT 60""",
@@ -954,8 +984,10 @@ def _short_keyword(text: str, maxwords: int, maxlen: int) -> str:
     return cut.rstrip(" ,.-–—:;") + "…"
 
 
-def _signal_band(mood_level: int) -> str:
+def _signal_band(mood_level: int | None) -> str:
     """mood_level → 3단계 신호(go/warn/stop). 임계는 config에서 조정."""
+    if mood_level is None:
+        return "unknown"
     if mood_level >= config.SIGNAL_GO_THRESHOLD:
         return "go"
     if mood_level >= config.SIGNAL_WARN_THRESHOLD:
@@ -974,10 +1006,11 @@ def _compute_country_section(conn, days: int | None = 1, top_n: int = 5) -> list
     dc, params = _date_clause(days)
     ph = ",".join("?" * len(_FLAGS))
     rows = conn.execute(
-        f"""SELECT a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.topics, m.primary_country_code cc
+        f"""SELECT a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.topics,
+                   COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) cc
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL
-              AND m.primary_country_code IN ({ph}){dc}
+              AND COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) IN ({ph}){dc}
             ORDER BY a.ai_score DESC""",
         (config.AI_SCORE_ACTIVE_THRESHOLD, *_FLAGS.keys(), *params),
     ).fetchall()
@@ -1031,10 +1064,11 @@ def _compute_country_signals(conn, days: int | None = 1) -> list[dict]:
     dc, params = _date_clause(days)
     ph = ",".join("?" * len(_FLAGS))
     rows = conn.execute(
-        f"""SELECT a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.topics, m.primary_country_code cc
+        f"""SELECT a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.topics,
+                   COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) cc
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL
-              AND m.primary_country_code IN ({ph}){dc}
+              AND COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) IN ({ph}){dc}
             ORDER BY a.ai_score DESC""",
         (config.AI_SCORE_ACTIVE_THRESHOLD, *_FLAGS.keys(), *params),
     ).fetchall()
@@ -1050,7 +1084,7 @@ def _compute_country_signals(conn, days: int | None = 1) -> list[dict]:
         arts = by_cc[cc]
         cc_inds = indicators.get(cc, [])
         mood_level, _trend = _mood_level(arts, cc_inds)
-        state = _signal_band(mood_level)
+        state = _signal_band(mood_level if arts else None)
 
         idx_list, fx = [], None
         for ind in cc_inds:
