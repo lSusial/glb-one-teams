@@ -258,6 +258,14 @@ def cmd_prefilter(args):
     print(f"[prefilter] 처리={s['total']}  keep={s['keep']}  drop={s['drop']}")
 
 
+def cmd_resolve_links(args):
+    import fulltext
+    conn = db.open_conn()
+    s = _ai_guard(lambda: fulltext.resolve_display_links(conn, days=getattr(args, "days", None)),
+                  "resolve-links")
+    print(f"[resolve-links] 대상={s['total']}  해소={s['resolved']}")
+
+
 def cmd_fulltext(args):
     import fulltext
     conn = db.open_conn()
@@ -379,6 +387,9 @@ def cmd_ai(args):
     sd = _ai_guard(lambda: llm_dedup.run_dedup(conn, days=days, use_batch=ub), "ai")
     print(f"   중복마킹={sd['marked']}건 (국가 {sd['countries']}, "
           f"검사={sd['reviewed']}, 실패보존={sd['failed']}, 가드해제={sd.get('released', 0)})")
+    print("▶ 노출 기사 원문 링크 해소(Google News → 원문, 점수순·순차)...")
+    sl = _ai_guard(lambda: fulltext.resolve_display_links(conn, days=days), "ai")
+    print(f"   대상={sl['total']} 해소={sl['resolved']}")
     print("▶ [4/7] 모달 긴 요약(노출 기사만)...")
     se = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub), "ai")
     print(f"   대상={se['total']} 작성={se['written']} 다출처={se['synthesized']}")
@@ -504,6 +515,8 @@ def main():
     pre.add_argument("--sync", action="store_true", help=_SYNC_HELP)
     ftx = sub.add_parser("fulltext", help="keep 기사 원문 본문 추출 (rank 품질↑, 무료)")
     ftx.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
+    rsl = sub.add_parser("resolve-links", help="채점된 기사 중 Google News 링크를 원문 URL로 해소(점수순·순차, 맥북)")
+    rsl.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
     rnk = sub.add_parser("rank",      help="AI 분석[영어] (score/summary_en/topics/kb_implication_en)")
     rnk.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
     rnk.add_argument("--redo-days", type=int, dest="redo_days",
@@ -561,7 +574,7 @@ def main():
         "backfill-country": cmd_backfill_country,
         "run": cmd_run, "report": cmd_report, "list": cmd_list,
         "indicators": cmd_indicators, "indicators-history": cmd_indicators_history,
-        "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "rank": cmd_rank,
+        "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "resolve-links": cmd_resolve_links, "rank": cmd_rank,
         "expand": cmd_expand, "ai-dedup": cmd_ai_dedup, "dedup-repair": cmd_dedup_repair,
         "translate": cmd_translate, "brief": cmd_brief, "highlights": cmd_highlights,
         "ai": cmd_ai, "export": cmd_export, "admin": cmd_admin,

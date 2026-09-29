@@ -93,7 +93,7 @@ fetch → keyword_filter(통과≥2, SOCIETY 독립경로) → dedup → prefilt
 - **국가 피드 노출 기간(9/22 확정)**: 얇은 거점을 최대 7일까지 소급 보충하던 COVERAGE_FLOOR·SOCIETY 14일 예외를 제거하고 전일+당일로 통일. 수집이 매일 안 돌면(예: 9/28처럼 6일 공백) 그만큼 국가탭이 정직하게 비는 게 정상 — 표시 감사 THIN_TABS는 이 트레이드오프를 반영한 지표.
 - **국가 탭 라우팅(9/22 수정)**: 매체국적 대신 AI 주제국가(`primary_country`, 없으면 매체국적)로 통일 — 미국 매체가 쓴 한국 기사가 US 탭에 뜨는 등 오분류 해소(COUNTRY_MISMATCH 0건).
 - **금액(USD) 표기 검증**: 기사 번역(`llm_translate.py`)·홈 탑이슈(`briefing.generate_daily_highlights`)·국가 브리핑(`briefing.run_briefing`) 3곳 모두 `numeric_guard.py`로 원문 대비 금액 불일치 시 저장 안 함. 9/28 실전에서 "$30억"(정답 $300억) 등 달러기호+한국어 단위 혼합 표기 누락을 발견해 패턴 추가.
-- Google News 링크 해소(collector.py의 구식 redirect-follow)가 9/28 한때 0/4,462건 실패(Google 쪽 API 변경 추정) — `fulltext.py`의 `googlenewsdecoder` 경로는 정상 동작(140/257, 역사적 기준치 수준)해 실질 영향은 적음. 재발 시 `googlenewsdecoder` 최신 버전(0.2.1)도 동일 실패 확인됨 — Google 쪽 문제로 추정, 재현 시 재확인 필요.
+- **Google News 링크 해소(9/29 재설계)**: collector의 구식 redirect 요청(성공률 0%)이 Google 요청 한도를 소진해 디코더까지 429로 막히던 문제 → collector 해소 제거, fulltext 디코딩 순차+429 연속 시 중단, rank 후 노출 기사 링크 점수순 추가 해소(`resolve-links`). 맥북 실측 대기.
 - 커밋 전 `git status`의 `.qbak` 임시 파일·`.claude/`·`resources/` 등 미추적 항목 정리 필요.
 
 ## 7. 다음 과제 (우선순위)
