@@ -42,6 +42,16 @@ python main.py list             # 최근 기사 확인
 ```
 일일 전체 절차(수집→AI→export→배포)는 `docs/operations.md` 참조.
 
+## 클라우드 세션 작업 규칙 (Claude Code on the web 등, `data/news.db`가 없는 환경)
+코드는 클라우드에서 고치고 실행·DB는 맥북에 있어 상태가 어긋날 수 있다. 클라우드 세션에서 코드를 바꿨다면 **작업 끝에 맥북 Claude Code에 그대로 붙여넣을 실행 프롬프트**를 항상 함께 준다:
+1. 코드 동기화 — 로컬 변경 확인 → `git checkout main && git pull` → 기대 커밋 확인 → `python -m unittest discover -s tests`
+2. DB를 바꾸는 단계 전 백업(`cp data/news.db data/news.db.bak-$(date +%Y%m%d-%H%M)`)
+3. 이번 변경에 필요한 실행 단계(순서·명령 명시, `--apply`·배포 같은 되돌리기 어려운 단계는 조건 명시)
+4. 확인 기준(예: `display_audit.py` 항목별 기대값) — 어긋나면 멈추고 보고
+5. 보고 형식 — 로그·감사 결과를 원문 그대로 붙여 클라우드 세션에 돌려줄 수 있게
+
+맥북에서 직접 작업할 때는 해당 없음.
+
 ## 관리 국가 (KB 거점 기준, 진출 13개국)
 
 | 코드 | 국가 | 도시 | 형태 |
