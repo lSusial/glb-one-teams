@@ -73,7 +73,7 @@ RANK_LIMIT      = 700        # 한 번 실행에 처리할 최대 기사 수(ran
 # prefilter 통과분만 원문 본문 추출(무료). 스니펫(~141B) 대신 본문으로 rank 품질↑.
 FULLTEXT_LIMIT   = 400       # 한 번 실행에 본문 추출할 최대 기사 수
 FULLTEXT_WORKERS = 12        # 병렬 fetch 수
-FULLTEXT_TIMEOUT = 15        # 원문 fetch 타임아웃(초)
+DISPLAY_LINK_RESOLVE_LIMIT = 150  # rank 후 노출 기사 GN 링크 추가 해소 한도(순차 요청·Google 429 방지)
 FULLTEXT_MAXLEN  = 12000     # 저장 본문 최대 길이(자)
 RANK_BODY_MAXLEN = 1200      # rank 프롬프트에 넣는 본문 최대 길이(자) — 2026-08-31 토큰
                               # 다이어트로 4000→2000(rank가 하루 토큰의 ~69%를 차지, 가장 큰 레버)
@@ -114,8 +114,6 @@ USER_AGENT = (
 REQUEST_TIMEOUT_SEC   = 20
 MAX_PARALLEL_FETCH    = 8
 RETRY_DELAYS          = (1, 3)   # 일반 5xx/네트워크 오류 재시도 대기(초): 1회→1s, 2회→3s
-GNEWS_RESOLVE_WORKERS = 30       # Google News 리다이렉트 URL 해소 병렬 수
-GNEWS_RESOLVE_TIMEOUT = 5
 
 # 429/503("얌전한 클라이언트" 대응) 전용 — 일반 5xx보다 훨씬 길게 대기 + 지터.
 # Google이 결과 무시(bozo)가 아니라 명시적으로 차단 신호를 보내는 상태코드이므로 별도 취급.

@@ -344,75 +344,6 @@ def fetch_feed(feed_id: int, source_id: int, url: str) -> tuple[FetchResult, lis
 
 
 # ---------------------------------------------------------------------------
-# Google News 리다이렉트 URL 해소
-# ---------------------------------------------------------------------------
-_GNEWS_PREFIX = "https://news.google.com/"
-_URL_RESOLVE_WORKERS = config.GNEWS_RESOLVE_WORKERS
-_URL_RESOLVE_TIMEOUT = config.GNEWS_RESOLVE_TIMEOUT
-
-
-def _resolve_single_url(url: str) -> str:
-    """Google News 리다이렉트 URL → 실제 기사 URL (best-effort)."""
-    if _GNEWS_PREFIX not in url:
-        return url
-    try:
-        r = requests.get(
-            url,
-            allow_redirects=True,
-            timeout=_URL_RESOLVE_TIMEOUT,
-            verify=_CA_BUNDLE,
-            headers={"User-Agent": USER_AGENT},
-            stream=True,
-        )
-        r.close()
-        final = r.url
-        return final if _GNEWS_PREFIX not in final else url
-    except Exception:
-        return url
-
-
-def resolve_google_news_links(
-    conn: sqlite3.Connection, article_ids: list[int]
-) -> int:
-    """새로 삽입된 기사 중 Google News URL을 실제 기사 URL로 교체."""
-    if not article_ids:
-        return 0
-    placeholders = ",".join("?" * len(article_ids))
-    rows = conn.execute(
-        f"SELECT article_id, link FROM articles_raw "
-        f"WHERE article_id IN ({placeholders}) "
-        f"AND link LIKE 'https://news.google.com/%'",
-        article_ids,
-    ).fetchall()
-    if not rows:
-        return 0
-
-    log.info("Google News URL 해소 시작: %d건", len(rows))
-    id_to_orig = {r["article_id"]: r["link"] for r in rows}
-
-    with cf.ThreadPoolExecutor(max_workers=_URL_RESOLVE_WORKERS) as pool:
-        futures = {
-            pool.submit(_resolve_single_url, orig): art_id
-            for art_id, orig in id_to_orig.items()
-        }
-        cur = conn.cursor()
-        resolved = 0
-        for fut in cf.as_completed(futures):
-            art_id = futures[fut]
-            new_url = fut.result()
-            if new_url != id_to_orig[art_id]:
-                cur.execute(
-                    "UPDATE articles_raw SET link = ? WHERE article_id = ?",
-                    (new_url[:2000], art_id),
-                )
-                resolved += 1
-
-    conn.commit()
-    log.info("Google News URL 해소 완료: %d건 업데이트 (/%d건)", resolved, len(rows))
-    return resolved
-
-
-# ---------------------------------------------------------------------------
 # 전체 실행
 # ---------------------------------------------------------------------------
 def list_active_feeds(conn: sqlite3.Connection) -> list[sqlite3.Row]:
@@ -442,7 +373,6 @@ def run_fetch_all(conn: sqlite3.Connection) -> int:
     total = ok = failed = new_total = dup_total = 0
     hits_429_total = hits_503_total = 0
     rate_limited_feeds = rate_limited_final_fail = 0
-    new_article_ids: list[int] = []
     started = time.time()
 
     with cf.ThreadPoolExecutor(max_workers=MAX_PARALLEL_FETCH) as direct_pool, \
@@ -488,7 +418,6 @@ def run_fetch_all(conn: sqlite3.Connection) -> int:
                            VALUES (?, ?, ?, ?, ?, ?, ?)""",
                         row,
                     )
-                    new_article_ids.append(cur.lastrowid)
                     new_count += 1
                 except sqlite3.IntegrityError:
                     dup_count += 1
@@ -506,7 +435,6 @@ def run_fetch_all(conn: sqlite3.Connection) -> int:
                 log.info("OK    %-3s  new=%-3d dup=%-3d  %s",
                          result.status, new_count, dup_count, result.feed_url)
 
-    resolve_google_news_links(conn, new_article_ids)
 
     cur.execute(
         """UPDATE fetch_runs
