@@ -365,7 +365,7 @@ def _dedup_country_feed(rows, cm):
     return reps, sizes, members
 
 
-_RL_MAX = 5   # 모달 '관련 기사 링크' 최대 개수(본 기사 포함)
+_RL_MAX = 4   # 모달 '관련 기사 링크' 최대 개수(본 기사 포함 — 원문 1 + 같은 사건 3). 2026-09-29 5→4
 
 
 def _story_links_map(conn) -> dict[int, list[dict]]:
