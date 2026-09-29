@@ -321,6 +321,12 @@ class QualityTests(unittest.TestCase):
             (1, '2026-09-27', 'Japan to raise consumption tax'),
             (2, '2026-09-28', 'Fed postpones rate decision')]), set())
 
+    def test_related_links_capped_at_four_including_self(self):
+        a = {'title_ko': '본 기사', 'title': 'raw', 'link': 'https://x/0', 'media_name': 'M0'}
+        sibs = [{'t': f's{i}', 'u': f'https://x/{i}', 'src': f'M{i}'} for i in range(1, 7)]
+        rl = export_json._related_links(a, None, sibs, [])
+        self.assertEqual([r['u'] for r in rl], ['https://x/0', 'https://x/1', 'https://x/2', 'https://x/3'])
+
 
 class NumericGuardTests(unittest.TestCase):
     def test_usd_prefix_and_korean_man_units_are_parsed(self):
