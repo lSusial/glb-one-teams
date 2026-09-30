@@ -78,3 +78,30 @@ def amount_mismatch(source_text: str, output_text: str) -> bool:
     """USD·INR 금액을 통화별로 각각 대조한다(usd_mismatch 확장). 한쪽이라도 어긋나면 True."""
     return (usd_mismatch(source_text, output_text)
             or _mismatch(inr_values(source_text), inr_values(output_text)))
+
+
+def source_amount_conflicts(texts: list[str]) -> dict[str, list[float]]:
+    """여러 출처가 같은 사건의 단일 금액을 서로 다르게 보도하면 통화별 값을 반환한다.
+
+    한 출처 안에 여러 금액이 있으면 총액·부분액을 함께 설명하는 기사일 수 있어 자동
+    충돌 판정에서 제외한다. 각 출처에서 단일 금액만 명확한 경우에만 2% 허용오차로
+    비교해 오탐보다 누락을 택한다.
+    """
+    conflicts: dict[str, list[float]] = {}
+    for currency, extract in (("USD", usd_values), ("INR", inr_values)):
+        singles = []
+        for text in texts:
+            values = extract(text or "")
+            unique = []
+            for value in values:
+                if not any(abs(value - old) <= max(1, abs(old)) * 0.02 for old in unique):
+                    unique.append(value)
+            if len(unique) == 1:
+                singles.append(unique[0])
+        distinct = []
+        for value in singles:
+            if not any(abs(value - old) <= max(1, abs(old)) * 0.02 for old in distinct):
+                distinct.append(value)
+        if len(distinct) >= 2:
+            conflicts[currency] = sorted(distinct)
+    return conflicts

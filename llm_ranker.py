@@ -151,6 +151,8 @@ def ensure_columns(conn) -> None:
         # 다출처 종합에 실제로 쓰인 소스 목록(JSON [{"t":제목,"u":URL,"src":매체명}, ...]).
         # 클러스터가 SYNTH_MIN_SOURCES 미만이면 NULL(단일 기사, 기존 방식).
         ("source_links",      "ALTER TABLE articles_raw ADD COLUMN source_links      TEXT"),
+        ("source_conflict",   "ALTER TABLE articles_raw ADD COLUMN source_conflict   TEXT"),
+        ("publisher_name",    "ALTER TABLE articles_raw ADD COLUMN publisher_name    TEXT"),
         # 주제 국가(기사가 '다루는' 국가, ISO2) — 매체 국적(m.primary_country_code)과 구분.
         # 신화통신의 인니 기사: media=CN, primary_country=ID. 2026-09-11 신설(피드백 7).
         ("primary_country",   "ALTER TABLE articles_raw ADD COLUMN primary_country   TEXT"),
@@ -266,7 +268,8 @@ def _cluster_sources(conn, article_id: int, exclude_media: str) -> list:
     별개 언론사로 잘못 세지 않기 위한 안전장치 — "3개 이상 서로 다른 언론사 종합"이라는
     취지를 실제로 지키려면 클러스터 크기가 아니라 distinct 매체 수로 판단해야 한다."""
     rows = conn.execute(
-        """SELECT a.title, a.summary, a.full_text, a.link, m.media_name, m.tier
+        f"""SELECT a.title, a.summary, a.full_text, a.link,
+                  {db.publisher_expr()} AS media_name, m.tier
            FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
            WHERE a.duplicate_of = ?
            ORDER BY m.tier ASC, a.published_at DESC""",
@@ -322,7 +325,7 @@ def run_rank(conn, provider: LLMProvider | None = None,
     rows = conn.execute(
         f"""
         SELECT a.article_id, a.title, a.summary, a.full_text, a.link,
-               m.primary_country_code AS cc, m.media_name
+               m.primary_country_code AS cc, {db.publisher_expr()} AS media_name
         FROM articles_raw a
         JOIN media_sources m ON m.source_id = a.source_id
         WHERE a.llm_prefilter = 'keep'
@@ -333,10 +336,11 @@ def run_rank(conn, provider: LLMProvider | None = None,
         (*params, limit),
     ).fetchall()
 
-    stats = dict(total=len(rows), ranked=0, active=0, synthesized=0, failed=0)
+    stats = dict(total=len(rows), ranked=0, active=0, synthesized=0, failed=0,
+                 source_conflicts=0)
 
     # 요청 일괄 구성 → 배치 제출(50% 할인) 또는 동기 폴백
-    requests, row_by_id, source_links_by_id = [], {}, {}
+    requests, row_by_id, source_links_by_id, source_conflict_by_id = [], {}, {}, {}
     for i, r in enumerate(rows):
         cid = str(i)
         siblings = _cluster_sources(conn, r["article_id"], r["media_name"])
@@ -344,14 +348,30 @@ def run_rank(conn, provider: LLMProvider | None = None,
 
         if total_n >= config.SYNTH_MIN_SOURCES:
             blocks, links = [], []
-            for n, src in enumerate([r] + list(siblings), start=1):
+            sources = [r] + list(siblings)
+            conflict = numeric_guard.source_amount_conflicts([
+                f"{src['title']}\n{_source_snippet(src)}" for src in sources
+            ])
+            for n, src in enumerate(sources, start=1):
                 blocks.append(
                     f"Source {n} ({src['media_name']}): {src['title']}\n{_source_snippet(src)}"
                 )
                 links.append({"t": src["title"][:100], "u": src["link"], "src": src["media_name"]})
-            content_block = "\n\n".join(blocks)
-            source_links_by_id[cid] = links
-            stats["synthesized"] += 1
+            if conflict:
+                # 서로 다른 단일 금액을 확정적으로 섞지 않는다. 대표 기사만 분석하고
+                # 충돌값을 기록해 사람이 확인하거나 후속 출처에서 해소할 수 있게 한다.
+                body = (r["full_text"] or "").strip()
+                body_line = f"본문: {body[:config.RANK_BODY_MAXLEN]}" if body \
+                    else f"요약: {(r['summary'] or '')[:1200]}"
+                content_block = f"제목: {r['title']}\n{body_line}"
+                source_links_by_id[cid] = None
+                source_conflict_by_id[cid] = conflict
+                stats["source_conflicts"] += 1
+            else:
+                content_block = "\n\n".join(blocks)
+                source_links_by_id[cid] = links
+                source_conflict_by_id[cid] = None
+                stats["synthesized"] += 1
         else:
             # 본문 추출본이 있으면 본문으로, 없으면 RSS 스니펫으로 (자동 폴백)
             body = (r["full_text"] or "").strip()
@@ -359,6 +379,7 @@ def run_rank(conn, provider: LLMProvider | None = None,
                 else f"요약: {(r['summary'] or '')[:1200]}"
             content_block = f"제목: {r['title']}\n{body_line}"
             source_links_by_id[cid] = None
+            source_conflict_by_id[cid] = None
 
         if config.is_presence(r["cc"]):
             ctx = kb_network.context_for(r["cc"])
@@ -395,6 +416,8 @@ def run_rank(conn, provider: LLMProvider | None = None,
         primary_country = _valid_primary_country(data.get("primary_country"))
         links = source_links_by_id.get(cid)
         source_links = json.dumps(links, ensure_ascii=False) if links else None
+        conflict = source_conflict_by_id.get(cid)
+        source_conflict = json.dumps(conflict, ensure_ascii=False) if conflict else None
 
         title_en = _checked_title_en(str(data.get("title_en") or "")[:300], r["title"] or "", summary_en)
         title_ko = _checked_title_ko(title_ko, r["title"] or "", title_en, summary_en)
@@ -402,12 +425,12 @@ def run_rank(conn, provider: LLMProvider | None = None,
         cur.execute(
             """UPDATE articles_raw
                SET ai_score = ?, ai_score_factors = ?, title_ko = ?, title_en = ?, summary_en = ?, topics = ?,
-                   event_type = ?, source_links = ?,
+                   event_type = ?, source_links = ?, source_conflict = ?,
                    primary_country = ?, ai_model = ?
                WHERE article_id = ?""",
             (score, json.dumps(score_factors, ensure_ascii=False) if score_factors else None,
              title_ko, title_en, summary_en, ",".join(topics), ",".join(event_types),
-             source_links, primary_country, provider.model_id, r["article_id"]),
+             source_links, source_conflict, primary_country, provider.model_id, r["article_id"]),
         )
         if redo_days:
             # 영어 기준본이 바뀌었으므로 한국어 번역·모달요약을 무효화 → translate/expand 재생성
@@ -422,9 +445,9 @@ def run_rank(conn, provider: LLMProvider | None = None,
     conn.commit()
 
     log.info(
-        "랭킹 완료 — 처리=%d  실패보존=%d  ACTIVE(>=%d)=%d  다출처종합=%d",
+        "랭킹 완료 — 처리=%d  실패보존=%d  ACTIVE(>=%d)=%d  다출처종합=%d  출처충돌=%d",
         stats["ranked"], stats["failed"], config.AI_SCORE_ACTIVE_THRESHOLD,
-        stats["active"], stats["synthesized"],
+        stats["active"], stats["synthesized"], stats["source_conflicts"],
     )
     return stats
 

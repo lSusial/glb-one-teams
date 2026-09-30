@@ -92,8 +92,17 @@ def effective_country_expr(article_alias: str = "a", media_alias: str = "m") -> 
     )
 
 
+def publisher_expr(article_alias: str = "a", media_alias: str = "m") -> str:
+    """기사별 원발행사를 우선하고 없으면 수집 피드의 매체명으로 폴백하는 SQL 식."""
+    return (
+        f"COALESCE(NULLIF({article_alias}.publisher_name, ''), "
+        f"{media_alias}.media_name)"
+    )
+
+
 def table_columns(conn: sqlite3.Connection, table: str = "articles_raw") -> set[str]:
-    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+    rows = conn.execute(f"PRAGMA table_info({table})")
+    return {row["name"] if isinstance(row, sqlite3.Row) else row[1] for row in rows}
 
 
 def ensure_columns(

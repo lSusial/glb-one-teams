@@ -29,6 +29,7 @@ LLM 호출·DB 쓰기 없음. export 직후 돌린다:
  17 SUPERSEDED         같은 탭에 연기·취소 등 후속 기사가 있는데 이전 예고성 기사가 함께 노출
                         (2026-09-28 IN 탭 '3일 파업 28일 개시' 옆에 '파업 연기'가 이미 있었음)
  18 KO_MISSING         한국어 요약(q)이 비어 한국어 화면에 영어 요약이 뜨는 카드 — 번역 대상 누락·거절
+ 19 SOURCE_AMOUNT_CONFLICT 다출처 종합 후보의 단일 금액이 출처끼리 충돌해 종합을 보류한 기사
 '점검 통과'가 '정확함'을 뜻하진 않는다 — 규칙으로 잡히는 결함만 센다.
 """
 from __future__ import annotations
@@ -337,10 +338,21 @@ def main() -> int:
         if a.get("q_en") and not (a.get("q") or "").strip():
             add("KO_MISSING", f"{w} {short(a)} (score={a.get('score')})")
 
+    # 19 SOURCE_AMOUNT_CONFLICT — 랭커가 출처 간 확정 금액 충돌을 감지해 종합을 보류한 건
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(articles_raw)")}
+    if "source_conflict" in cols:
+        for r in conn.execute(
+                "SELECT article_id, title, source_conflict FROM articles_raw "
+                "WHERE ai_score >= ? AND duplicate_of IS NULL AND source_conflict IS NOT NULL",
+                (config.AI_SCORE_ACTIVE_THRESHOLD,)):
+            add("SOURCE_AMOUNT_CONFLICT",
+                f"#{r['article_id']} {(r['title'] or '')[:60]} · {r['source_conflict']}")
+
     order = ["EMPTY_SUMMARY", "STALE", "PREVIEW_SHOWN", "COUNTRY_MISMATCH", "NEAR_DUP_IN_TAB",
              "JUNK_TITLE", "UNRELATED_LINKS", "TITLE_SUMMARY_GAP", "HIDDEN_NEWER_REP", "THIN_TABS",
              "SELF_TITLE_MISMATCH", "HIGHLIGHT_SOURCE_MISSING", "HIGHLIGHT_SOURCE_INVALID",
-             "AMOUNT_MISMATCH", "STALE_WEEKLY", "STALE_SPARK", "SUPERSEDED", "KO_MISSING"]
+             "AMOUNT_MISMATCH", "STALE_WEEKLY", "STALE_SPARK", "SUPERSEDED", "KO_MISSING",
+             "SOURCE_AMOUNT_CONFLICT"]
     print(f"표시 감사 — 기준일 {today} · 카드 {len(cards)}장 (국가탭 {len(tabs)}장) · export={export_dir}")
     print("-" * 78)
     for k in order:

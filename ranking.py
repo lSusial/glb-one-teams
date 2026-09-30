@@ -31,6 +31,7 @@ import datetime
 import math
 
 import config
+import db
 
 # ── 가중치 (튜닝 대상: 여기만 고치면 전체 반영) ──────────────────────
 W_CLUSTER       = 3.0                          # × log2(1 + 다매체 형제 수)  [튜닝: 6→3]
@@ -50,18 +51,25 @@ def cluster_sizes(conn) -> dict[int, int]:
     세어 실제 독립 커버리지만 순위 보너스에 반영한다.
     """
     out: dict[int, int] = {}
+    publisher = ("COALESCE(NULLIF(a.publisher_name, ''), m.media_name)"
+                 if "publisher_name" in db.table_columns(conn) else "m.media_name")
     for rep, publishers in conn.execute(
-        """WITH members AS (
-               SELECT article_id AS rep_id, source_id FROM articles_raw
+        f"""WITH members AS (
+               SELECT article_id AS rep_id, article_id, source_id FROM articles_raw
                UNION ALL
-               SELECT duplicate_of AS rep_id, source_id FROM articles_raw
+               SELECT duplicate_of AS rep_id, article_id, source_id FROM articles_raw
                WHERE duplicate_of IS NOT NULL
            )
-           SELECT x.rep_id, COUNT(DISTINCT LOWER(TRIM(m.media_name))) AS publishers
+           SELECT x.rep_id, COUNT(DISTINCT LOWER(TRIM(
+               {publisher}
+           ))) AS publishers
            FROM members x
+           JOIN articles_raw a ON a.article_id = x.article_id
            JOIN media_sources m ON m.source_id = x.source_id
            GROUP BY x.rep_id
-           HAVING COUNT(DISTINCT LOWER(TRIM(m.media_name))) > 1"""
+           HAVING COUNT(DISTINCT LOWER(TRIM(
+               {publisher}
+           ))) > 1"""
     ):
         if rep is not None:
             out[int(rep)] = int(publishers) - 1

@@ -49,6 +49,51 @@ _CA_BUNDLE = certifi.where()
 log = logging.getLogger("collector")
 
 
+def ensure_article_columns(conn: sqlite3.Connection) -> None:
+    db.ensure_columns(conn, "articles_raw", [
+        ("publisher_name", "ALTER TABLE articles_raw ADD COLUMN publisher_name TEXT"),
+    ])
+
+
+def _publisher_name(entry, feed_url: str, title: str) -> str | None:
+    """RSS의 기사별 원발행사명. Google News는 ``source.title``을 제공한다.
+
+    일부 과거/변형 피드에서 source가 빠지면 Google News 제목의 마지막 `` - 매체``
+    접미사만 제한적으로 사용한다. 일반 직접 RSS 제목은 임의로 자르지 않는다.
+    """
+    source = entry.get("source") if entry is not None else None
+    if isinstance(source, dict):
+        name = str(source.get("title") or "").strip()
+    else:
+        name = str(source or "").strip()
+    if not name and _is_google_news(feed_url) and " - " in (title or ""):
+        name = title.rsplit(" - ", 1)[-1].strip()
+    if not name or len(name) > 120 or name.lower() in {"google news", "google"}:
+        return None
+    return name
+
+
+def backfill_publisher_names(conn: sqlite3.Connection) -> int:
+    """기존 Google News 기사에서 제목 접미사로 비어 있는 원발행사명을 보정한다."""
+    ensure_article_columns(conn)
+    rows = conn.execute(
+        """SELECT a.article_id, a.title, f.feed_url
+           FROM articles_raw a
+           JOIN media_source_feeds f ON f.feed_id = a.feed_id
+           WHERE COALESCE(a.publisher_name, '') = ''
+             AND f.feed_url LIKE '%news.google.com%'"""
+    ).fetchall()
+    updates = []
+    for row in rows:
+        name = _publisher_name(None, row["feed_url"], row["title"] or "")
+        if name:
+            updates.append((name, row["article_id"]))
+    if updates:
+        conn.executemany("UPDATE articles_raw SET publisher_name=? WHERE article_id=?", updates)
+        conn.commit()
+    return len(updates)
+
+
 # ---------------------------------------------------------------------------
 # 데이터 클래스
 # ---------------------------------------------------------------------------
@@ -330,6 +375,7 @@ def fetch_feed(feed_id: int, source_id: int, url: str) -> tuple[FetchResult, lis
             continue
         summary = _strip_html(entry.get("summary") or entry.get("description") or "")
         published = _parse_published(entry) or fetched_now
+        publisher = _publisher_name(entry, url, title)
         rows.append((
             feed_id,
             source_id,
@@ -338,6 +384,7 @@ def fetch_feed(feed_id: int, source_id: int, url: str) -> tuple[FetchResult, lis
             summary[:4000],
             published,
             _content_hash(title, link),
+            publisher,
         ))
 
     return FetchResult(feed_id, url, status, hits_429=hits_429, hits_503=hits_503), rows
@@ -359,6 +406,10 @@ def run_fetch_all(conn: sqlite3.Connection) -> int:
     (GNEWS_MAX_PARALLEL=3 + 요청 간 딜레이)는 별도 풀로 분리해 Google 쪽
     요청 패턴을 얌전하게 유지한다 — direct RSS 커버리지·속도는 그대로.
     """
+    ensure_article_columns(conn)
+    backfilled = backfill_publisher_names(conn)
+    if backfilled:
+        log.info("기존 Google News 원발행사 보정=%d건", backfilled)
     cur = conn.cursor()
     cur.execute("INSERT INTO fetch_runs DEFAULT VALUES")
     run_id = cur.lastrowid
@@ -414,12 +465,20 @@ def run_fetch_all(conn: sqlite3.Connection) -> int:
                 try:
                     cur.execute(
                         """INSERT INTO articles_raw
-                           (feed_id, source_id, title, link, summary, published_at, content_hash)
-                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                           (feed_id, source_id, title, link, summary, published_at, content_hash,
+                            publisher_name)
+                           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                         row,
                     )
                     new_count += 1
                 except sqlite3.IntegrityError:
+                    # 기존 행도 새 RSS 응답이 제공한 원발행사 정보로 보강한다.
+                    if row[-1]:
+                        cur.execute(
+                            "UPDATE articles_raw SET publisher_name=COALESCE(NULLIF(publisher_name,''), ?) "
+                            "WHERE content_hash=?",
+                            (row[-1], row[-2]),
+                        )
                     dup_count += 1
             new_total += new_count
             dup_total += dup_count

@@ -12,13 +12,14 @@ class RankingSourceTests(unittest.TestCase):
             INSERT INTO media_sources VALUES
                 (1, 'Publisher A'), (2, 'Publisher B'), (3, 'Publisher C');
             CREATE TABLE articles_raw(
-                article_id INTEGER PRIMARY KEY, source_id INTEGER, duplicate_of INTEGER
+                article_id INTEGER PRIMARY KEY, source_id INTEGER, duplicate_of INTEGER,
+                publisher_name TEXT
             );
         ''')
         self.addCleanup(self.db.close)
 
     def test_cluster_counts_independent_publishers_not_article_rows(self):
-        self.db.executemany('INSERT INTO articles_raw VALUES(?,?,?)', [
+        self.db.executemany('INSERT INTO articles_raw VALUES(?,?,?,NULL)', [
             (10, 1, None),       # representative: Publisher A
             (11, 1, 10),         # same publisher repeats do not add weight
             (12, 1, 10),
@@ -30,10 +31,18 @@ class RankingSourceTests(unittest.TestCase):
         self.assertEqual(ranking.cluster_sizes(self.db), {10: 1, 20: 2})
 
     def test_same_publisher_only_gets_no_cluster_bonus(self):
-        self.db.executemany('INSERT INTO articles_raw VALUES(?,?,?)', [
+        self.db.executemany('INSERT INTO articles_raw VALUES(?,?,?,NULL)', [
             (10, 1, None), (11, 1, 10), (12, 1, 10),
         ])
         self.assertEqual(ranking.cluster_sizes(self.db), {})
+
+    def test_article_publishers_split_one_aggregator_source(self):
+        self.db.executemany('INSERT INTO articles_raw VALUES(?,?,?,?)', [
+            (10, 1, None, 'Reuters'),
+            (11, 1, 10, 'Reuters'),
+            (12, 1, 10, 'Bloomberg'),
+        ])
+        self.assertEqual(ranking.cluster_sizes(self.db), {10: 1})
 
 
 if __name__ == '__main__':

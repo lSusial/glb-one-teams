@@ -101,6 +101,7 @@ def ensure_columns(conn) -> None:
     db.ensure_columns(conn, "articles_raw", [
         ("expanded_summary",    "ALTER TABLE articles_raw ADD COLUMN expanded_summary    TEXT"),
         ("expanded_summary_en", "ALTER TABLE articles_raw ADD COLUMN expanded_summary_en TEXT"),
+        ("publisher_name",      "ALTER TABLE articles_raw ADD COLUMN publisher_name      TEXT"),
     ])
 
 

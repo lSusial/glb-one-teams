@@ -107,6 +107,7 @@ def _ensure_ai_columns(conn) -> None:
         ("summary_en",        "ALTER TABLE articles_raw ADD COLUMN summary_en        TEXT"),
         ("kb_implication_en", "ALTER TABLE articles_raw ADD COLUMN kb_implication_en TEXT"),
         ("primary_country",   "ALTER TABLE articles_raw ADD COLUMN primary_country   TEXT"),
+        ("publisher_name",    "ALTER TABLE articles_raw ADD COLUMN publisher_name    TEXT"),
     ])
 
 
@@ -208,6 +209,7 @@ def _daily_highlights(conn) -> list:
     새 데이터는 source_article_ids로 원문을 직접 연결한다. 구 데이터에는 이 필드가
     없으므로 source_articles가 빈 배열로 나가며 brief.html의 제한된 유사도 폴백만 쓴다.
     """
+    _ensure_ai_columns(conn)
     try:
         cols = [c[1] for c in conn.execute("PRAGMA table_info(daily_highlights)")]
     except Exception:
@@ -242,7 +244,7 @@ def _daily_highlights(conn) -> list:
     rows = conn.execute(
         f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.title_en, m.language,
                    a.summary_ko, a.summary_en, a.expanded_summary, a.expanded_summary_en,
-                   a.link, a.published_at, a.topics, m.media_name,
+                   a.link, a.published_at, a.topics, {db.publisher_expr()} AS media_name,
                    {db.effective_country_expr()} AS cc
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.article_id IN ({placeholders})""",
@@ -295,7 +297,8 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
     rows = conn.execute(
         f"""SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en, a.topics, a.korean_fi,
                    a.event_type, a.personnel_move, m.tier,
-                   a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name, a.primary_country
+                   a.link, a.published_at, a.ai_score, m.primary_country_code cc,
+                   {db.publisher_expr()} AS media_name, a.primary_country
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score IS NOT NULL AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'
               AND m.primary_country_code IN ({ph}){dc}
@@ -400,7 +403,7 @@ def _story_links_map(conn) -> dict[int, list[dict]]:
     for r in conn.execute(
         "SELECT a.duplicate_of AS rep, a.title AS title, a.title_en AS title_en, "
         "a.title_ko AS title_ko, a.summary_en AS summary_en, a.link AS link, "
-        "m.media_name AS src, p.title AS rep_title, p.title_en AS rep_title_en, "
+        f"{db.publisher_expr()} AS src, p.title AS rep_title, p.title_en AS rep_title_en, "
         "p.summary_en AS rep_summary_en "
         "FROM articles_raw a JOIN articles_raw p ON p.article_id = a.duplicate_of "
         "JOIN media_sources m ON m.source_id = a.source_id "
@@ -510,7 +513,8 @@ def _compute_korean_fi(conn, days: int | None = 30, limit: int = 30) -> list[dic
     rows = conn.execute(
         f"""SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en, a.korean_fi, a.topics,
                    a.event_type, a.personnel_move, m.tier,
-                   a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name, a.primary_country
+                   a.link, a.published_at, a.ai_score, m.primary_country_code cc,
+                   {db.publisher_expr()} AS media_name, a.primary_country
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.korean_fi IS NOT NULL AND a.korean_fi != '' AND a.duplicate_of IS NULL
               AND (COALESCE(a.summary_ko, '') != '' OR COALESCE(a.summary_en, '') != '')
@@ -572,7 +576,8 @@ def _compute_personnel(conn, days: int | None = 30, limit: int = 30) -> list[dic
     rows = conn.execute(
         f"""SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en, a.topics,
                    a.korean_fi, a.event_type, a.personnel_move, m.tier,
-                   a.link, a.published_at, a.ai_score, m.primary_country_code cc, m.media_name, a.primary_country
+                   a.link, a.published_at, a.ai_score, m.primary_country_code cc,
+                   {db.publisher_expr()} AS media_name, a.primary_country
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.personnel_move = 1 AND a.ai_score IS NOT NULL AND a.duplicate_of IS NULL
               AND a.link NOT LIKE '%/tag/%' AND a.link NOT LIKE '%/tags/%'
@@ -646,7 +651,8 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
             f"""
             SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en,
                    a.expanded_summary, a.expanded_summary_en, a.event_type, a.personnel_move, m.tier,
-                   a.topics, a.link, a.published_at, a.ai_score, a.source_links, a.korean_fi, m.media_name,
+                   a.topics, a.link, a.published_at, a.ai_score, a.source_links, a.korean_fi,
+                   {db.publisher_expr()} AS media_name,
                    m.primary_country_code cc
             FROM articles_raw a
             JOIN media_sources m ON m.source_id = a.source_id
@@ -878,7 +884,7 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
                    a.expanded_summary, a.expanded_summary_en, a.event_type, a.korean_fi, a.personnel_move, m.tier,
                    a.topics, a.link, a.published_at,
                    {db.effective_country_expr()} cc,
-                   m.media_name, a.primary_country
+                   {db.publisher_expr()} AS media_name, a.primary_country
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}{exc}
             ORDER BY a.ai_score DESC, a.published_at DESC LIMIT 60""",
@@ -1303,7 +1309,8 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
         f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.summary, a.summary_ko,
                    a.summary_en, a.expanded_summary, a.expanded_summary_en,
                    a.topics, a.event_type, a.link, a.korean_fi, a.personnel_move, m.tier,
-                   a.published_at, m.primary_country_code cc, m.media_name, a.primary_country
+                   a.published_at, m.primary_country_code cc,
+                   {db.publisher_expr()} AS media_name, a.primary_country
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'{dc}{exc}
             ORDER BY a.ai_score DESC""",
@@ -1316,7 +1323,7 @@ def _compute_topics(conn, days: int | None = None, max_per: int = 15) -> list[di
         np_rows = conn.execute(
             f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en, a.topics,
                        a.event_type, a.link, a.published_at, a.korean_fi, a.personnel_move, m.tier,
-                       m.primary_country_code cc, m.media_name, a.primary_country
+                       m.primary_country_code cc, {db.publisher_expr()} AS media_name, a.primary_country
                 FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
                 WHERE a.ai_score IS NOT NULL AND a.duplicate_of IS NULL AND a.ai_model LIKE '%:%'
                   AND m.primary_country_code IN ({ph}){dc}

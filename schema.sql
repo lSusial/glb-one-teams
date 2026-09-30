@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS articles_raw (
     published_at      TEXT,
     fetched_at        TEXT    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     content_hash      TEXT    NOT NULL,
+    publisher_name    TEXT,   -- 기사별 원발행사(Google News <source> 등)
     -- 키워드 필터 (keyword_filter.py)
     filter_stage      INTEGER NOT NULL DEFAULT 0,
     filter_decision   TEXT    NOT NULL DEFAULT 'pending',
@@ -77,6 +78,7 @@ CREATE TABLE IF NOT EXISTS articles_raw (
     fulltext_failure_reason TEXT,
     event_type        TEXT,   -- REG/DEAL/INCIDENT 등 이벤트축 CSV
     source_links      TEXT,   -- 다출처 종합에 사용한 링크 JSON
+    source_conflict   TEXT,   -- 출처 간 금액 충돌 JSON(충돌 시 종합 보류)
     primary_country   TEXT,   -- 기사 대상 국가(매체 소재국과 구분)
     dup_by_ai         INTEGER DEFAULT 0,
     korean_fi         TEXT,

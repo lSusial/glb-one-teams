@@ -42,6 +42,7 @@ class SchemaContractTests(unittest.TestCase):
         briefing_cols = {r[1] for r in conn.execute('PRAGMA table_info(country_briefings)')}
         self.assertTrue({
             'ai_score_factors', 'summary_en', 'title_en', 'event_type', 'source_links',
+            'source_conflict', 'publisher_name',
             'primary_country', 'dup_by_ai', 'korean_fi', 'personnel_move',
             'expanded_summary', 'expanded_summary_en', 'fulltext_status',
             'fulltext_attempted_at', 'fulltext_failure_reason',
@@ -111,6 +112,20 @@ class QualityTests(unittest.TestCase):
 
     def test_invalid_rank_score_is_not_silently_saved_as_50(self):
         self.assertEqual(llm_ranker._score_from_data({}), (None, None))
+
+    def test_cross_source_single_amount_conflict_is_detected(self):
+        conflict = numeric_guard.source_amount_conflicts([
+            'The tariff deal covers $30 billion of goods.',
+            'The tariff agreement covers USD 60 billion in goods.',
+            'No amount was given in this report.',
+        ])
+        self.assertEqual(conflict, {'USD': [30e9, 60e9]})
+
+    def test_multi_amount_explanation_is_not_auto_flagged(self):
+        self.assertEqual(numeric_guard.source_amount_conflicts([
+            'Each side covers $30 billion, for $60 billion combined.',
+            'The combined agreement is worth $60 billion.',
+        ]), {})
 
     def test_scoped_dedup_preserves_other_country_and_old_rows(self):
         self.add(1); self.add(2, duplicate=1, ai=1)
