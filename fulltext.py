@@ -46,12 +46,13 @@ def ensure_columns(conn) -> None:
 _BLOCK_AFTER = 3   # 429(요청 한도 초과)가 연속 이만큼 나오면 이번 실행의 디코딩을 멈춘다
 
 
-def decode_serial(pairs) -> dict:
+def decode_serial(pairs, failed: set | None = None) -> dict:
     """[(article_id, link)] 중 Google News 링크를 실제 기사 URL로 순차 해소한다.
 
     병렬 요청은 Google 요청 한도를 금방 소진해 IP가 일시 차단(429)된다. 한 건씩 간격을 두고
     요청하고, 429가 연속되면 나머지는 다음 실행으로 넘겨 차단이 길어지지 않게 한다.
     반환: {article_id: 해소된 URL} — 실패·미시도는 빠진다.
+    failed(선택): 확정 실패(429가 아닌 디코딩 실패) id를 담는다. 429·미시도는 일시적이라 넣지 않는다.
     """
     try:
         from googlenewsdecoder import gnewsdecoder
@@ -77,6 +78,8 @@ def decode_serial(pairs) -> dict:
                 break
         else:
             blocked = 0
+            if failed is not None:
+                failed.add(aid)
             log.debug("gnewsdecoder 실패: %s", r.get("message"))
     return out
 
@@ -138,7 +141,8 @@ def run_fulltext(conn, limit: int | None = None, days: int | None = None,
 
     cur = conn.cursor()
     # 1) Google News 링크는 먼저 순차 해소(병렬 X). 해소 못 한 GN 링크는 본문 추출을 건너뛴다.
-    decoded = decode_serial([(r["article_id"], r["link"]) for r in rows])
+    decode_failed: set = set()
+    decoded = decode_serial([(r["article_id"], r["link"]) for r in rows], decode_failed)
     for aid, url in decoded.items():
         cur.execute("UPDATE articles_raw SET link = ? WHERE article_id = ?", (url[:2000], aid))
     stats["resolved"] = len(decoded)
@@ -146,11 +150,13 @@ def run_fulltext(conn, limit: int | None = None, days: int | None = None,
     targets = [(r["article_id"], decoded.get(r["article_id"], r["link"])) for r in rows]
     unresolved = [aid for aid, url in targets if not url or _GNEWS in url]
     stats["failed"] = len(unresolved)
+    # 확정 실패만 3일 재시도 제한 대상으로 기록한다. 429로 막혔거나 중단돼 시도 못 한 기사는
+    # 상태를 남기지 않아 다음 실행에서 다시 뽑힌다(--days 2 창이라 3일 금지면 영구 누락).
     cur.executemany(
         "UPDATE articles_raw SET fulltext_status='unresolved_url', "
         "fulltext_attempted_at=CURRENT_TIMESTAMP, fulltext_failure_reason='google_news_decode_failed' "
         "WHERE article_id=?",
-        [(aid,) for aid in unresolved],
+        [(aid,) for aid in unresolved if aid in decode_failed],
     )
     targets = [(aid, u) for aid, u in targets if u and _GNEWS not in u]
 

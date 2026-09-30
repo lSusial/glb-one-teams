@@ -21,6 +21,8 @@ class FakeDecoder:
     def __call__(self, url, interval=None):
         self.calls.append(url)
         r = self.responses.get(url, '429')
+        if r is None:                               # 확정 실패(429 아님)
+            return {'status': False, 'message': 'invalid article id'}
         if r == '429':
             return {'status': False, 'message': 'Request error in decode_url: 429 Client Error: Too Many Requests'}
         return {'status': True, 'decoded_url': r}
@@ -101,7 +103,7 @@ class LinkTests(unittest.TestCase):
     def test_fulltext_does_not_extract_unresolved_google_links(self):
         self.add(1, f'{GN}1')
         self.add(2, 'https://direct/2')
-        dec = FakeDecoder({})
+        dec = FakeDecoder({f'{GN}1': None})           # 확정 실패 → unresolved_url 기록
         with install(dec), patch.object(fulltext, '_extract', side_effect=lambda u: f'text of {u}') as ex, \
                 patch('requests.get') as get:
             s = fulltext.run_fulltext(self.db, limit=10, days=2)
@@ -120,6 +122,19 @@ class LinkTests(unittest.TestCase):
         self.assertEqual(second['total'], 0)
         self.assertEqual(tuple(self.fulltext_state(1)), ('extract_failed', 'empty_or_blocked'))
 
+
+    def test_rate_limited_links_stay_retryable(self):
+        # 429로 중단되면 시도 못 한 기사까지 unresolved_url+시각이 찍혀 3일 재시도 금지 → --days 2 창에서
+        # 영구 누락되던 문제. 확정 실패(비-429)만 unresolved_url, 나머지는 다음 실행에서 다시 뽑혀야 한다.
+        self.add(1, f'{GN}1', fscore=9)                 # 확정 실패(디코더가 429 아닌 오류)
+        for i in range(2, 7):
+            self.add(i, f'{GN}{i}', fscore=9 - i)       # 429 → 3회째 중단, 이후는 미시도
+        dec = FakeDecoder({f'{GN}1': None})
+        with install(dec):
+            fulltext.run_fulltext(self.db, limit=10, days=2)
+        st = {r[0]: r[1] for r in self.db.execute('SELECT article_id, fulltext_status FROM articles_raw')}
+        self.assertEqual(st[1], 'unresolved_url')
+        self.assertTrue(all(st[i] in (None, 'pending') for i in range(2, 7)), st)
 
 if __name__ == '__main__':
     unittest.main()
