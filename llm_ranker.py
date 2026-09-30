@@ -105,7 +105,7 @@ def _checked_title_ko(title_ko: str, title: str, title_en: str, summary_en: str)
     return title_ko
 
 
-def _score_from_data(data: dict) -> tuple[int, dict | None]:
+def _score_from_data(data: dict) -> tuple[int | None, dict | None]:
     """4개 품질 차원을 결정적 점수로 합산한다. 구 응답은 ai_score로 호환한다.
 
     8 + 7D + 6M + 5U + 4N: 전부 2점인 일반 관심기사는 52점, 직접적·중대한
@@ -125,7 +125,7 @@ def _score_from_data(data: dict) -> tuple[int, dict | None]:
     try:
         return max(0, min(100, int(data.get("ai_score")))), None
     except (TypeError, ValueError):
-        return 50, None
+        return None, None
 
 
 def ensure_columns(conn) -> None:
@@ -333,7 +333,7 @@ def run_rank(conn, provider: LLMProvider | None = None,
         (*params, limit),
     ).fetchall()
 
-    stats = dict(total=len(rows), ranked=0, active=0, synthesized=0)
+    stats = dict(total=len(rows), ranked=0, active=0, synthesized=0, failed=0)
 
     # 요청 일괄 구성 → 배치 제출(50% 할인) 또는 동기 폴백
     requests, row_by_id, source_links_by_id = [], {}, {}
@@ -378,6 +378,12 @@ def run_rank(conn, provider: LLMProvider | None = None,
         data = results.get(cid) or {}
         # ── 폴백 포함 파싱 ──
         score, score_factors = _score_from_data(data)
+        if score is None:
+            # 빈/무효 응답을 임의의 중간 점수로 확정하면 재시도 기회를 잃는다.
+            # 기존 재랭킹 값도 그대로 보존하고 다음 실행에서 다시 처리한다.
+            stats["failed"] += 1
+            log.warning("랭커 응답 무효 — 저장 안 함(article_id=%s)", r["article_id"])
+            continue
         title_ko = str(data.get("title_ko") or "")[:60]
         summary_en = str(data.get("summary_en") or "")[:1500]
         topics = taxonomy.validate(data.get("topics", []))
@@ -416,8 +422,9 @@ def run_rank(conn, provider: LLMProvider | None = None,
     conn.commit()
 
     log.info(
-        "랭킹 완료 — 처리=%d  ACTIVE(>=%d)=%d  다출처종합=%d",
-        stats["ranked"], config.AI_SCORE_ACTIVE_THRESHOLD, stats["active"], stats["synthesized"],
+        "랭킹 완료 — 처리=%d  실패보존=%d  ACTIVE(>=%d)=%d  다출처종합=%d",
+        stats["ranked"], stats["failed"], config.AI_SCORE_ACTIVE_THRESHOLD,
+        stats["active"], stats["synthesized"],
     )
     return stats
 

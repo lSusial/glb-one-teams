@@ -31,13 +31,20 @@ CREATE TABLE IF NOT EXISTS country_briefings (
     briefing_type   TEXT NOT NULL DEFAULT 'weekly',
     generated_at    TEXT,
     summary         TEXT,
+    summary_en      TEXT,
     issues          TEXT,
+    issues_en       TEXT,
     outlook         TEXT,
+    outlook_en      TEXT,
     keywords        TEXT,
+    keywords_en     TEXT,
     key_stat        TEXT,
+    key_stat_en     TEXT,
     model           TEXT,
     article_count   INTEGER,
     source_articles TEXT,
+    week_start      TEXT,
+    week_end        TEXT,
     UNIQUE(cc, briefing_date, briefing_type)
 )
 """
@@ -107,10 +114,10 @@ def _target_countries(conn) -> list[str]:
     (docs/design_미진출국.md — 통합 피드만 제공, countries.html에서 처리)."""
     return [
         r["cc"] for r in conn.execute(
-            f"""SELECT DISTINCT COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) AS cc
+            f"""SELECT DISTINCT {db.effective_country_expr()} AS cc
                 FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
                 WHERE a.ai_score IS NOT NULL
-                  AND COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code)
+                  AND {db.effective_country_expr()}
                       IN ({','.join('?' for _ in kb_network.KB_NETWORK)})""",
             tuple(kb_network.KB_NETWORK),
         )
@@ -178,10 +185,10 @@ def run_briefing(
             f"""
             SELECT a.article_id, a.title, a.summary_ko, a.summary_en, a.ai_score, a.link,
                    a.published_at, a.event_type, a.korean_fi, a.personnel_move, m.tier,
-                   COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) AS cc
+                   {db.effective_country_expr()} AS cc
             FROM articles_raw a
             JOIN media_sources m ON m.source_id = a.source_id
-            WHERE COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) = ?
+            WHERE {db.effective_country_expr()} = ?
               AND a.ai_score >= ?
               AND COALESCE(NULLIF(a.summary_ko, ''), a.summary_en, '') != ''
               AND a.duplicate_of IS NULL{dc}
@@ -377,7 +384,7 @@ def generate_daily_highlights(
         SELECT a.article_id, a.title, a.title_ko, a.summary_ko, a.summary_en,
                a.topics, a.ai_score, a.published_at, a.event_type, a.korean_fi, a.personnel_move,
                m.tier, m.primary_country_code AS cc,
-               COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) AS subject_cc
+               {db.effective_country_expr()} AS subject_cc
         FROM articles_raw a
         JOIN media_sources m ON m.source_id = a.source_id
         WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}{exc}

@@ -10,7 +10,8 @@ ranking.py — 표시용 복합 랭킹 점수(rank_score)
   ai_score 는 ACTIVE/WATCH 게이트와 국가 온도(mood)에만 그대로 쓰고,
   **표시용 정렬은 이미 DB에 있는 신호를 조합한 rank_score 로** 한다.
   결정적 계산이라 LLM 비용 0. 가장 강한 신호는 다매체 커버리지
-  (duplicate_of 로 세는 형제 기사 수 = '몇 개 매체가 다뤘나') — 지금 정렬에 안 쓰이던 것.
+  (duplicate_of 묶음의 독립 발행사 수 = '몇 개 매체가 다뤘나') — 같은 발행사의
+  여러 피드·반복 기사는 한 출처로 센다.
 
   rank_score = ai_score
              + W_CLUSTER * log2(1 + 다매체수)
@@ -42,15 +43,28 @@ PERSONNEL_BONUS = 1.0                          # 인사 이동
 
 
 def cluster_sizes(conn) -> dict[int, int]:
-    """대표기사 article_id → 그 기사를 duplicate_of 로 가리키는 형제(중복) 수.
-    한 export 실행에서 한 번만 계산해 order()에 cluster_map 으로 넘겨 재사용 권장."""
+    """대표기사 article_id → 추가 독립 발행사 수(대표 발행사는 제외).
+
+    기사 행 수를 그대로 세면 같은 발행사의 섹션별 피드나 반복 보도가 다매체
+    신호를 부풀린다. 대표+형제를 합친 뒤 정규화한 ``media_name``의 고유 개수를
+    세어 실제 독립 커버리지만 순위 보너스에 반영한다.
+    """
     out: dict[int, int] = {}
-    for rep, n in conn.execute(
-        "SELECT duplicate_of, COUNT(*) FROM articles_raw "
-        "WHERE duplicate_of IS NOT NULL GROUP BY duplicate_of"
+    for rep, publishers in conn.execute(
+        """WITH members AS (
+               SELECT article_id AS rep_id, source_id FROM articles_raw
+               UNION ALL
+               SELECT duplicate_of AS rep_id, source_id FROM articles_raw
+               WHERE duplicate_of IS NOT NULL
+           )
+           SELECT x.rep_id, COUNT(DISTINCT LOWER(TRIM(m.media_name))) AS publishers
+           FROM members x
+           JOIN media_sources m ON m.source_id = x.source_id
+           GROUP BY x.rep_id
+           HAVING COUNT(DISTINCT LOWER(TRIM(m.media_name))) > 1"""
     ):
         if rep is not None:
-            out[int(rep)] = int(n)
+            out[int(rep)] = int(publishers) - 1
     return out
 
 
@@ -82,7 +96,7 @@ def rank_score(row, cluster: int = 0, now: datetime.date | None = None) -> float
     row 에서 읽는 키(없으면 해당 보너스 0):
       ai_score(사실상 필수), published_at, tier, cc 또는 primary_country_code,
       event_type, korean_fi, personnel_move.
-    cluster: cluster_sizes()[article_id] 값(형제 수, 없으면 0).
+    cluster: cluster_sizes()[article_id] 값(대표 외 독립 발행사 수, 없으면 0).
     """
     now = now or datetime.date.today()
     s = float(_get(row, "ai_score", 0) or 0)

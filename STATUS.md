@@ -1,6 +1,6 @@
 # 현황 — glb-one-teams
 
-> **최종 갱신 2026-09-29** (홈 지도 주제국가 라우팅·무데이터 상태 분리, 모달 관련링크 사건 유사도 검증은 로컬 반영·배포 대기) | For Internal Use Only
+> **최종 갱신 2026-09-29** (홈 지도 주제국가 라우팅·무데이터 상태·모달 관련링크 검증 배포 완료, 시장 신호 위험도 계산 보정은 로컬 반영·배포 대기) | For Internal Use Only
 >
 > 기획은 [`PLAN.md`](PLAN.md), 설계는 [`docs/design.md`](docs/design.md), 운영은 [`docs/operations.md`](docs/operations.md), 이력은 [`docs/work_log.md`](docs/work_log.md), UI 사양은 [`mockups/HANDOFF.md`](mockups/HANDOFF.md).
 
@@ -84,7 +84,7 @@ fetch → keyword_filter(통과≥2, SOCIETY 독립경로) → dedup → prefilt
 
 - Oracle Cloud SSH 22번 간헐적 타임아웃 → 서버 동기화 비활성. 원인 미파악.
 - DB integrity check 실패 이력(인덱스 손상) → `REINDEX idx_articles_dedup`로 복구했음. 재발 시 동일 조치.
-- **품질 감사(9/18) 잔여 P2**: 다매체 가중치가 동일 매체 반복 보도에 과대 반영(발행사 기준 집계 필요) · 본문 추출 실패/미시도 구분 불가 및 나중에 확보한 본문이 재분석에 반영되지 않음 · F1 평가가 운영 랭커 프롬프트를 평가하지 않음. 상세 `docs/quality_audit_2026-09-18.md`. (P1 3건은 9/21 코드 반영 후 재생성·배포까지 완료)
+- **품질 감사(9/18) 잔여 P2**: 발행사 기준 다출처 집계·본문 추출 상태 기록·운영 랭커 F1 연결은 9/30 로컬 반영. 남은 항목은 **나중에 확보한 본문을 기존 결과 유실 없이 재분석하는 원자적 큐**다. 상세 `docs/quality_audit_2026-09-18.md`, `docs/tech_debt_audit_2026-09-29.md`.
 - ~~AI 중복판정 오묶음~~ **(9/28 재설계로 해소)**: 국가 전체를 한 번에 LLM에 넣던 방식이 응답 무효 시 국가 전체를 실패보존시켜 recall이 무너지는 구조였다(라이브 평가 recall 0.28). 기사쌍 단위 소청크 요청으로 재설계(`llm_dedup.py`) — 실 DB 적용 결과 실패보존 0건, 라벨 회귀평가 recall 0.87/precision 0.94. `eval/eval_dedup_guard.py --labeled-live`로 저비용 회귀평가 가능.
 - **ai_score 양자화 개선(9/28 코드 반영)**: 기존 최종 숫자 직접 생성은 오늘 ACTIVE 20건이 62/72 두 값에 집중됐다. `directness·magnitude·urgency·novelty` 각 0~4를 받아 Python 가중합(8~96)으로 산출하고 `ai_score_factors`에 저장하도록 변경. 기존 응답은 `ai_score` 폴백. 다음 정규 rank부터 실데이터 분포를 재측정한다.
 - **SDK 호환**: `anthropic` 1.x는 파이프라인의 `temperature` 인자를 받지 않아 호출이 실패한다(2026-09-21 확인). `requirements.txt`를 `anthropic>=0.40.0,<1`로 고정. 새 가상환경 구성 시 주의.
@@ -94,7 +94,10 @@ fetch → keyword_filter(통과≥2, SOCIETY 독립경로) → dedup → prefilt
 - **국가 탭 라우팅(9/22 수정)**: 매체국적 대신 AI 주제국가(`primary_country`, 없으면 매체국적)로 통일 — 미국 매체가 쓴 한국 기사가 US 탭에 뜨는 등 오분류 해소(COUNTRY_MISMATCH 0건).
 - **금액(USD) 표기 검증**: 기사 번역(`llm_translate.py`)·홈 탑이슈(`briefing.generate_daily_highlights`)·국가 브리핑(`briefing.run_briefing`) 3곳 모두 `numeric_guard.py`로 원문 대비 금액 불일치 시 저장 안 함. 9/28 실전에서 "$30억"(정답 $300억) 등 달러기호+한국어 단위 혼합 표기 누락을 발견해 패턴 추가.
 - **Google News 링크 해소(9/29 재설계)**: collector의 구식 redirect 요청(성공률 0%)이 Google 요청 한도를 소진해 디코더까지 429로 막히던 문제 → collector 해소 제거, fulltext 디코딩 순차+429 연속 시 중단, rank 후 노출 기사 링크 점수순 추가 해소(`resolve-links`). 9/29 배포에서 GN 링크 카드 46→7/107, 국가탭 0/33으로 감소 확인.
-- **홈 지도 상태·국가 보정(9/29 로컬, 배포 대기)**: 기사 없는 국가를 70점 `POSITIVE`로 표시하던 기본값을 `NO DATA`로 분리하고, 홈 핵심뉴스·국가 신호·상위 국가도 매체국가가 아닌 `primary_country`로 집계. AI 중복그룹의 관련링크는 사건 단서 겹침을 한 번 더 검사해 같은 기관·주제의 별개 기사를 모달 출처에서 제외.
+- **홈 지도 상태·국가 보정(9/29 배포 완료)**: 기사 없는 국가를 70점 `POSITIVE`로 표시하던 기본값을 `NO DATA`로 분리하고, 홈 핵심뉴스·국가 신호·상위 국가도 매체국가가 아닌 `primary_country`로 집계. AI 중복그룹의 관련링크는 사건 단서 겹침을 한 번 더 검사해 같은 기관·주제의 별개 기사를 모달 출처에서 제외.
+- **시장 신호·카테고리 온도 보정(9/29 로컬, 배포 대기)**: 카테고리 개편 후 사라진 `topics=RISK`를 계속 세어 위험기사 수가 항상 0이던 문제를 수정. 현재 이벤트축 `SANCTION·INCIDENT`와 환율·지수 변동으로 계산하고, 중요도인 `ai_score`를 부정적 방향으로 오용하던 항목을 제거. 영문 `POSITIVE`는 의미에 맞게 `STABLE`로 변경. 함께 구 5종 코드를 보던 카테고리 온도를 `taxonomy.yaml` 6종과 자동 동기화해 전부 0이던 값도 복구.
+- **구조 점검·안전 리팩터링(9/29 로컬, 배포 대기)**: 기사 대상 국가 SQL을 `db.effective_country_expr()`로 공용화해 국가 화면·브리핑·AI 중복판정의 라우팅 기준을 통일. `schema.sql`과 브리핑 CREATE 문을 현재 운영 컬럼·지표 히스토리까지 동기화하고 신규 DB 계약 테스트를 추가했다. 정적 검사 0건·72개 테스트·신규/운영 DB 검사·실데이터 export 통과. 잔여 기술부채는 `docs/tech_debt_audit_2026-09-29.md` 참조.
+- **품질 파이프라인 후속(9/30 로컬, 배포 대기)**: eval 랭커가 별도 옛 루브릭 대신 실제 운영 프롬프트와 4차원 점수 함수를 사용하도록 연결. 본문 추출은 `ok/unresolved_url/extract_failed/pending` 상태·시각·사유를 저장하고 실패 URL을 3일 간격으로 재시도한다. 다출처 순위 보너스는 기사 행 수가 아닌 독립 발행사 수로 변경(실 DB 4,526개 묶음 중 3,887개 과대집계 제거). 랭커 빈/무효 응답은 임의 50점으로 저장하지 않고 기존값 보존·재시도하도록 수정. 테스트 80개 통과.
 - 커밋 전 `git status`의 `.qbak` 임시 파일·`.claude/`·`resources/` 등 미추적 항목 정리 필요.
 
 ## 7. 다음 과제 (우선순위)

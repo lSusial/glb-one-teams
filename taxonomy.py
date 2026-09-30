@@ -34,7 +34,7 @@ def _event_types() -> list[dict]:
 
 
 def codes() -> list[str]:
-    """유효 주제 코드 목록. 예: ['MARKET','BANKING','DIGITAL','ESG','RISK']."""
+    """유효 주제 코드 목록. 예: ['ECONOMY','MARKETS','TECH','GEO','POLICY','SOCIETY']."""
     return [t["code"] for t in _topics()]
 
 
@@ -50,7 +50,7 @@ def label(code: str, lang: str = "ko") -> str:
 
 
 def ui_key(code: str) -> str:
-    """주제 코드 → UI 현지언론 필터 키(finance/digital/esg/risk)."""
+    """주제 코드 → UI 현지언론 필터 키(economy/markets/tech/geopolitics/policy/society)."""
     for t in _topics():
         if t["code"] == code:
             return t.get("ui", code.lower())

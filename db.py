@@ -79,6 +79,19 @@ def exclude_countries_clause(codes, alias: str = "m") -> tuple[str, list]:
     return f" AND {p}primary_country_code NOT IN ({ph})", list(codes)
 
 
+def effective_country_expr(article_alias: str = "a", media_alias: str = "m") -> str:
+    """기사의 실제 대상 국가를 반환하는 공용 SQL 식.
+
+    ``primary_country``가 있으면 기사 내용의 국가를 우선하고, 없을 때만 매체
+    소재국으로 폴백한다. 국가별 화면·브리핑·AI 중복 판정이 같은 라우팅 규칙을
+    쓰도록 이 식을 한곳에서 관리한다.
+    """
+    return (
+        f"COALESCE(NULLIF({article_alias}.primary_country, ''), "
+        f"{media_alias}.primary_country_code)"
+    )
+
+
 def table_columns(conn: sqlite3.Connection, table: str = "articles_raw") -> set[str]:
     return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
 

@@ -3,15 +3,18 @@ import re
 import sqlite3
 import unittest
 from datetime import date
+from pathlib import Path
 from unittest.mock import patch
 
 import briefing
+import db
 import export_json
 import llm_dedup
 import llm_ranker
 import llm_expand
 import llm_translate
 import numeric_guard
+import taxonomy
 
 
 class Provider:
@@ -29,14 +32,38 @@ class Provider:
         return {r[0]: self.response for r in requests}
 
 
+class SchemaContractTests(unittest.TestCase):
+    def test_fresh_schema_contains_runtime_columns_and_history(self):
+        conn = sqlite3.connect(':memory:')
+        self.addCleanup(conn.close)
+        schema = (Path(__file__).parents[1] / 'schema.sql').read_text(encoding='utf-8')
+        conn.executescript(schema)
+        article_cols = {r[1] for r in conn.execute('PRAGMA table_info(articles_raw)')}
+        briefing_cols = {r[1] for r in conn.execute('PRAGMA table_info(country_briefings)')}
+        self.assertTrue({
+            'ai_score_factors', 'summary_en', 'title_en', 'event_type', 'source_links',
+            'primary_country', 'dup_by_ai', 'korean_fi', 'personnel_move',
+            'expanded_summary', 'expanded_summary_en', 'fulltext_status',
+            'fulltext_attempted_at', 'fulltext_failure_reason',
+        } <= article_cols)
+        self.assertTrue({
+            'summary_en', 'issues_en', 'outlook_en', 'keywords_en', 'key_stat_en',
+            'week_start', 'week_end',
+        } <= briefing_cols)
+        self.assertIsNotNone(conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='indicator_history'"
+        ).fetchone())
+
+
 class QualityTests(unittest.TestCase):
     def setUp(self):
         self.db = sqlite3.connect(':memory:')
         self.db.row_factory = sqlite3.Row
         self.db.executescript('''
             CREATE TABLE media_sources(source_id INTEGER PRIMARY KEY,
-                primary_country_code TEXT, tier INTEGER);
-            INSERT INTO media_sources VALUES(1,'US',1),(2,'JP',1),(3,'LA',1);
+                primary_country_code TEXT, tier INTEGER, media_name TEXT);
+            INSERT INTO media_sources VALUES
+                (1,'US',1,'US Test'),(2,'JP',1,'JP Test'),(3,'LA',1,'LA Test');
             CREATE TABLE articles_raw(article_id INTEGER PRIMARY KEY, source_id INTEGER,
                 primary_country TEXT, title_ko TEXT, title TEXT, ai_score INTEGER,
                 ai_model TEXT, published_at TEXT, duplicate_of INTEGER, dup_by_ai INTEGER,
@@ -56,6 +83,22 @@ class QualityTests(unittest.TestCase):
     def links(self):
         return {r[0]: r[1] for r in self.db.execute('SELECT article_id,duplicate_of FROM articles_raw')}
 
+    def test_effective_country_expression_prefers_article_subject(self):
+        expr = db.effective_country_expr()
+        rows = self.db.execute(
+            f"SELECT a.article_id, {expr} AS cc FROM articles_raw a "
+            "JOIN media_sources m ON m.source_id=a.source_id ORDER BY a.article_id"
+        ).fetchall()
+        self.assertEqual(rows, [])
+        self.add(1, source=1, cc='JP')
+        self.db.execute("UPDATE articles_raw SET primary_country='' WHERE article_id=1")
+        self.add(2, source=1, cc='ID')
+        rows = self.db.execute(
+            f"SELECT a.article_id, {expr} AS cc FROM articles_raw a "
+            "JOIN media_sources m ON m.source_id=a.source_id ORDER BY a.article_id"
+        ).fetchall()
+        self.assertEqual([(r['article_id'], r['cc']) for r in rows], [(1, 'US'), (2, 'ID')])
+
     def test_rank_score_factors_are_deterministic_and_differentiated(self):
         score, factors = llm_ranker._score_from_data({"score_factors": {
             "directness": 3, "magnitude": 2, "urgency": 3, "novelty": 2,
@@ -65,6 +108,9 @@ class QualityTests(unittest.TestCase):
 
     def test_rank_score_falls_back_to_legacy_value(self):
         self.assertEqual(llm_ranker._score_from_data({"ai_score": 72}), (72, None))
+
+    def test_invalid_rank_score_is_not_silently_saved_as_50(self):
+        self.assertEqual(llm_ranker._score_from_data({}), (None, None))
 
     def test_scoped_dedup_preserves_other_country_and_old_rows(self):
         self.add(1); self.add(2, duplicate=1, ai=1)
@@ -112,7 +158,7 @@ class QualityTests(unittest.TestCase):
         self.add(1, source=2, score=65)
         self.add(2, source=2, score=65)
         for aid in range(3, 8):
-            self.add(aid, source=2, score=65, duplicate=2)
+            self.add(aid, source=1, score=65, duplicate=2)  # 별도 발행사 보도 → 순위 보너스
         self.assertEqual(briefing._target_countries(self.db), ['US'])
         p = Provider({'summary_ko': '브리핑'})
         with patch.object(briefing.config, 'BRIEFING_MAX_ARTICLES', 1):
@@ -353,6 +399,25 @@ class QualityTests(unittest.TestCase):
 
     def test_no_news_signal_is_unknown(self):
         self.assertEqual(export_json._signal_band(None), 'unknown')
+
+    def test_mood_uses_current_risk_events_not_removed_topic(self):
+        flat = [{'kind': 'index', 'change_pct': 0.0}]
+        calm = [{'ai_score': 90, 'topics': 'ECONOMY', 'event_type': ''}]
+        risky = [{'ai_score': 60, 'topics': 'ECONOMY', 'event_type': 'SANCTION'},
+                 {'ai_score': 60, 'topics': 'POLICY', 'event_type': 'INCIDENT'}]
+        self.assertGreater(export_json._mood_level(calm, flat)[0], 70)
+        self.assertLess(export_json._mood_level(risky, flat)[0], 55)
+
+    def test_mood_reacts_to_market_stress_without_risk_article(self):
+        calm = [{'ai_score': 60, 'topics': 'MARKETS', 'event_type': ''}]
+        stressed = [{'kind': 'fx', 'change_pct': 2.5},
+                    {'kind': 'index', 'change_pct': -2.5}]
+        self.assertLess(export_json._mood_level(calm, stressed)[0], 70)
+
+    def test_pulse_categories_follow_current_taxonomy(self):
+        self.assertEqual([x[0] for x in export_json._pulse_cats()], taxonomy.codes())
+        self.assertEqual(taxonomy.codes(),
+                         ['ECONOMY', 'MARKETS', 'TECH', 'GEO', 'POLICY', 'SOCIETY'])
 
 
 class NumericGuardTests(unittest.TestCase):

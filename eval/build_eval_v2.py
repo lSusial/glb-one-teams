@@ -22,7 +22,6 @@ import csv
 import json
 import os
 import random
-import re
 import sqlite3
 import sys
 from pathlib import Path

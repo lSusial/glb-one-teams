@@ -279,7 +279,8 @@ def cmd_rank(args):
     ub = _batch_flag(args)
     rd = getattr(args, "redo_days", None)
     s = _ai_guard(lambda: llm_ranker.run_rank(conn, days=getattr(args, "days", None), redo_days=rd, use_batch=ub), "rank")
-    print(f"[rank] 처리={s['ranked']}  ACTIVE={s['active']}" + (f"  (재랭킹 {rd}일창)" if rd else ""))
+    print(f"[rank] 처리={s['ranked']}  실패보존={s.get('failed', 0)}  ACTIVE={s['active']}"
+          + (f"  (재랭킹 {rd}일창)" if rd else ""))
 
 
 def cmd_expand(args):
@@ -382,7 +383,7 @@ def cmd_ai(args):
     print(f"   본문={sf['extracted']} URL해소={sf['resolved']} 실패={sf['failed']}")
     print("▶ [3/7] AI 분석[영어]...")
     s2 = _ai_guard(lambda: llm_ranker.run_rank(conn, days=days, use_batch=ub), "ai")
-    print(f"   ranked={s2['ranked']} ACTIVE={s2['active']}")
+    print(f"   ranked={s2['ranked']} 실패보존={s2.get('failed', 0)} ACTIVE={s2['active']}")
     print("▶ AI 근접중복 판정(노출 후보 → duplicate_of)...")
     sd = _ai_guard(lambda: llm_dedup.run_dedup(conn, days=days, use_batch=ub), "ai")
     print(f"   중복마킹={sd['marked']}건 (국가 {sd['countries']}, "

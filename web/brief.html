@@ -244,7 +244,7 @@
 
   const STATE_LV = { go:'positive', warn:'watch', stop:'risk', unknown:'unknown' };
   const STATE_BADGE = EN
-    ? {go:'POSITIVE', warn:'WATCH', stop:'RISK', unknown:'NO DATA'}
+    ? {go:'STABLE', warn:'WATCH', stop:'RISK', unknown:'NO DATA'}
     : {go:'안정', warn:'주의', stop:'경계', unknown:'데이터 없음'};
 
   function renderPulse(){
@@ -309,7 +309,7 @@
     $('#legend-l').innerHTML = [
       {k:'risk',label:'RISK',color:'var(--risk)'},
       {k:'watch',label:'WATCH',color:'var(--watch)'},
-      {k:'positive',label:'POSITIVE',color:'var(--positive)'},
+      {k:'positive',label:'STABLE',color:'var(--positive)'},
       {k:'unknown',label:'NO DATA',color:'var(--faint)'},
     ].map((g) => `<span class="lg"><i style="background:${g.color}"></i>${g.label}<b>${tally[g.k]||0}</b></span>`).join('');
 

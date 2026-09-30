@@ -20,7 +20,6 @@ from datetime import date, datetime, timezone
 import requests
 
 import config
-import db
 
 log = logging.getLogger("indicators")
 

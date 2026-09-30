@@ -62,11 +62,27 @@ CREATE TABLE IF NOT EXISTS articles_raw (
     llm_reject_reason TEXT,
     -- AI 분석 (llm_ranker.py)
     ai_score          INTEGER,
+    ai_score_factors  TEXT,   -- 점수 산정 4개 요인 JSON
     summary_ko        TEXT,
+    summary_en        TEXT,   -- 영어 기준 요약
     ai_model          TEXT,
     topics            TEXT,
     title_ko          TEXT,   -- 한국어 제목 (UI 't') — llm_ranker.py 생성
+    title_en          TEXT,   -- 영어 제목
     kb_implication    TEXT,   -- KB 시사점 (UI 'k') — llm_ranker.py 생성
+    kb_implication_en TEXT,
+    full_text         TEXT,   -- 본문 추출 결과
+    fulltext_status   TEXT,   -- ok / unresolved_url / extract_failed / pending
+    fulltext_attempted_at TEXT,
+    fulltext_failure_reason TEXT,
+    event_type        TEXT,   -- REG/DEAL/INCIDENT 등 이벤트축 CSV
+    source_links      TEXT,   -- 다출처 종합에 사용한 링크 JSON
+    primary_country   TEXT,   -- 기사 대상 국가(매체 소재국과 구분)
+    dup_by_ai         INTEGER DEFAULT 0,
+    korean_fi         TEXT,
+    personnel_move    INTEGER,
+    expanded_summary  TEXT,
+    expanded_summary_en TEXT,
     FOREIGN KEY (feed_id)   REFERENCES media_source_feeds(feed_id) ON DELETE CASCADE,
     FOREIGN KEY (source_id) REFERENCES media_sources(source_id) ON DELETE CASCADE,
     UNIQUE (content_hash)
@@ -79,6 +95,7 @@ CREATE INDEX IF NOT EXISTS idx_articles_filter     ON articles_raw(filter_decisi
 CREATE INDEX IF NOT EXISTS idx_articles_llmpre     ON articles_raw(llm_prefilter);
 CREATE INDEX IF NOT EXISTS idx_articles_aiscore    ON articles_raw(ai_score);
 CREATE INDEX IF NOT EXISTS idx_articles_dedup      ON articles_raw(duplicate_of);
+CREATE INDEX IF NOT EXISTS idx_articles_subject_cc ON articles_raw(primary_country);
 
 -- 수집 실행 이력
 CREATE TABLE IF NOT EXISTS fetch_runs (
@@ -100,10 +117,15 @@ CREATE TABLE IF NOT EXISTS country_briefings (
     briefing_type   TEXT NOT NULL DEFAULT 'weekly',
     generated_at    TEXT,
     summary         TEXT,
+    summary_en      TEXT,
     issues          TEXT,
+    issues_en       TEXT,
     outlook         TEXT,
+    outlook_en      TEXT,
     keywords        TEXT,
+    keywords_en     TEXT,
     key_stat        TEXT,
+    key_stat_en     TEXT,
     model           TEXT,
     article_count   INTEGER,
     source_articles TEXT,
@@ -132,6 +154,16 @@ CREATE TABLE IF NOT EXISTS indicators (
 );
 
 CREATE INDEX IF NOT EXISTS idx_indicators_country_date ON indicators(country, date DESC);
+
+-- 주간 종가 히스토리(국가 지표 스파크라인)
+CREATE TABLE IF NOT EXISTS indicator_history (
+    country TEXT NOT NULL,
+    kind    TEXT NOT NULL,
+    symbol  TEXT NOT NULL,
+    d       TEXT NOT NULL,
+    close   REAL NOT NULL,
+    PRIMARY KEY (country, kind, symbol, d)
+);
 
 -- '오늘의 글로벌 핵심' (briefing.generate_daily_highlights) — 일자당 1행, 항목 JSON 배열
 CREATE TABLE IF NOT EXISTS daily_highlights (

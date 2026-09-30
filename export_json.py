@@ -243,7 +243,7 @@ def _daily_highlights(conn) -> list:
         f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.title_en, m.language,
                    a.summary_ko, a.summary_en, a.expanded_summary, a.expanded_summary_en,
                    a.link, a.published_at, a.topics, m.media_name,
-                   COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) AS cc
+                   {db.effective_country_expr()} AS cc
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.article_id IN ({placeholders})""",
         ids,
@@ -650,7 +650,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                    m.primary_country_code cc
             FROM articles_raw a
             JOIN media_sources m ON m.source_id = a.source_id
-            WHERE COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) = ?
+            WHERE {db.effective_country_expr()} = ?
               AND {where}{dc}{_ARCHIVE_LINK_EXCL}
             ORDER BY {order}
             LIMIT {60 if active_only else 20}
@@ -677,7 +677,6 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
         articles = []
         for i, a in enumerate(rows):
             codes = [c for c in (a["topics"] or "").split(",") if c]
-            my_topics = set(codes)
             # related links: 같은 사건을 다룬 실제 기사만(다출처 종합 소스 → duplicate_of 형제 →
             # 피드 스토리 묶음). 같은 국가·토픽이 겹친다는 이유로 무관한 기사를 붙이지 않는다.
             synth_links = None
@@ -752,14 +751,16 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
 # ---------------------------------------------------------------------------
 _PULSE_TEMPLATE = config.ROOT / "web" / "brief.html"
 
-# taxonomy 코드 → 온도계 5대 카테고리(배지·필터와 라벨·색상 일치: 경제/금융/디지털/ESG/리스크)
-_PULSE_CATS = [
-    ("MARKET",  "경제",   "Economy", "#2b5f9e"),
-    ("BANKING", "금융",   "Banking", "#2f7d4f"),
-    ("DIGITAL", "디지털", "Digital", "#6a3fb5"),
-    ("ESG",     "ESG",    "ESG",     "#3a8a6a"),
-    ("RISK",    "리스크", "Risk",    "#b23b3b"),
-]
+_PULSE_COLORS = {
+    "ECONOMY": "#2b5f9e", "MARKETS": "#2f7d4f", "TECH": "#6a3fb5",
+    "GEO": "#b23b3b", "POLICY": "#8b5a2b", "SOCIETY": "#6b7280",
+}
+
+
+def _pulse_cats() -> list[tuple[str, str, str, str]]:
+    """taxonomy.yaml의 현재 주제축을 온도 데이터 계약으로 변환한다."""
+    return [(code, taxonomy.label(code, "ko"), taxonomy.label(code, "en"),
+             _PULSE_COLORS.get(code, "#6b7280")) for code in taxonomy.codes()]
 
 
 def _compute_pulse(conn, days: int | None = None) -> list[dict]:
@@ -769,7 +770,10 @@ def _compute_pulse(conn, days: int | None = None) -> list[dict]:
     """
     date_clause, params = _date_clause(days, alias="a")
     # KB 미진출국은 온도 집계에서 제외 — 거점 없는 시장 뉴스가 카테고리 온도를 왜곡하지 않도록.
-    exc, exp = db.exclude_countries_clause(config.NON_PRESENCE_CODES)
+    ph = ",".join("?" * len(config.NON_PRESENCE_CODES))
+    exc = (f" AND {db.effective_country_expr()} NOT IN ({ph})"
+           if config.NON_PRESENCE_CODES else "")
+    exp = list(config.NON_PRESENCE_CODES)
     rows = conn.execute(
         f"SELECT a.ai_score, a.topics FROM articles_raw a "
         f"JOIN media_sources m ON m.source_id = a.source_id "
@@ -777,7 +781,8 @@ def _compute_pulse(conn, days: int | None = None) -> list[dict]:
         (*params, *exp),
     ).fetchall()
 
-    buckets: dict[str, list[int]] = {code: [] for code, _, _, _ in _PULSE_CATS}
+    pulse_cats = _pulse_cats()
+    buckets: dict[str, list[int]] = {code: [] for code, _, _, _ in pulse_cats}
     for r in rows:
         codes = set((r["topics"] or "").split(","))
         for code in buckets:
@@ -786,7 +791,7 @@ def _compute_pulse(conn, days: int | None = None) -> list[dict]:
 
     max_n = max((len(v) for v in buckets.values()), default=0) or 1
     cats = []
-    for code, label, label_en, color in _PULSE_CATS:
+    for code, label, label_en, color in pulse_cats:
         s = buckets[code]
         n = len(s)
         avg = sum(s) / n if n else 0
@@ -865,14 +870,14 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
     dc, params = _date_clause(days)
     # KB 미진출국은 제외 — 이 블록은 진출 11개 거점 횡단 요약용.
     ph = ",".join("?" * len(config.NON_PRESENCE_CODES))
-    exc = (f" AND COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) NOT IN ({ph})"
+    exc = (f" AND {db.effective_country_expr()} NOT IN ({ph})"
            if config.NON_PRESENCE_CODES else "")
     exp = list(config.NON_PRESENCE_CODES)
     rows = conn.execute(
         f"""SELECT a.article_id, a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en,
                    a.expanded_summary, a.expanded_summary_en, a.event_type, a.korean_fi, a.personnel_move, m.tier,
                    a.topics, a.link, a.published_at,
-                   COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) cc,
+                   {db.effective_country_expr()} cc,
                    m.media_name, a.primary_country
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL{dc}{exc}
@@ -891,7 +896,6 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
         if per_cc.get(cc, 0) >= config.TOP_NEWS_PER_COUNTRY:
             continue                                   # 국가별 상한
         codes = [c for c in (r["topics"] or "").split(",") if c]
-        my_topics = set(codes)
         # related: 같은 사건 기사(duplicate_of 형제)만 — 같은 국가·토픽 겹침으로 붙이지 않음
         rl = _related_links(r, None, siblings_map.get(r["article_id"], []), [])
         t_ko = r["title_ko"] if "title_ko" in r.keys() else None
@@ -935,11 +939,12 @@ def _mood_level(arts: list, cc_indicators: list) -> tuple[int, str]:
     if not arts:
         return 70, "→"
     n = len(arts)
-    avg_score = sum(r["ai_score"] for r in arts) / n
-    risk_n = sum(1 for r in arts if "RISK" in (r["topics"] or "").split(","))
+    # topics의 RISK 코드는 2026-09 카테고리 개편 때 사라졌다. 현재 위험 사건은
+    # 별도 이벤트축의 SANCTION·INCIDENT로 판정한다. ai_score는 중요도이지
+    # 부정적 방향이 아니므로 스트레스 계산에 넣지 않는다.
+    risk_n = sum(1 for r in arts
+                 if {"SANCTION", "INCIDENT"} & set((r["event_type"] or "").split(",")))
     risk_pct = risk_n / n * 100
-    score_norm = max(0.0, min(100.0, (avg_score - config.AI_SCORE_ACTIVE_THRESHOLD)
-                               / (100 - config.AI_SCORE_ACTIVE_THRESHOLD) * 100))
 
     badness = []
     for ind in cc_indicators:
@@ -955,10 +960,10 @@ def _mood_level(arts: list, cc_indicators: list) -> tuple[int, str]:
 
     if badness:
         ind_avg = sum(badness) / len(badness)
-        stress = 0.4 * risk_pct + 0.3 * score_norm + 0.3 * ind_avg
+        stress = 0.6 * risk_pct + 0.4 * ind_avg
         trend = "▼" if ind_avg > 55 else ("▲" if ind_avg < 45 else "→")
     else:
-        stress = 0.6 * risk_pct + 0.4 * score_norm
+        stress = 0.75 * risk_pct
         trend = "→"   # 지표 없음 — 모멘텀 이력 스냅샷이 없어 중립 처리
 
     mood_level = round(max(0, min(100, 100 - stress)))
@@ -1010,11 +1015,11 @@ def _compute_country_section(conn, days: int | None = 1, top_n: int = 5) -> list
     dc, params = _date_clause(days)
     ph = ",".join("?" * len(_FLAGS))
     rows = conn.execute(
-        f"""SELECT a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.topics,
-                   COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) cc
+        f"""SELECT a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.topics, a.event_type,
+                   {db.effective_country_expr()} cc
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL
-              AND COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) IN ({ph}){dc}
+              AND {db.effective_country_expr()} IN ({ph}){dc}
             ORDER BY a.ai_score DESC""",
         (config.AI_SCORE_ACTIVE_THRESHOLD, *_FLAGS.keys(), *params),
     ).fetchall()
@@ -1060,19 +1065,19 @@ def _index_short_label(symbol: str) -> str | None:
 
 
 def _compute_country_signals(conn, days: int | None = 1) -> list[dict]:
-    """국가별 시장 신호 보드(진출국 11개 전부) — docs/mockups/국가신호_board.html.
+    """국가별 시장 신호 보드(진출국 13개 전부) — docs/mockups/국가신호_board.html.
 
     country_section(top-5 이슈)과 같은 _mood_level() 계산을 재사용하되, 제한
-    없이 11개 전부 반환한다. 그날 기사가 없는 국가는 중립값(go)으로 표시.
+    없이 13개 전부 반환한다. 그날 기사가 없는 국가는 unknown으로 표시.
     """
     dc, params = _date_clause(days)
     ph = ",".join("?" * len(_FLAGS))
     rows = conn.execute(
-        f"""SELECT a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.topics,
-                   COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) cc
+        f"""SELECT a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.topics, a.event_type,
+                   {db.effective_country_expr()} cc
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL
-              AND COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) IN ({ph}){dc}
+              AND {db.effective_country_expr()} IN ({ph}){dc}
             ORDER BY a.ai_score DESC""",
         (config.AI_SCORE_ACTIVE_THRESHOLD, *_FLAGS.keys(), *params),
     ).fetchall()

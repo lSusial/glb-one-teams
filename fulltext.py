@@ -10,6 +10,7 @@ prefilter 통과(keep) 기사의 원문 URL을 열어 **본문 전체**를 추�
     (2026-09-29: 병렬 요청·구식 redirect-follow가 Google 요청 한도를 소진해 전부 429로 막혔음).
   · resolve_display_links(): rank 후 노출 기사 중 GN 링크가 남은 것을 점수순으로 추가 해소.
   · 본문 추출 = trafilatura. 실패 시 스니펫 유지(full_text 비움, rank 는 자동 폴백).
+  · 성공/URL 미해소/추출 실패와 시각을 기록하고, 실패 URL은 3일 간격으로 재시도한다.
   · 네트워크 개방 환경(맥북)에서 실행. 병렬 fetch.
 
 필요 패키지: trafilatura, googlenewsdecoder  (requirements.txt)
@@ -30,7 +31,16 @@ _GNEWS = "news.google."
 def ensure_columns(conn) -> None:
     db.ensure_columns(conn, "articles_raw", [
         ("full_text", "ALTER TABLE articles_raw ADD COLUMN full_text TEXT"),
+        ("fulltext_status", "ALTER TABLE articles_raw ADD COLUMN fulltext_status TEXT"),
+        ("fulltext_attempted_at", "ALTER TABLE articles_raw ADD COLUMN fulltext_attempted_at TEXT"),
+        ("fulltext_failure_reason", "ALTER TABLE articles_raw ADD COLUMN fulltext_failure_reason TEXT"),
     ])
+    # 상태 컬럼 도입 전 이미 확보한 본문은 성공으로 소급 표시한다.
+    conn.execute(
+        "UPDATE articles_raw SET fulltext_status='ok' "
+        "WHERE COALESCE(full_text, '') != '' AND fulltext_status IS NULL"
+    )
+    conn.commit()
 
 
 _BLOCK_AFTER = 3   # 429(요청 한도 초과)가 연속 이만큼 나오면 이번 실행의 디코딩을 멈춘다
@@ -104,6 +114,7 @@ def run_fulltext(conn, limit: int | None = None, days: int | None = None,
     workers = workers or config.FULLTEXT_WORKERS
 
     date_clause, params = db.days_clause_now(days)
+    retry_before = f"-{int(config.FULLTEXT_RETRY_DAYS)} days"
 
     rows = conn.execute(
         f"""
@@ -111,11 +122,13 @@ def run_fulltext(conn, limit: int | None = None, days: int | None = None,
         FROM articles_raw a
         WHERE a.llm_prefilter = 'keep'
           AND a.duplicate_of IS NULL
-          AND COALESCE(a.full_text, '') = ''{date_clause}
+          AND COALESCE(a.full_text, '') = ''
+          AND (a.fulltext_status IS NULL OR a.fulltext_status = 'pending'
+               OR a.fulltext_attempted_at <= datetime('now', ?)){date_clause}
         ORDER BY a.filter_score DESC
         LIMIT ?
         """,
-        (*params, limit),
+        (retry_before, *params, limit),
     ).fetchall()
 
     stats = dict(total=len(rows), extracted=0, resolved=0, failed=0)
@@ -131,7 +144,14 @@ def run_fulltext(conn, limit: int | None = None, days: int | None = None,
     stats["resolved"] = len(decoded)
     conn.commit()
     targets = [(r["article_id"], decoded.get(r["article_id"], r["link"])) for r in rows]
-    stats["failed"] = sum(1 for _, u in targets if not u or _GNEWS in u)
+    unresolved = [aid for aid, url in targets if not url or _GNEWS in url]
+    stats["failed"] = len(unresolved)
+    cur.executemany(
+        "UPDATE articles_raw SET fulltext_status='unresolved_url', "
+        "fulltext_attempted_at=CURRENT_TIMESTAMP, fulltext_failure_reason='google_news_decode_failed' "
+        "WHERE article_id=?",
+        [(aid,) for aid in unresolved],
+    )
     targets = [(aid, u) for aid, u in targets if u and _GNEWS not in u]
 
     # 2) 실제 URL만 병렬 본문 추출
@@ -141,10 +161,15 @@ def run_fulltext(conn, limit: int | None = None, days: int | None = None,
         for fut in cf.as_completed(futs):
             aid, text = fut.result()
             if text:
-                cur.execute("UPDATE articles_raw SET full_text = ? WHERE article_id = ?",
+                cur.execute("UPDATE articles_raw SET full_text = ?, fulltext_status='ok', "
+                            "fulltext_attempted_at=CURRENT_TIMESTAMP, fulltext_failure_reason=NULL "
+                            "WHERE article_id = ?",
                             (text, aid))
                 stats["extracted"] += 1
             else:
+                cur.execute("UPDATE articles_raw SET fulltext_status='extract_failed', "
+                            "fulltext_attempted_at=CURRENT_TIMESTAMP, "
+                            "fulltext_failure_reason='empty_or_blocked' WHERE article_id=?", (aid,))
                 stats["failed"] += 1
             done += 1
             if done % 50 == 0:
@@ -163,6 +188,7 @@ def resolve_display_links(conn, days: int | None = None, limit: int | None = Non
     본문 추출은 keep 상위 FULLTEXT_LIMIT건만 돌아, 한도 밖(미진출국·주제확장 피드 등)은 GN 링크
     그대로 화면에 나갔다(2026-09-29 노출 107건 중 46건). rank 이후 실제 노출될 기사부터 채운다.
     """
+    ensure_columns(conn)
     limit = limit or config.DISPLAY_LINK_RESOLVE_LIMIT
     date_clause, params = db.days_clause_now(days)
     # 대표(채점된 비중복 기사) 먼저 점수순, 그다음 그 대표에 묶인 형제(모달 '관련 기사 링크') —
@@ -182,7 +208,14 @@ def resolve_display_links(conn, days: int | None = None, limit: int | None = Non
     ).fetchall()
     decoded = decode_serial([(r["article_id"], r["link"]) for r in rows])
     for aid, url in decoded.items():
-        conn.execute("UPDATE articles_raw SET link = ? WHERE article_id = ?", (url[:2000], aid))
+        conn.execute(
+            "UPDATE articles_raw SET link = ?, "
+            "fulltext_status=CASE WHEN COALESCE(full_text, '')='' THEN 'pending' ELSE fulltext_status END, "
+            "fulltext_attempted_at=CASE WHEN COALESCE(full_text, '')='' THEN NULL ELSE fulltext_attempted_at END, "
+            "fulltext_failure_reason=CASE WHEN COALESCE(full_text, '')='' THEN NULL ELSE fulltext_failure_reason END "
+            "WHERE article_id = ?",
+            (url[:2000], aid),
+        )
     conn.commit()
     log.info("노출 기사 링크 해소 — 대상=%d  해소=%d", len(rows), len(decoded))
     return {"total": len(rows), "resolved": len(decoded)}

@@ -51,6 +51,12 @@ class LinkTests(unittest.TestCase):
     def link(self, aid):
         return self.db.execute('SELECT link FROM articles_raw WHERE article_id=?', (aid,)).fetchone()[0]
 
+    def fulltext_state(self, aid):
+        return self.db.execute(
+            'SELECT fulltext_status, fulltext_failure_reason FROM articles_raw WHERE article_id=?',
+            (aid,),
+        ).fetchone()
+
     def test_decode_stops_after_consecutive_429(self):
         dec = FakeDecoder({})                       # 전부 429
         with install(dec):
@@ -75,6 +81,7 @@ class LinkTests(unittest.TestCase):
             s = fulltext.resolve_display_links(self.db, days=2, limit=1)
         self.assertEqual(s['resolved'], 1)
         self.assertEqual(self.link(2), 'https://real/2')   # 점수 높은 것부터
+        self.assertEqual(self.fulltext_state(2)['fulltext_status'], 'pending')
         self.assertEqual(self.link(1), f'{GN}1')           # 한도 밖
         self.assertEqual(dec.calls, [f'{GN}2'])
 
@@ -101,6 +108,17 @@ class LinkTests(unittest.TestCase):
         ex.assert_called_once_with('https://direct/2')     # GN 링크로는 본문 추출 안 함
         get.assert_not_called()                            # 성공률 0%인 리다이렉트 폴백 요청도 안 보냄
         self.assertEqual((s['extracted'], s['resolved'], s['failed']), (1, 0, 1))
+        self.assertEqual(tuple(self.fulltext_state(1)), ('unresolved_url', 'google_news_decode_failed'))
+        self.assertEqual(tuple(self.fulltext_state(2)), ('ok', None))
+
+    def test_recent_extraction_failure_is_not_retried_immediately(self):
+        self.add(1, 'https://direct/1')
+        with patch.object(fulltext, '_extract', return_value=None):
+            first = fulltext.run_fulltext(self.db, limit=10, days=2)
+            second = fulltext.run_fulltext(self.db, limit=10, days=2)
+        self.assertEqual((first['total'], first['failed']), (1, 1))
+        self.assertEqual(second['total'], 0)
+        self.assertEqual(tuple(self.fulltext_state(1)), ('extract_failed', 'empty_or_blocked'))
 
 
 if __name__ == '__main__':

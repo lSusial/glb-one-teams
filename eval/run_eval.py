@@ -7,8 +7,8 @@ eval/run_eval.py — 프리필터 및 ai_score 루브릭 평가
   python eval/run_eval.py --mode prefilter --sync             # 동기 호출 (디버깅)
 
   # ── 랭커 루브릭 평가 ───────────────────────────────────────────────────
-  python eval/run_eval.py --mode ranker                       # 현재+개정 동시 채점 + 비교 리포트
-  python eval/run_eval.py --mode ranker --rubric new          # 개정 루브릭만
+  python eval/run_eval.py --mode ranker                       # 구 평가용+실제 운영 랭커 비교
+  python eval/run_eval.py --mode ranker --rubric new          # 실제 운영 랭커만
   python eval/run_eval.py --mode ranker --results PATH        # 기존 결과로 리포트만
   python eval/run_eval.py --mode ranker --sync                # 동기 호출 (디버깅)
   python eval/run_eval.py --mode ranker --threshold 50        # ACTIVE 임계 변경
@@ -56,6 +56,9 @@ def _load_dotenv(path: Path | None = None) -> None:
 
 _load_dotenv()
 
+import config
+import kb_network
+import llm_ranker
 from llm_provider import get_provider
 
 EVAL_FILE = Path(__file__).parent / "eval_set_v2.jsonl"   # 기본: v2 (grade 0-3)
@@ -69,39 +72,11 @@ _SYS_PREFIX = (
     '{"ai_score": <integer 0-100>}\n\n'
 )
 
-# ── 루브릭 A: 현재 ──────────────────────────────────────────────────────────
+# ── 비교 기준: 운영 연결 전의 구 평가용 루브릭 ───────────────────────────────
 RUBRIC_OLD = (
     "ai_score guide: direct impact on KB branch lending/risk/funding = 80+, "
     "indirect/background = 40-60, weak = under 40."
 )
-
-# ── 루브릭 B: 개정 (4계층) ──────────────────────────────────────────────────
-RUBRIC_NEW = """\
-ai_score rubric — assign the highest tier that applies:
-
-75-100  DIRECT · IMMEDIATE
-  KB branch/subsidiary directly affected today.
-  Examples: host-country central bank rate decision, capital controls imposed,
-  KB entity under regulatory action/sanction, sovereign rating downgrade
-  in a KB-presence market, FX convertibility crisis.
-
-50-74   CONTEXTUAL · IMPORTANT
-  A KB banker at this hub should read this within the day.
-  Examples: major currency move in a KB country (VND/IDR/MMK/CNY/INR…),
-  Fed/BoJ/ECB rate path shift, oil shock affecting local inflation,
-  geopolitical event in KB market (coup, sanctions risk, capital-flow
-  restriction), banking-sector M&A or stress in KB geography,
-  sovereign debt stress, significant trade/tariff change.
-
-25-49   BACKGROUND · CONTEXT
-  Useful context; no near-term KB action needed.
-  Examples: global fintech/ESG trends, developed-market macro that only
-  indirectly reaches KB geographies, general industry research.
-
-0-24    NOISE / UNRELATED
-  Sports, entertainment, stock tips for unrelated sectors, crime gossip,
-  local events with no macro or financial relevance to KB overseas operations."""
-
 
 def load_eval() -> list[dict]:
     items = []
@@ -202,7 +177,7 @@ def report_prefilter(items: list[dict], preds: list[bool | None]) -> dict:
     if failed:
         print(f"  ⚠ 응답 파싱 실패 {failed}건 → 보수적 keep 처리")
     print(f"{'='*62}")
-    print(f"\n  혼동행렬")
+    print("\n  혼동행렬")
     print(f"  {'':16s}  예측 keep  예측 drop")
     print(f"  pos ({pos_label})    TP={tp:3d}      FN={fn:3d}")
     print(f"  neg ({neg_label})    FP={fp:3d}      TN={tn:3d}")
@@ -247,35 +222,59 @@ def save_prefilter_results(items: list[dict], preds: list[bool | None], metrics:
 
 
 # ────────────────────────────────────────────────────────────────────────────
-# 랭커 루브릭 평가 (기존 코드)
+# 랭커 평가(구 평가용 기준과 실제 운영 랭커 비교)
 # ────────────────────────────────────────────────────────────────────────────
 
-def build_requests(items: list[dict], rubric: str) -> list[tuple]:
-    system = _SYS_PREFIX + rubric
+def build_requests(items: list[dict], production: bool) -> list[tuple]:
+    """평가 요청을 만든다.
+
+    production=True이면 운영 ``llm_ranker.run_rank``와 같은 거점/미진출
+    프롬프트와 사용자 메시지 형식을 사용한다. 평가용 프롬프트 복사본을 두지 않아
+    운영 프롬프트가 바뀌면 평가도 즉시 같은 계약을 측정한다.
+    """
     reqs = []
     for i, e in enumerate(items):
-        user = (
-            f"[cc: {e.get('cc', 'GLOBAL')}]\n"
-            f"title: {e.get('title', '')}\n"
-            f"summary: {(e.get('summary') or '')[:600]}"
-        )
-        reqs.append((str(i), system, user, 100))
+        cc = str(e.get("cc") or "GLOBAL").upper()
+        title = e.get("title", "")
+        summary = (e.get("summary") or "")[:1200]
+        if production:
+            content = f"제목: {title}\n요약: {summary}"
+            if config.is_presence(cc):
+                system = llm_ranker._system_prompt()
+                user = f"[거점 맥락: {kb_network.context_for(cc)}]\n매체: eval  국가: {cc}\n{content}"
+            else:
+                system = llm_ranker._system_prompt_light()
+                user = f"매체: eval  국가: {cc}\n{content}"
+            max_tokens = 700
+        else:
+            system = _SYS_PREFIX + RUBRIC_OLD
+            user = f"[cc: {cc}]\ntitle: {title}\nsummary: {summary[:600]}"
+            max_tokens = 100
+        reqs.append((str(i), system, user, max_tokens))
     return reqs
 
 
-def run_scoring(items: list[dict], rubric: str, use_batch: bool) -> list[int | None]:
-    provider = get_provider("fast", use_batch=None if use_batch else False)
-    reqs = build_requests(items, rubric)
-    results = provider.complete_json_batch(reqs)
+def parse_scores(results: dict, count: int, production: bool) -> list[int | None]:
+    """LLM 결과를 점수로 변환. 운영 모드는 실제 4차원 합산 함수를 재사용한다."""
     scores = []
-    for i in range(len(items)):
+    for i in range(count):
         data = results.get(str(i)) or {}
+        if production and (data.get("score_factors") is not None or data.get("ai_score") is not None):
+            scores.append(llm_ranker._score_from_data(data)[0])
+            continue
         try:
-            s = int(data.get("ai_score"))
-            scores.append(max(0, min(100, s)))
+            score = int(data.get("ai_score"))
+            scores.append(max(0, min(100, score)))
         except (TypeError, ValueError):
             scores.append(None)
     return scores
+
+
+def run_scoring(items: list[dict], use_batch: bool, production: bool) -> list[int | None]:
+    provider = get_provider("fast", use_batch=None if use_batch else False)
+    reqs = build_requests(items, production)
+    results = provider.complete_json_batch(reqs)
+    return parse_scores(results, len(items), production)
 
 
 def bucket(score: int | None) -> str:
@@ -312,9 +311,9 @@ def report(items: list[dict], scores_old: list, scores_new: list, threshold: int
 
     pairs: list[tuple[str, list]] = []
     if any(s is not None for s in scores_old):
-        pairs.append(("현재 루브릭", scores_old))
+        pairs.append(("구 평가용 루브릭", scores_old))
     if any(s is not None for s in scores_new):
-        pairs.append(("개정 루브릭", scores_new))
+        pairs.append(("실제 운영 랭커", scores_new))
 
     for tag, scores in pairs:
         valid = [s for s in scores if s is not None]
@@ -331,7 +330,7 @@ def report(items: list[dict], scores_old: list, scores_new: list, threshold: int
 
         # 2. grade별 평균 점수 (v2) 또는 label별 (v1)
         if has_v2:
-            print(f"\n  grade별 평균 ai_score:")
+            print("\n  grade별 평균 ai_score:")
             from collections import defaultdict
             by_grade: dict[int, list] = defaultdict(list)
             for e, s in zip(items, scores):
@@ -364,7 +363,7 @@ def report(items: list[dict], scores_old: list, scores_new: list, threshold: int
 
         # 4. grade 교차표 (v2 전용): grade × bucket
         if has_v2:
-            print(f"\n  grade × ai_score 교차표:")
+            print("\n  grade × ai_score 교차표:")
             print(f"  {'grade':6s}  {'0-24':>6s}  {'25-49':>6s}  {'50-74':>6s}  {'75-100':>7s}  {'avg':>6s}")
             from collections import defaultdict
             by_g: dict[int, list] = defaultdict(list)
@@ -384,7 +383,7 @@ def report(items: list[dict], scores_old: list, scores_new: list, threshold: int
 
     # 5. 개별 기사 변화 (both 모드 + pos 기사만)
     if any(s is not None for s in scores_old) and any(s is not None for s in scores_new):
-        print(f"\n── pos 기사 점수 변화 (현재→개정, grade 높은 순) ──")
+        print("\n── pos 기사 점수 변화 (구 평가→운영, grade 높은 순) ──")
         triples = [(e, so, sn) for e, so, sn in zip(items, scores_old, scores_new)
                    if _pos(e) == 1]
         triples.sort(key=lambda t: -(_grade_of(t[0]) or 0) * 1000 - (t[2] or 0))
@@ -430,7 +429,7 @@ def main():
     ap.add_argument("--mode", choices=["prefilter", "ranker"], default="ranker",
                     help="평가 모드: prefilter(keep/drop) 또는 ranker(ai_score 분포) (기본: ranker)")
     ap.add_argument("--rubric", choices=["old", "new", "both"], default="both",
-                    help="[ranker] 채점할 루브릭 선택 (기본: both)")
+                    help="[ranker] old=구 평가용, new=실제 운영 랭커, both=비교 (기본: both)")
     ap.add_argument("--results", metavar="PATH",
                     help="[ranker] 기존 결과 JSONL 경로 — 재채점 없이 리포트만 출력")
     ap.add_argument("--eval-file", metavar="PATH", default=None,
@@ -476,14 +475,14 @@ def main():
     scores_new: list[int | None] = [None] * len(items)
 
     if args.rubric in ("old", "both"):
-        print(f"\n[현재 루브릭] {len(items)}건 채점 중...")
-        scores_old = run_scoring(items, RUBRIC_OLD, use_batch)
+        print(f"\n[구 평가용 루브릭] {len(items)}건 채점 중...")
+        scores_old = run_scoring(items, use_batch, production=False)
         ok = sum(s is not None for s in scores_old)
         print(f"  완료: 성공={ok}건  실패={len(items)-ok}건")
 
     if args.rubric in ("new", "both"):
-        print(f"\n[개정 루브릭] {len(items)}건 채점 중...")
-        scores_new = run_scoring(items, RUBRIC_NEW, use_batch)
+        print(f"\n[실제 운영 랭커] {len(items)}건 채점 중...")
+        scores_new = run_scoring(items, use_batch, production=True)
         ok = sum(s is not None for s in scores_new)
         print(f"  완료: 성공={ok}건  실패={len(items)-ok}건")
 

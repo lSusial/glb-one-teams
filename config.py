@@ -73,6 +73,7 @@ RANK_LIMIT      = 700        # 한 번 실행에 처리할 최대 기사 수(ran
 # prefilter 통과분만 원문 본문 추출(무료). 스니펫(~141B) 대신 본문으로 rank 품질↑.
 FULLTEXT_LIMIT   = 400       # 한 번 실행에 본문 추출할 최대 기사 수
 FULLTEXT_WORKERS = 12        # 병렬 fetch 수
+FULLTEXT_RETRY_DAYS = 3      # 실패 URL 재시도 간격(매일 같은 페이월·차단 URL 재요청 방지)
 DISPLAY_LINK_RESOLVE_LIMIT = 150  # rank 후 노출 기사 GN 링크 추가 해소 한도(순차 요청·Google 429 방지)
 FULLTEXT_MAXLEN  = 12000     # 저장 본문 최대 길이(자)
 RANK_BODY_MAXLEN = 1200      # rank 프롬프트에 넣는 본문 최대 길이(자) — 2026-08-31 토큰

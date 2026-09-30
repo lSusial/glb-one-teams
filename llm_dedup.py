@@ -416,7 +416,7 @@ def run_dedup(conn, provider: LLMProvider | None = None,
                a.summary_en AS s_en, a.ai_score, a.published_at,
                a.duplicate_of,
                m.primary_country_code AS media_cc,
-               COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) AS cc
+               {db.effective_country_expr()} AS cc
         FROM articles_raw a
         JOIN media_sources m ON m.source_id = a.source_id
         WHERE a.ai_score IS NOT NULL
@@ -584,7 +584,7 @@ def repair_existing(conn, threshold: float | None = None, apply: bool = False,
                 f"SELECT a.article_id, a.title, a.title_ko, {title_en_sql} AS title_en, "
                 f"a.ai_score, a.published_at, "
                 f"m.primary_country_code AS media_cc, "
-                f"COALESCE(NULLIF(a.primary_country, ''), m.primary_country_code) AS cc "
+                f"{db.effective_country_expr()} AS cc "
                 f"FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id "
                 f"WHERE a.article_id IN ({q})", chunk):
             aid = int(a["article_id"])
