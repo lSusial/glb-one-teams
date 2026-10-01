@@ -382,6 +382,16 @@ class QualityTests(unittest.TestCase):
             (1, '2026-09-27', 'Japan to raise consumption tax'),
             (2, '2026-09-28', 'Fed postpones rate decision')]), set())
 
+    def test_expired_preview_is_removed_after_one_day(self):
+        items = [
+            (1, '2026-09-29', 'Fed expected to release PCE tomorrow'),
+            (2, '2026-09-30', 'BOJ decision ahead of meeting'),
+            (3, '2026-09-29', 'Fed publishes PCE inflation data'),
+            (4, '', 'ECB decision expected tomorrow'),
+        ]
+        self.assertEqual(llm_dedup.expired_preview_ids(items, '2026-10-01'), {1})
+        self.assertEqual(llm_dedup.expired_preview_ids(items, 'bad-date'), set())
+
     def test_archive_link_exclusion_filters_topic_and_tag_pages(self):
         db = sqlite3.connect(':memory:')
         self.addCleanup(db.close)
@@ -433,6 +443,22 @@ class QualityTests(unittest.TestCase):
         self.assertEqual([x[0] for x in export_json._pulse_cats()], taxonomy.codes())
         self.assertEqual(taxonomy.codes(),
                          ['ECONOMY', 'MARKETS', 'TECH', 'GEO', 'POLICY', 'SOCIETY'])
+
+    def test_snapshot_date_uses_collection_run_not_export_wall_clock(self):
+        """AI 분석이 자정을 넘겨 끝나도 아카이브 날짜는 수집일에 고정돼야 한다.
+
+        2026-10-01 발견: export 실행 시각(다음날 새벽)을 스냅샷 날짜로 쓰면, 전날 수집분이
+        다음날 폴더에 저장되고 전날 폴더엔 그 전전날의 낡은 스냅샷만 남는 어긋남이 생겼다."""
+        self.db.executescript(
+            "CREATE TABLE fetch_runs(run_id INTEGER PRIMARY KEY, started_at TEXT);"
+            "INSERT INTO fetch_runs VALUES(1, '2026-09-30 05:28:27');"
+        )
+        self.assertEqual(export_json._snapshot_date(self.db), '2026-09-30')
+
+    def test_snapshot_date_falls_back_to_today_without_fetch_history(self):
+        self.db.executescript("CREATE TABLE fetch_runs(run_id INTEGER PRIMARY KEY, started_at TEXT);")
+        self.assertEqual(export_json._snapshot_date(self.db),
+                          export_json._snapshot_date(None))
 
 
 class NumericGuardTests(unittest.TestCase):

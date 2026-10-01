@@ -66,9 +66,26 @@ def _eff_cc(r) -> str:
     return pc or r["cc"]
 
 
-def _snapshot_date(date: str | None = None) -> str:
-    """스냅샷 라벨 날짜 (기본: 오늘, 로컬)."""
-    return date or datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d")
+def _snapshot_date(conn=None, date: str | None = None) -> str:
+    """스냅샷 라벨 날짜 — 가장 최근 수집(fetch_runs) 시작 시각의 현지 날짜 기준.
+
+    export가 실행되는 순간의 날짜를 쓰면, AI 분석이 자정을 넘겨 끝났을 때 전일 수집분이
+    다음날 날짜로 아카이브돼 날짜 선택기가 어긋난다(2026-10-01 발견: 9/30 수집분이 다음날
+    04시에 export되며 '10/1' 폴더에 저장되고, '9/30' 폴더엔 그 전날 아침의 낡은 스냅샷만
+    남았음). conn이 없거나 수집 이력이 없으면 현재 날짜로 폴백한다."""
+    if date:
+        return date
+    if conn is not None:
+        row = conn.execute(
+            "SELECT started_at FROM fetch_runs ORDER BY run_id DESC LIMIT 1"
+        ).fetchone()
+        if row and row["started_at"]:
+            try:
+                dt = datetime.strptime(row["started_at"], "%Y-%m-%d %H:%M:%S")
+                return dt.replace(tzinfo=timezone.utc).astimezone().strftime("%Y-%m-%d")
+            except ValueError:
+                pass
+    return datetime.now(timezone.utc).astimezone().strftime("%Y-%m-%d")
 
 
 def _write_json(name: str, payload: dict) -> None:
@@ -672,6 +689,11 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
             # 연기·취소 등 후속 기사가 있으면 그 전 예고성 기사를 내린다(파업 '개시'와 '연기'가 같이 뜨던 문제)
             gone = llm_dedup.superseded_ids([(a["article_id"], a["published_at"] or "",
                                               a["title_en"] or a["title"] or "") for a in ordered])
+            gone |= llm_dedup.expired_preview_ids(
+                [(a["article_id"], a["published_at"] or "",
+                  a["title_ko"], a["title_en"], a["title"])
+                 for a in ordered],
+                _snapshot_date(conn))
             ordered = [a for a in ordered if a["article_id"] not in gone]
             rows = ordered[:config.COUNTRY_MAX_ARTICLES]        # 국가당 노출 상한
             # 상한에서 밀린 사회기사 몇 건 되살림(위 where로 이미 후보에 포함됨).
@@ -734,7 +756,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "snapshot_date": _snapshot_date(),
+        "snapshot_date": _snapshot_date(conn),
         "mode": "active" if active_only else "passed",
         "active_threshold": config.AI_SCORE_ACTIVE_THRESHOLD if active_only else None,
         "countries": countries,
@@ -1153,7 +1175,7 @@ def export_pulse(conn, days: int | None = None) -> dict:
     config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "snapshot_date": _snapshot_date(),
+        "snapshot_date": _snapshot_date(conn),
         "days": days,
         "categories": _compute_pulse(conn, days=days),
         "top_news": _compute_top_news(conn, days=days, limit=10),
@@ -1228,7 +1250,7 @@ def export_weekly(conn) -> dict:
     config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "snapshot_date": _snapshot_date(),
+        "snapshot_date": _snapshot_date(conn),
         "countries": _weekly_briefs(conn),
     }
     _write_json("weekly", payload)
@@ -1358,7 +1380,7 @@ def export_topics(conn, days: int | None = None) -> dict:
     cats = _compute_topics(conn, days=days)
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "snapshot_date": _snapshot_date(),
+        "snapshot_date": _snapshot_date(conn),
         "days": days,
         "categories": cats,
     }
@@ -1410,7 +1432,7 @@ def export_markets(conn) -> dict:
         pass
 
     row = conn.execute("SELECT MAX(date) AS d FROM indicators").fetchone()
-    latest = row["d"] if row and row["d"] else _snapshot_date()
+    latest = row["d"] if row and row["d"] else _snapshot_date(conn)
 
     countries = []
     for cc in _PRESENCE_NAMES_KO:  # 진출 13개국 순서
@@ -1449,7 +1471,8 @@ def export_markets(conn) -> dict:
 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "snapshot_date": latest,
+        "snapshot_date": _snapshot_date(conn),
+        "indicator_date": latest,
         "countries": countries,
     }
     _write_json("markets", payload)

@@ -176,6 +176,27 @@ def is_preview(*titles: str | None) -> bool:
     return any(t and _PREVIEW_RE.search(t) for t in titles)
 
 
+def expired_preview_ids(items, as_of: str, max_age_days: int = 1) -> set:
+    """기준일보다 오래된 예고성 기사 id를 반환한다.
+
+    발표·결정 임박 기사는 후속 기사가 수집되지 않았더라도 이틀 뒤에는 정보 가치가
+    사라진다. 원문 발행일을 해석할 수 없는 항목은 보존한다.
+    """
+    try:
+        today = date.fromisoformat((as_of or "")[:10])
+    except ValueError:
+        return set()
+    gone = set()
+    for aid, published_at, *titles in items:
+        try:
+            published = date.fromisoformat((published_at or "")[:10])
+        except ValueError:
+            continue
+        if (today - published).days > max_age_days and is_preview(*titles):
+            gone.add(aid)
+    return gone
+
+
 def pick_rep(group, meta, subject: str | None = None) -> int:
     """대표 = 예고/프리뷰 아님 → ai_score 최고 → (동점이면) 현지언론 → 게시 최신 → id 작은 것.
     meta[aid] = {"score", "pub", "titles", "media_cc"}. 시간순 사건에서 결정 기사가 대표가 되게 하고,
