@@ -45,6 +45,7 @@ fetch → keyword_filter → dedup ─▶ prefilter → fulltext → rank → ai
 | `fulltext.py` | keep 기사 원문 본문 추출(trafilatura+googlenewsdecoder, 무료) |
 | `llm_ranker.py` | `ai_score`·`summary_en`·주제 카테고리·이벤트유형·`primary_country`·`kb_implication_en` 생성(영어 canonical) |
 | `ranking.py` | 표시용 복합 정렬 `rank_score` — ai_score 게이트는 불변 (`docs/rank_score_spec.md`) |
+| `quality_report.py` | 국가·소스 수율, 본문률, 점수 집중, 근거 강도 일일 리포트·경보 |
 | `llm_expand.py` | 노출(ACTIVE) 기사 모달용 긴 요약(3~4문단, 다출처 종합, 얇은 소스는 경량 프롬프트) |
 | `llm_translate.py` | 영어 canonical → 한국어 표시분 번역 |
 | `llm_dedup.py` | AI 근접중복 판정 — 같은 사건의 다른 표현을 묶어 `duplicate_of` 마킹 |
@@ -82,6 +83,7 @@ python main.py init      # DB 초기화 (sources.yaml 동기화)
 python main.py run       # 수집(AI 없음) — fetch → filter → dedup
 python main.py list --limit 20
 python main.py report    # 매체 가용성 리포트
+python main.py quality   # 뉴스 품질·국가·소스 수율 리포트(외부 API 없음)
 ```
 
 ### AI 레이어 (`ANTHROPIC_API_KEY` 필요)
@@ -95,7 +97,7 @@ python main.py export        # DB → data/export/*.json (+ web 템플릿 주입
 ```
 
 개별 단계: `prefilter` · `fulltext` · `rank` · `ai-dedup` · `expand` · `translate` · `brief` · `highlights`.
-부가 명령: `korean-fi` · `personnel` · `backfill-country` · `indicators-history` · `admin` · `broadcast` · `eval`.
+부가 명령: `quality` · `korean-fi` · `personnel` · `backfill-country` · `indicators-history` · `admin` · `broadcast` · `eval`.
 
 > 모델은 `config.py`에서 작업별 분리 — 현재 전 단계 Haiku + Message Batches API(토큰 50%↓, `--sync`로 동기 전환).
 > 프로바이더 교체는 `LLM_PROVIDER`(anthropic|openai|stub) 환경변수.

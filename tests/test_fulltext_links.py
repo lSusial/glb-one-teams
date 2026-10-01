@@ -135,6 +135,23 @@ class LinkTests(unittest.TestCase):
             'SELECT full_text FROM articles_raw WHERE article_id=2'
         ).fetchone()[0])
 
+    def test_country_balancing_prevents_one_country_from_taking_limit(self):
+        self.add(1, 'https://direct/us1', score=90, fscore=10)
+        self.add(2, 'https://direct/us2', score=80, fscore=9)
+        self.add(3, 'https://direct/gb1', score=70, fscore=8)
+        self.db.execute('ALTER TABLE articles_raw ADD COLUMN source_id INTEGER')
+        self.db.execute('ALTER TABLE articles_raw ADD COLUMN primary_country TEXT')
+        self.db.execute('CREATE TABLE media_sources(source_id INTEGER PRIMARY KEY, primary_country_code TEXT)')
+        self.db.executemany('INSERT INTO media_sources VALUES(?,?)', [(1, 'US'), (2, 'GB')])
+        self.db.execute('UPDATE articles_raw SET source_id=1 WHERE article_id IN (1,2)')
+        self.db.execute('UPDATE articles_raw SET source_id=2 WHERE article_id=3')
+        self.db.commit()
+        with patch.object(fulltext, '_extract', side_effect=lambda u: f'text of {u}'):
+            result = fulltext.run_fulltext(
+                self.db, limit=2, days=2, min_score=50, balance_countries=True,
+            )
+        self.assertEqual(set(result['extracted_ids']), {1, 3})
+
 
     def test_rate_limited_links_stay_retryable(self):
         # 429로 중단되면 시도 못 한 기사까지 unresolved_url+시각이 찍혀 3일 재시도 금지 → --days 2 창에서

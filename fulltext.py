@@ -107,11 +107,13 @@ def _process(article_id: int, url: str):
 
 
 def run_fulltext(conn, limit: int | None = None, days: int | None = None,
-                 workers: int | None = None, min_score: int | None = None) -> dict:
+                 workers: int | None = None, min_score: int | None = None,
+                 balance_countries: bool = False) -> dict:
     """keep·본문미보유 기사의 원문 본문을 병렬 추출·저장.
 
     days: 지정 시 최근 N일 게시분만(전체 백로그 대신 최신치 — 부하 절감).
     min_score: 지정 시 이미 채점된 기사 중 해당 점수 이상만 우선 추출한다.
+    balance_countries: 국가별 1순위→2순위 순으로 뽑아 대형 국가의 한도 독점을 막는다.
     """
     ensure_columns(conn)
     limit = limit or config.FULLTEXT_LIMIT
@@ -123,16 +125,27 @@ def run_fulltext(conn, limit: int | None = None, days: int | None = None,
     score_clause = " AND a.ai_score >= ?" if min_score is not None else ""
     score_params = [int(min_score)] if min_score is not None else []
     order_by = "a.ai_score DESC, a.filter_score DESC" if min_score is not None else "a.filter_score DESC"
+    country_rank = ""
+    join_media = ""
+    outer_order = "ai_score DESC, filter_score DESC" if min_score is not None else "filter_score DESC"
+    if balance_countries:
+        join_media = "JOIN media_sources m ON m.source_id = a.source_id"
+        country_rank = (
+            f", ROW_NUMBER() OVER (PARTITION BY {db.effective_country_expr()} "
+            f"ORDER BY {order_by}) AS country_pos"
+        )
+        outer_order = "country_pos ASC, ai_score DESC, filter_score DESC"
     rows = conn.execute(
-        f"""
-        SELECT a.article_id, a.link
-        FROM articles_raw a
+        f"""SELECT article_id, link FROM (
+        SELECT a.article_id, a.link, a.ai_score, a.filter_score{country_rank}
+        FROM articles_raw a {join_media}
         WHERE a.llm_prefilter = 'keep'
           AND a.duplicate_of IS NULL
           AND COALESCE(a.full_text, '') = ''
           AND (a.fulltext_status IS NULL OR a.fulltext_status = 'pending'
                OR a.fulltext_attempted_at <= datetime('now', ?)){score_clause}{date_clause}
-        ORDER BY {order_by}
+        )
+        ORDER BY {outer_order}
         LIMIT ?
         """,
         (retry_before, *score_params, *params, limit),

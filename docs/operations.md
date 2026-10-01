@@ -11,6 +11,7 @@ python main.py run                 # fetch → filter → dedup (Google News 때
 python main.py ai --days 2         # prefilter → fulltext → rank → ai-dedup → expand → translate → brief → highlights (Batches, 수 분~10분)
 python main.py indicators          # 환율·지수·정책금리·국채 스냅샷
 python main.py export              # data/export/*.json + 화면 HTML 생성
+python main.py quality             # 국가·소스 수율, 본문률, 점수 집중, 근거 강도 경보(무료)
 python3 eval/display_audit.py      # 표시 감사(읽기 전용 리포트) — 요약 없음·오래된 기사·오묶음·관련링크 무관 등. deploy_web.sh가 export 직후 자동 실행
 ./deploy_web.sh                    # export + wrangler pages deploy (= 아래 한 줄)
 wrangler pages deploy data/export --project-name kb-global-daily --commit-dirty=true
@@ -19,6 +20,7 @@ wrangler pages deploy data/export --project-name kb-global-daily --commit-dirty=
 - 주 1회: `python main.py indicators-history`(6개월 주봉 백필, 맥북). 필요 시 `korean-fi` · `personnel` · `backfill-country` 태깅.
 - 서버 동기화(`sync_to_server.sh`, `deploy_web.sh` 내 rsync)는 Oracle Cloud SSH 22번 타임아웃으로 **2026-08-24부터 비활성**. 복구되면 `deploy_web.sh`의 주석 블록 해제.
 - 평가: `python main.py eval --mode prefilter|ranker` (`eval/`). 품질 회귀: `python -m unittest discover -s tests -v`.
+- 품질 경보: `python main.py quality --strict`. 결과는 `data/quality/latest.{json,md}`이며 배포 스크립트가 자동 실행한다. 경고는 기록만 하고 `critical`만 배포를 중단한다. 개선 과제 상태는 `docs/news_quality_roadmap.md` 참조.
 - **AI 중복판정 신뢰성**: 저장분 소급은 먼저 `python3 main.py dedup-repair --days 1`로 dry-run한 뒤 `--apply --days 1`로 백업·적용한다. 특정 그룹만 고치려면 `--rep-id ARTICLE_ID`를 여러 번 지정할 수 있다. 전체 무범위 적용은 과거 그룹을 대량 변경하므로 피한다. 새 프롬프트 실측은 `python3 eval/eval_dedup_guard.py --labeled-live`(라벨 70쌍) 또는 `--live --days 8`(DB 무변경).
 - 물량 병목 주의: `PREFILTER_LIMIT=1600`, `RANK_LIMIT=700`(2026-09-08 상향). 초과분은 `--days 2` 창 밖으로 밀려 영구 미처리되므로 수집량이 늘면 재점검.
 

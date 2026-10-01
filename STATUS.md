@@ -21,7 +21,7 @@ fetch → keyword_filter(통과≥2, SOCIETY 독립경로) → dedup → prefilt
 | 수집 | `collector.py` | ✅ 108소스/154피드(GNews 우회 다수). 거점국 주제확장·제재 모니터 피드 포함. 9/30 기사별 원발행사명(`publisher_name`, GN `<source>`) 저장. 9/29 성공률 0%이던 GN redirect 해소 제거(Google 429 원인) |
 | 키워드 필터·중복 | `keyword_filter.py` | ✅ 인사동향(역할어×교체신호어 AND)·한국계 금융기관·주제국가 폴백 태깅 포함 |
 | LLM 1차 관문 | `llm_prefilter.py` | ✅ F1 0.542→0.708 |
-| 본문 추출 | `fulltext.py` | ✅ GN 링크 순차 디코딩(429 연속 3회 시 중단), 상태 `ok/unresolved_url/extract_failed/pending`·시각·사유 기록, 확정 실패만 3일 재시도 제한(429·미시도는 다음 실행 재시도). 1차 한도 400건 뒤 50점 이상 후보를 최대 60건 추가 확보 |
+| 본문 추출 | `fulltext.py` | ✅ GN 링크 순차 디코딩(429 연속 3회 시 중단), 상태 `ok/unresolved_url/extract_failed/pending`·시각·사유 기록, 확정 실패만 3일 재시도 제한(429·미시도는 다음 실행 재시도). 1차 한도 400건 뒤 50점 이상 후보를 국가별 순환 순서로 최대 60건 추가 확보 |
 | AI 분석 | `llm_ranker.py` | ✅ 요약(en)·주제 6종·이벤트유형 4종·`primary_country`. 중요도 4차원(직접성·규모·긴급성·신규성 0~4) 가중합, 근거 `ai_score_factors`와 파생 `market_importance`·`kb_relevance` 저장. 새 본문 확보 성공 ID만 재랭킹하고 무효 응답은 기존 결과 유지. 한·영 제목 금액 검증, 다출처 금액 충돌 시 종합 보류(`source_conflict`) |
 | 근접중복 | `llm_dedup.py` | ✅ 기사쌍 단위 소청크(recall 0.87/precision 0.94), 전이 병합 차단(소급 보정도 동일 규칙), 한국 공통어 가드, 예고 판정은 AI 제목 기준. 국가 판정 `db.effective_country_expr()` 공용 |
 | 링크 해소 | `fulltext.resolve_display_links` | ✅ rank·중복판정 후 채점 기사 → 그 형제(관련 링크) 순으로 GN 링크 해소, 최대 150건(`main.py resolve-links` 단독 실행 가능). 9/29 GN 링크 카드 46→7/107 |
@@ -31,6 +31,7 @@ fetch → keyword_filter(통과≥2, SOCIETY 독립경로) → dedup → prefilt
 | export | `export_json.py` | ✅ 대체된 예고 기사 제거(`superseded_ids`), 토픽·태그 페이지 링크 제외, 관련 링크 최대 4건(원문+같은 사건 3)·사건 유사도 검증, 홈 지도 무데이터 분리 |
 | 지표 | `indicators.py` | ✅ 환율·지수·정책금리·미국채, 1/3/6개월 추세(주 1회 `indicators-history`) |
 | 표시 감사 | `eval/display_audit.py` | ✅ 19개 항목. `deploy_web.sh --strict`는 탑이슈 출처 무결성만 배포 차단, 나머지는 보고 전용(§6 결정 대기) |
+| 품질 경보 | `quality_report.py` | ✅ 국가·소스 단계별 수율, ACTIVE 본문률, 점수 집중, 근거 강도, 피드 실패를 JSON/Markdown으로 기록. 배포 전 critical 차단 |
 | 배포 | `deploy_web.sh` | ✅ export + 감사 + wrangler. 서버 rsync는 SSH 타임아웃으로 비활성 |
 | 메신저 | `broadcaster.py` | 🟡 Telegram 구현, 정기 발송 미가동·채널 확정 대기 |
 | 자동화 | — | 🔴 정기 실행 미구현(수동 1일 1회) |

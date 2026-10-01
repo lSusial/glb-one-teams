@@ -207,6 +207,17 @@ def cmd_report(_args):
     print(f"[report] wrote {REPORT_PATH}")
 
 
+def cmd_quality(args):
+    import quality_report
+    conn = db.open_conn()
+    report = quality_report.build_report(conn, days=args.days, export_dir=config.EXPORT_DIR)
+    paths = quality_report.write_report(report)
+    print(quality_report.to_markdown(report))
+    print(f"[quality] JSON={paths['json']}  Markdown={paths['markdown']}")
+    if args.strict and any(a["severity"] == "critical" for a in report["alerts"]):
+        raise SystemExit(1)
+
+
 def cmd_indicators(_args):
     import indicators
     conn = db.open_conn()
@@ -392,7 +403,7 @@ def cmd_ai(args):
     sp = _ai_guard(
         lambda: fulltext.run_fulltext(
             conn, days=days, limit=config.PRIORITY_FULLTEXT_LIMIT,
-            min_score=config.PRIORITY_FULLTEXT_MIN_SCORE,
+            min_score=config.PRIORITY_FULLTEXT_MIN_SCORE, balance_countries=True,
         ),
         "ai",
     )
@@ -504,6 +515,9 @@ def main():
     sub.add_parser("init",   help="DB 초기화 및 sources.yaml 동기화")
     sub.add_parser("fetch",  help="전체 활성 피드 1회 수집")
     sub.add_parser("report", help="매체 가용성 리포트 생성")
+    qlt = sub.add_parser("quality", help="최신 데이터 품질·국가·소스 수율 리포트(무료)")
+    qlt.add_argument("--days", type=int, default=1, help="최신 게시일 기준 과거 N일 추가 포함(기본 1=전일+당일)")
+    qlt.add_argument("--strict", action="store_true", help="critical 경보가 있으면 종료코드 1")
     sub.add_parser("run",    help="fetch → filter → dedup 순서 실행")
     sub.add_parser("indicators", help="국가별 거시지표(환율·주가지수) 수집")
     sub.add_parser("indicators-history", help="지표 6개월 주간 추세(스파크라인용) 수집 — 맥북에서 실행")
@@ -592,7 +606,7 @@ def main():
         "init": cmd_init, "fetch": cmd_fetch, "filter": cmd_filter,
         "dedup": cmd_dedup, "korean-fi": cmd_korean_fi, "personnel": cmd_personnel,
         "backfill-country": cmd_backfill_country,
-        "run": cmd_run, "report": cmd_report, "list": cmd_list,
+        "run": cmd_run, "report": cmd_report, "quality": cmd_quality, "list": cmd_list,
         "indicators": cmd_indicators, "indicators-history": cmd_indicators_history,
         "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "resolve-links": cmd_resolve_links, "rank": cmd_rank,
         "expand": cmd_expand, "ai-dedup": cmd_ai_dedup, "dedup-repair": cmd_dedup_repair,

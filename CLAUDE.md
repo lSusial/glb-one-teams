@@ -24,6 +24,7 @@ KB 글로벌 거점(13개국) 뉴스 데일리. 파이프라인: 수집 → 필�
 | `docs/operations.md` | 배포 대상·채널·자동화 결정, 브로드캐스트 설계, 일일 운영 절차 |
 | `docs/rank_score_spec.md` | 표시 정렬 rank_score 스펙·가중치 튜닝 기록 |
 | `docs/quality_audit_2026-09-18.md` | 품질 감사(P1~P2)·잔여 개선 과제 |
+| `docs/news_quality_roadmap.md` | 뉴스 품질 개선 7개 항목·상태·완료 조건 |
 | `docs/work_log.md` | 작업 이력(요약본) |
 | `mockups/HANDOFF.md` | UI 디자인 시스템·화면별 데이터 계약 |
 
