@@ -22,6 +22,7 @@ KB 글로벌 거점(13개국) 뉴스 데일리. 파이프라인: 수집 → 필�
 | `PLAN.md` | 기획 확정안·비전·로드맵(제품 레이어) |
 | `docs/design.md` | 데이터·AI·카테고리(축 A~E)·화면 구성 요소·미진출국 설계 |
 | `docs/operations.md` | 배포 대상·채널·자동화 결정, 브로드캐스트 설계, 일일 운영 절차 |
+| `docs/pipeline_process.md` | 수집→AI→노출→품질검사→배포 전체 로직·재실행 원칙 |
 | `docs/rank_score_spec.md` | 표시 정렬 rank_score 스펙·가중치 튜닝 기록 |
 | `docs/quality_audit_2026-09-18.md` | 품질 감사(P1~P2)·잔여 개선 과제 |
 | `docs/news_quality_roadmap.md` | 뉴스 품질 개선 7개 항목·상태·완료 조건 |

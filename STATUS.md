@@ -2,7 +2,7 @@
 
 > **최종 갱신 2026-10-01** — 9/29~30 수집분 감사 완료. AI 중복 오묶음 17건을 해제하고 오래된 예고 기사·무관 관련링크를 제거했다. ACTIVE 0건인 국가에는 검증된 50~54점 관심 뉴스 1건을 구분 노출하며, GB·HK·VN·TH 4건 번역 후 14:45 KST Cloudflare Pages 배포·운영 데이터 일치 검증 완료. **10/1 수집분은 아직 없으며, 최신 적재일은 9/30** | For Internal Use Only
 >
-> 기획은 [`PLAN.md`](PLAN.md), 설계는 [`docs/design.md`](docs/design.md), 운영은 [`docs/operations.md`](docs/operations.md), 이력은 [`docs/work_log.md`](docs/work_log.md), UI 사양은 [`mockups/HANDOFF.md`](mockups/HANDOFF.md).
+> 기획은 [`PLAN.md`](PLAN.md), 전체 처리 로직은 [`docs/pipeline_process.md`](docs/pipeline_process.md), 설계는 [`docs/design.md`](docs/design.md), 운영은 [`docs/operations.md`](docs/operations.md), 이력은 [`docs/work_log.md`](docs/work_log.md), UI 사양은 [`mockups/HANDOFF.md`](mockups/HANDOFF.md).
 
 ## 1. 한 줄 요약
 

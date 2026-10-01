@@ -15,7 +15,7 @@ fetch → keyword_filter → dedup ─▶ prefilter → fulltext → rank → ai
 
 - 코어(`run`)는 AI 없이 동작한다 — 수집·필터·중복제거만.
 - AI 단계(`ai`)는 `ANTHROPIC_API_KEY`가 있어야 실행되며, 키가 없으면 안내 후 중단된다(코어에는 영향 없음).
-- 설계: `docs/design.md`, UI 사양: `mockups/HANDOFF.md`, 운영 절차: `docs/operations.md`.
+- 전체 처리 로직: `docs/pipeline_process.md`, 설계: `docs/design.md`, UI 사양: `mockups/HANDOFF.md`, 운영 절차: `docs/operations.md`.
 
 ## 모듈 구성
 

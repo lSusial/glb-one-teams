@@ -1,7 +1,7 @@
 # 설계 — 데이터 · AI · 카테고리 · 화면 구성
 
 > 통합 문서(2026-09-21 현행화). 구 `데이터_AI_카테고리_설계`(6/27) · `데이터_구성요소_정의서`(8/26) · `design_미진출국`(8/21)을 하나로 합치고, 구현으로 대체된 초안 내용은 제거했다.
-> 화면 픽셀·디자인 토큰은 `../mockups/HANDOFF.md`, 랭킹 수식은 `rank_score_spec.md`, 구현 현황은 `../STATUS.md`.
+> 전체 실행 흐름·재시도 원칙은 `pipeline_process.md`, 화면 픽셀·디자인 토큰은 `../mockups/HANDOFF.md`, 랭킹 수식은 `rank_score_spec.md`, 구현 현황은 `../STATUS.md`.
 
 ---
 
