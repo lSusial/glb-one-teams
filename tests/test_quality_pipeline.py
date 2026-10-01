@@ -41,7 +41,8 @@ class SchemaContractTests(unittest.TestCase):
         article_cols = {r[1] for r in conn.execute('PRAGMA table_info(articles_raw)')}
         briefing_cols = {r[1] for r in conn.execute('PRAGMA table_info(country_briefings)')}
         self.assertTrue({
-            'ai_score_factors', 'summary_en', 'title_en', 'event_type', 'source_links',
+            'ai_score_factors', 'market_importance', 'kb_relevance',
+            'summary_en', 'title_en', 'event_type', 'source_links',
             'source_conflict', 'publisher_name',
             'primary_country', 'dup_by_ai', 'korean_fi', 'personnel_move',
             'expanded_summary', 'expanded_summary_en', 'fulltext_status',
@@ -54,6 +55,73 @@ class SchemaContractTests(unittest.TestCase):
         self.assertIsNotNone(conn.execute(
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name='indicator_history'"
         ).fetchone())
+
+
+class RankRerunTests(unittest.TestCase):
+    def setUp(self):
+        self.db = sqlite3.connect(':memory:')
+        self.db.row_factory = sqlite3.Row
+        self.db.executescript('''
+            CREATE TABLE media_sources(source_id INTEGER PRIMARY KEY,
+                primary_country_code TEXT, tier INTEGER, media_name TEXT);
+            INSERT INTO media_sources VALUES(1, 'US', 1, 'Test News');
+            CREATE TABLE articles_raw(article_id INTEGER PRIMARY KEY, source_id INTEGER,
+                title TEXT, summary TEXT, full_text TEXT, link TEXT, publisher_name TEXT,
+                duplicate_of INTEGER, published_at TEXT, llm_prefilter TEXT,
+                ai_score INTEGER, filter_score INTEGER, summary_ko TEXT,
+                expanded_summary TEXT, expanded_summary_en TEXT);
+        ''')
+        self.db.executemany(
+            "INSERT INTO articles_raw VALUES(?,1,?,?,?,?,NULL,NULL,?,'keep',?,?,?, ?, ?)",
+            [
+                (1, 'First', 'old snippet', 'new full text', 'https://example.com/1',
+                 date.today().isoformat(), 60, 10, '기존 요약', '기존 긴 요약', 'old long'),
+                (2, 'Second', 'other snippet', 'other full text', 'https://example.com/2',
+                 date.today().isoformat(), 65, 9, '다른 요약', '다른 긴 요약', 'other long'),
+            ],
+        )
+        self.db.commit()
+        self.addCleanup(self.db.close)
+
+    @staticmethod
+    def response(score_factors=None):
+        return {
+            'score_factors': score_factors or {
+                'directness': 3, 'magnitude': 4, 'urgency': 2, 'novelty': 1,
+            },
+            'title_ko': '새 제목', 'title_en': 'New title',
+            'summary_en': 'A new evidence-based summary.',
+            'topics': ['ECONOMY'], 'event_type': [], 'primary_country': 'US',
+        }
+
+    def test_exact_article_rerank_updates_only_success_and_invalidates_derivatives(self):
+        result = llm_ranker.run_rank(self.db, provider=Provider(self.response()), article_ids=[1])
+        self.assertEqual((result['total'], result['ranked']), (1, 1))
+        first = self.db.execute(
+            'SELECT ai_score, market_importance, kb_relevance, summary_ko, expanded_summary '
+            'FROM articles_raw WHERE article_id=1'
+        ).fetchone()
+        self.assertEqual((first['ai_score'], first['market_importance'], first['kb_relevance']),
+                         (67, 63, 75))
+        self.assertIsNone(first['summary_ko'])
+        self.assertIsNone(first['expanded_summary'])
+        self.assertEqual(self.db.execute(
+            'SELECT ai_score FROM articles_raw WHERE article_id=2'
+        ).fetchone()[0], 65)
+
+    def test_invalid_exact_rerank_preserves_existing_article(self):
+        result = llm_ranker.run_rank(self.db, provider=Provider({}), article_ids=[1])
+        row = self.db.execute(
+            'SELECT ai_score, summary_ko, expanded_summary FROM articles_raw WHERE article_id=1'
+        ).fetchone()
+        self.assertEqual(result['failed'], 1)
+        self.assertEqual(tuple(row), (60, '기존 요약', '기존 긴 요약'))
+
+    def test_empty_exact_scope_does_not_fall_back_to_unscored_queue(self):
+        provider = Provider(self.response())
+        result = llm_ranker.run_rank(self.db, provider=provider, article_ids=[])
+        self.assertEqual(result['total'], 0)
+        self.assertEqual(provider.requests, [])
 
 
 class QualityTests(unittest.TestCase):
@@ -109,6 +177,11 @@ class QualityTests(unittest.TestCase):
 
     def test_rank_score_falls_back_to_legacy_value(self):
         self.assertEqual(llm_ranker._score_from_data({"ai_score": 72}), (72, None))
+
+    def test_rank_dimensions_separate_market_and_kb_relevance(self):
+        self.assertEqual(llm_ranker._score_dimensions({
+            'directness': 3, 'magnitude': 4, 'urgency': 2, 'novelty': 1,
+        }), (63, 75))
 
     def test_invalid_rank_score_is_not_silently_saved_as_50(self):
         self.assertEqual(llm_ranker._score_from_data({}), (None, None))

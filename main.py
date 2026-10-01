@@ -367,7 +367,7 @@ def cmd_dedup_repair(args):
 
 
 def cmd_ai(args):
-    """prefilter → rank → expand → translate → brief → highlights 순서 실행."""
+    """prefilter → fulltext/rank → 상위 후보 재분석 → dedup → 후속 생성 순서 실행."""
     import briefing
     import llm_prefilter
     import llm_ranker
@@ -388,6 +388,19 @@ def cmd_ai(args):
     s2 = _ai_guard(lambda: llm_ranker.run_rank(conn, days=days, use_batch=ub), "ai")
     print(f"   ranked={s2['ranked']} 실패보존={s2.get('failed', 0)} ACTIVE={s2['active']} "
           f"출처충돌={s2.get('source_conflicts', 0)}")
+    print("▶ 상위 후보 본문 추가 확보·재분석...")
+    sp = _ai_guard(
+        lambda: fulltext.run_fulltext(
+            conn, days=days, limit=config.PRIORITY_FULLTEXT_LIMIT,
+            min_score=config.PRIORITY_FULLTEXT_MIN_SCORE,
+        ),
+        "ai",
+    )
+    rerank_ids = sp.get("extracted_ids", [])
+    sr = (_ai_guard(lambda: llm_ranker.run_rank(
+        conn, article_ids=rerank_ids, use_batch=ub,
+    ), "ai") if rerank_ids else {"ranked": 0, "failed": 0})
+    print(f"   본문={sp['extracted']} 재분석={sr['ranked']} 실패보존={sr.get('failed', 0)}")
     print("▶ AI 근접중복 판정(노출 후보 → duplicate_of)...")
     sd = _ai_guard(lambda: llm_dedup.run_dedup(conn, days=days, use_batch=ub), "ai")
     print(f"   중복마킹={sd['marked']}건 (국가 {sd['countries']}, "

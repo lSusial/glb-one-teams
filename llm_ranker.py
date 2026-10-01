@@ -128,6 +128,16 @@ def _score_from_data(data: dict) -> tuple[int | None, dict | None]:
         return None, None
 
 
+def _score_dimensions(factors: dict | None) -> tuple[int | None, int | None]:
+    """4차원 원점수에서 시장 중요도와 KB 관련성을 0~100으로 분리한다."""
+    if not factors:
+        return None, None
+    market = round((factors["magnitude"] * 6 + factors["urgency"] * 5
+                    + factors["novelty"] * 4) / 60 * 100)
+    kb_relevance = factors["directness"] * 25
+    return market, kb_relevance
+
+
 def ensure_columns(conn) -> None:
     db.ensure_columns(conn, "articles_raw", [
         ("ai_score",       "ALTER TABLE articles_raw ADD COLUMN ai_score       INTEGER"),
@@ -158,6 +168,8 @@ def ensure_columns(conn) -> None:
         ("primary_country",   "ALTER TABLE articles_raw ADD COLUMN primary_country   TEXT"),
         # 점수 설명가능성·캘리브레이션용 4차원 원점수(JSON). 과거 행은 NULL 허용.
         ("ai_score_factors", "ALTER TABLE articles_raw ADD COLUMN ai_score_factors TEXT"),
+        ("market_importance", "ALTER TABLE articles_raw ADD COLUMN market_importance INTEGER"),
+        ("kb_relevance", "ALTER TABLE articles_raw ADD COLUMN kb_relevance INTEGER"),
     ])
 
 
@@ -295,11 +307,13 @@ def _source_snippet(row) -> str:
 
 def run_rank(conn, provider: LLMProvider | None = None,
              limit: int | None = None, days: int | None = None,
-             use_batch: bool | None = None, redo_days: int | None = None) -> dict:
+             use_batch: bool | None = None, redo_days: int | None = None,
+             article_ids: list[int] | None = None) -> dict:
     """prefilter keep·미분석 기사를 LLM으로 분석.
 
     days: 지정 시 최근 N일 게시 기사만 처리(전체 백로그 대신 최신치만 — 비용 절감).
     use_batch: None=배치(50% 할인, 기본) / False=동기 호출(디버깅).
+    article_ids: 본문을 새로 확보한 기존 채점 기사만 안전하게 재분석할 때 사용한다.
 
     다출처 종합: keyword_filter.run_dedup()이 만든 duplicate_of 클러스터(대표+형제,
     "같은 사건, 다른 매체")가 config.SYNTH_MIN_SOURCES 이상이면 형제 기사들도 함께
@@ -311,7 +325,12 @@ def run_rank(conn, provider: LLMProvider | None = None,
     system_full = _system_prompt()
     system_light = _system_prompt_light()
 
-    if redo_days:
+    if article_ids is not None:
+        ids = list(dict.fromkeys(int(x) for x in article_ids))
+        placeholders = ",".join("?" for _ in ids) or "NULL"
+        date_clause, params = "", ids
+        rank_cond = f"a.article_id IN ({placeholders}) AND a.duplicate_of IS NULL"
+    elif redo_days:
         # 재랭킹(소급): 창 안의 노출(ACTIVE, ai_score>=임계) 기사만 다시 채점한다.
         # 카테고리 재정의(5)·primary_country 신설(7)을 기존분에 반영할 때만 사용.
         # 미채점 백로그(ai_score IS NULL)는 제외되어 대상이 ACTIVE로 한정된다(비용 통제).
@@ -405,6 +424,7 @@ def run_rank(conn, provider: LLMProvider | None = None,
             stats["failed"] += 1
             log.warning("랭커 응답 무효 — 저장 안 함(article_id=%s)", r["article_id"])
             continue
+        market_importance, kb_relevance = _score_dimensions(score_factors)
         title_ko = str(data.get("title_ko") or "")[:60]
         summary_en = str(data.get("summary_en") or "")[:1500]
         topics = taxonomy.validate(data.get("topics", []))
@@ -424,15 +444,17 @@ def run_rank(conn, provider: LLMProvider | None = None,
 
         cur.execute(
             """UPDATE articles_raw
-               SET ai_score = ?, ai_score_factors = ?, title_ko = ?, title_en = ?, summary_en = ?, topics = ?,
+               SET ai_score = ?, ai_score_factors = ?, market_importance = ?, kb_relevance = ?,
+                   title_ko = ?, title_en = ?, summary_en = ?, topics = ?,
                    event_type = ?, source_links = ?, source_conflict = ?,
                    primary_country = ?, ai_model = ?
                WHERE article_id = ?""",
             (score, json.dumps(score_factors, ensure_ascii=False) if score_factors else None,
+             market_importance, kb_relevance,
              title_ko, title_en, summary_en, ",".join(topics), ",".join(event_types),
              source_links, source_conflict, primary_country, provider.model_id, r["article_id"]),
         )
-        if redo_days:
+        if redo_days or article_ids is not None:
             # 영어 기준본이 바뀌었으므로 한국어 번역·모달요약을 무효화 → translate/expand 재생성
             cur.execute(
                 "UPDATE articles_raw SET summary_ko = NULL, kb_implication = NULL, "

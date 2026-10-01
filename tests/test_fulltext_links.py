@@ -122,6 +122,19 @@ class LinkTests(unittest.TestCase):
         self.assertEqual(second['total'], 0)
         self.assertEqual(tuple(self.fulltext_state(1)), ('extract_failed', 'empty_or_blocked'))
 
+    def test_priority_extraction_uses_score_and_returns_exact_ids(self):
+        self.add(1, 'https://direct/1', score=49, fscore=10)
+        self.add(2, 'https://direct/2', score=70, fscore=1)
+        with patch.object(fulltext, '_extract', side_effect=lambda u: f'text of {u}'):
+            result = fulltext.run_fulltext(self.db, limit=10, days=2, min_score=50)
+        self.assertEqual(result['extracted_ids'], [2])
+        self.assertIsNone(self.db.execute(
+            'SELECT full_text FROM articles_raw WHERE article_id=1'
+        ).fetchone()[0])
+        self.assertIn('direct/2', self.db.execute(
+            'SELECT full_text FROM articles_raw WHERE article_id=2'
+        ).fetchone()[0])
+
 
     def test_rate_limited_links_stay_retryable(self):
         # 429로 중단되면 시도 못 한 기사까지 unresolved_url+시각이 찍혀 3일 재시도 금지 → --days 2 창에서

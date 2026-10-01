@@ -107,10 +107,11 @@ def _process(article_id: int, url: str):
 
 
 def run_fulltext(conn, limit: int | None = None, days: int | None = None,
-                 workers: int | None = None) -> dict:
+                 workers: int | None = None, min_score: int | None = None) -> dict:
     """keep·본문미보유 기사의 원문 본문을 병렬 추출·저장.
 
     days: 지정 시 최근 N일 게시분만(전체 백로그 대신 최신치 — 부하 절감).
+    min_score: 지정 시 이미 채점된 기사 중 해당 점수 이상만 우선 추출한다.
     """
     ensure_columns(conn)
     limit = limit or config.FULLTEXT_LIMIT
@@ -119,6 +120,9 @@ def run_fulltext(conn, limit: int | None = None, days: int | None = None,
     date_clause, params = db.days_clause_now(days)
     retry_before = f"-{int(config.FULLTEXT_RETRY_DAYS)} days"
 
+    score_clause = " AND a.ai_score >= ?" if min_score is not None else ""
+    score_params = [int(min_score)] if min_score is not None else []
+    order_by = "a.ai_score DESC, a.filter_score DESC" if min_score is not None else "a.filter_score DESC"
     rows = conn.execute(
         f"""
         SELECT a.article_id, a.link
@@ -127,14 +131,14 @@ def run_fulltext(conn, limit: int | None = None, days: int | None = None,
           AND a.duplicate_of IS NULL
           AND COALESCE(a.full_text, '') = ''
           AND (a.fulltext_status IS NULL OR a.fulltext_status = 'pending'
-               OR a.fulltext_attempted_at <= datetime('now', ?)){date_clause}
-        ORDER BY a.filter_score DESC
+               OR a.fulltext_attempted_at <= datetime('now', ?)){score_clause}{date_clause}
+        ORDER BY {order_by}
         LIMIT ?
         """,
-        (retry_before, *params, limit),
+        (retry_before, *score_params, *params, limit),
     ).fetchall()
 
-    stats = dict(total=len(rows), extracted=0, resolved=0, failed=0)
+    stats = dict(total=len(rows), extracted=0, extracted_ids=[], resolved=0, failed=0)
     if not rows:
         log.info("본문 추출 대상 없음")
         return stats
@@ -172,6 +176,7 @@ def run_fulltext(conn, limit: int | None = None, days: int | None = None,
                             "WHERE article_id = ?",
                             (text, aid))
                 stats["extracted"] += 1
+                stats["extracted_ids"].append(aid)
             else:
                 cur.execute("UPDATE articles_raw SET fulltext_status='extract_failed', "
                             "fulltext_attempted_at=CURRENT_TIMESTAMP, "

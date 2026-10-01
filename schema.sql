@@ -64,6 +64,8 @@ CREATE TABLE IF NOT EXISTS articles_raw (
     -- AI 분석 (llm_ranker.py)
     ai_score          INTEGER,
     ai_score_factors  TEXT,   -- 점수 산정 4개 요인 JSON
+    market_importance INTEGER, -- 규모·긴급성·신규성 기반 시장 중요도(0~100)
+    kb_relevance      INTEGER, -- 직접성 기반 KB 관련성(0~100)
     summary_ko        TEXT,
     summary_en        TEXT,   -- 영어 기준 요약
     ai_model          TEXT,

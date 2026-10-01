@@ -72,6 +72,8 @@ RANK_LIMIT      = 700        # 한 번 실행에 처리할 최대 기사 수(ran
 # ── 본문 추출(fulltext.py) ───────────────────────────────────────
 # prefilter 통과분만 원문 본문 추출(무료). 스니펫(~141B) 대신 본문으로 rank 품질↑.
 FULLTEXT_LIMIT   = 400       # 한 번 실행에 본문 추출할 최대 기사 수
+PRIORITY_FULLTEXT_LIMIT = 60 # 1차 채점 후 상위 후보 본문 추가 확보 한도
+PRIORITY_FULLTEXT_MIN_SCORE = 50  # 관심 뉴스 하한 이상만 추가 확보·재채점
 FULLTEXT_WORKERS = 12        # 병렬 fetch 수
 FULLTEXT_RETRY_DAYS = 3      # 실패 URL 재시도 간격(매일 같은 페이월·차단 URL 재요청 방지)
 DISPLAY_LINK_RESOLVE_LIMIT = 150  # rank 후 노출 기사 GN 링크 추가 해소 한도(순차 요청·Google 429 방지)
