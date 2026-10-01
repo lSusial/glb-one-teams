@@ -43,6 +43,8 @@
 .pk{position:relative}
 .pk .pin{position:absolute;top:-2px;right:2px;font-size:13px;line-height:1;color:var(--line-2);cursor:pointer;z-index:2;padding:2px}
 .pk .pin.on{color:var(--gold)}
+.watch-badge{display:inline-flex;align-items:center;margin-right:6px;padding:2px 7px;border-radius:999px;
+        background:var(--gold-soft);color:#9A640C;font-size:10px;font-weight:700;vertical-align:2px}
 </style>
 </head>
 <body>
@@ -253,8 +255,11 @@
       const c = e.target.closest('.cc-chip'); if (!c) return; fCat = c.dataset.k; lkPresOpen = false; renderPresence();
     };
 
-    const active = (co.count || 0) > 0;
-    const st = active ? `<span class="dstatus on">${EN?'News':'뉴스'} ${co.count}${EN?'':'건'}</span>` : `<span class="dstatus off">${EN?'Watch':'관찰'}</span>`;
+    const active = (co.count || 0) > 0, watchOnly = co.status === 'WATCH';
+    const st = watchOnly
+      ? `<span class="dstatus off">${EN?'Watch news 1':'관심 뉴스 1건'}</span>`
+      : active ? `<span class="dstatus on">${EN?'News':'뉴스'} ${co.count}${EN?'':'건'}</span>`
+      : `<span class="dstatus off">${EN?'Watch':'관찰'}</span>`;
     const dhead = `
       <div class="dhead">
         <span class="fbar" style="border-left-color:${active?'var(--gold)':'var(--line-2)'}">${svg('flr-'+co.cc.toLowerCase(),40,40,'rflag')}</span>
@@ -278,7 +283,7 @@
     if (rows.length) {
       feed = `<ul class="feed">` + rows.map((a,i) => `
         <li class="fitem" data-i="${i}">
-          <div class="fi-t">${esc(tt(a))}</div>
+          <div class="fi-t">${a.watch?`<span class="watch-badge">${EN?'WATCH':'관심 뉴스'}</span>`:''}${esc(tt(a))}</div>
           ${tq(a)?`<div class="fi-q">${esc(tq(a))}</div>`:''}
           <div class="fi-m"><span class="src">${esc(a.src||'')}</span>${a.d?`<span>${esc(md(a.d))}</span>`:''}
             <span style="margin-left:auto">${svg('ico-chev-r',15,15)}</span></div>

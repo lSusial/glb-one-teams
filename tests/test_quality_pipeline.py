@@ -364,6 +364,18 @@ class QualityTests(unittest.TestCase):
         done = {r[0] for r in self.db.execute('SELECT article_id FROM articles_raw WHERE summary_ko IS NOT NULL')}
         self.assertEqual(done, {1, 2, 3})
 
+    def test_translation_can_be_limited_to_explicit_article_ids(self):
+        self.add(1, score=60)
+        self.add(2, score=60)
+        self.db.execute("UPDATE articles_raw SET summary_ko=NULL, title_ko=NULL")
+        self.db.commit()
+        result = llm_translate.run_translate(
+            self.db, Provider({'title_ko': '제목', 'summary': '요약'}), article_ids=[2])
+        self.assertEqual(result['total'], 1)
+        done = {r[0] for r in self.db.execute(
+            'SELECT article_id FROM articles_raw WHERE summary_ko IS NOT NULL')}
+        self.assertEqual(done, {2})
+
     def test_superseded_story_is_detected(self):
         items = [
             (1, '2026-09-27', "India's 3-day bank strike may delay September salaries"),
@@ -421,6 +433,19 @@ class QualityTests(unittest.TestCase):
                 'summary_en': 'The July meeting minutes show board members discussed accelerating interest rate increases as inflation pressures persist.'}
         self.assertFalse(export_json._same_story_for_link(rep, other))
         self.assertTrue(export_json._same_story_for_link(rep, same))
+
+    def test_country_story_member_is_validated_before_becoming_related_link(self):
+        rep = {'title': 'Nifty Bank crashes 1,800 points in 2 days and slips below 54K',
+               'title_en': "India's Nifty Bank index crashes below 54K on RBI rate-hike concerns",
+               'summary_en': "India's Nifty Bank index fell 1% to 53,786 on Tuesday, marking its lowest level in four months, as investors braced for potential RBI rate hikes ahead of the central bank's October monetary policy meeting. Rising oil and food prices, combined with Fed rate hikes, have pushed the RBI toward tightening.",
+               'title_ko': '인도 은행지수 하락', 'link': 'https://x/rep', 'media_name': 'A'}
+        unrelated = {'title': 'Rupee recoups intraday losses as RBI intervenes via dollar sales',
+                     'title_en': 'RBI dollar sales help rupee recover intraday losses',
+                     'summary_en': "The Indian rupee reversed intraday weakness after the Reserve Bank of India intervened by selling dollars in the foreign exchange market. The RBI's action stabilized the currency following earlier depreciation pressure. Such interventions are routine RBI practice to manage rupee volatility and support exchange-rate stability.",
+                     'title_ko': '루피 낙폭 회복', 'link': 'https://x/other', 'media_name': 'B'}
+        self.assertEqual(
+            [x['u'] for x in export_json._related_links(rep, None, [], [unrelated])],
+            ['https://x/rep'])
 
     def test_no_news_signal_is_unknown(self):
         self.assertEqual(export_json._signal_band(None), 'unknown')

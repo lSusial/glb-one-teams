@@ -76,9 +76,12 @@ def _snapshot_date(conn=None, date: str | None = None) -> str:
     if date:
         return date
     if conn is not None:
-        row = conn.execute(
-            "SELECT started_at FROM fetch_runs ORDER BY run_id DESC LIMIT 1"
-        ).fetchone()
+        try:
+            row = conn.execute(
+                "SELECT started_at FROM fetch_runs ORDER BY run_id DESC LIMIT 1"
+            ).fetchone()
+        except Exception:
+            row = None
         if row and row["started_at"]:
             try:
                 dt = datetime.strptime(row["started_at"], "%Y-%m-%d %H:%M:%S")
@@ -459,6 +462,8 @@ def _related_links(a, synth_links, siblings, members) -> list[dict]:
     for x in siblings:
         add(x["t"], x["u"], x["src"])
     for m in members:
+        if not _same_story_for_link(a, m):
+            continue
         m_keys = m.keys()
         m_title = (m["title_ko"] if "title_ko" in m_keys else None) or m["title"]
         add(m_title, m["link"], m["media_name"])
@@ -632,6 +637,52 @@ _SOCIETY_ACTIVE_FLOOR = config.SOCIETY_ACTIVE_FLOOR   # 사회뉴스 전용 노�
 _SOCIETY_MAX_PER = 3         # 국가당 되살릴 사회기사 최대 수
 
 
+def country_watch_candidate_ids(conn, days: int = 1) -> dict[str, int]:
+    """ACTIVE가 0건인 진출국별 50~54점 관심 기사 한 건을 고른다."""
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(articles_raw)")}
+    media_cols = {r[1] for r in conn.execute("PRAGMA table_info(media_sources)")}
+    title_en = "a.title_en" if "title_en" in cols else "NULL"
+    source_ok = "COALESCE(a.source_conflict, '') = ''" if "source_conflict" in cols else "1=1"
+    body_ok = "COALESCE(a.full_text, '') <> ''" if "full_text" in cols else "0"
+    tier = "m.tier" if "tier" in media_cols else "1"
+    link_excl = _ARCHIVE_LINK_EXCL if "link" in cols else ""
+    dc, params = _date_clause(days)
+    active_ccs = {r[0] for r in conn.execute(
+        f"""SELECT DISTINCT {db.effective_country_expr()}
+            FROM articles_raw a JOIN media_sources m ON m.source_id=a.source_id
+            WHERE a.duplicate_of IS NULL
+              AND ((a.ai_score >= ?{dc})
+                   OR (a.topics LIKE '%SOCIETY%' AND a.ai_score >= ?{dc}))""",
+        (config.AI_SCORE_ACTIVE_THRESHOLD, *params,
+         config.SOCIETY_ACTIVE_FLOOR, *params))}
+    rows = conn.execute(
+        f"""SELECT a.article_id, {db.effective_country_expr()} AS cc,
+                   a.title, a.title_ko, {title_en} AS title_en, a.published_at,
+                   a.ai_score, {tier} AS tier
+            FROM articles_raw a JOIN media_sources m ON m.source_id=a.source_id
+            WHERE a.duplicate_of IS NULL
+              AND a.ai_score >= ? AND a.ai_score < ?{dc}
+              AND {source_ok}
+              AND COALESCE(a.summary_en, '') <> ''
+              AND ({body_ok} OR {tier} <= 1)
+              {link_excl}
+            ORDER BY a.ai_score DESC, tier ASC, a.published_at DESC""",
+        (config.COUNTRY_WATCH_FLOOR, config.AI_SCORE_ACTIVE_THRESHOLD, *params),
+    ).fetchall()
+    out = {}
+    as_of = _snapshot_date(conn)
+    for r in rows:
+        cc = r["cc"]
+        if cc not in _FLAGS or cc in active_ccs or cc in out:
+            continue
+        if llm_dedup.expired_preview_ids(
+                [(r["article_id"], r["published_at"],
+                  r["title_ko"], r["title_en"], r["title"])], as_of):
+            continue
+        out[cc] = r["article_id"]
+    return out
+
+
 def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     _ensure_ai_columns(conn)
     dc, dparams = _date_clause(days)   # 현지언론 = 전일+당일 (max-1일 이후)
@@ -663,7 +714,9 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
 
     cm = ranking.cluster_sizes(conn)   # 표시 정렬용 복합 rank_score 재료(export 1회 계산)
     siblings_map = _story_links_map(conn)   # 모달 관련 기사(같은 사건) 재료
+    watch_candidates = country_watch_candidate_ids(conn, days) if active_only else {}
     for cc, flag in _FLAGS.items():
+        watch_ids = set()
         rows = conn.execute(
             f"""
             SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en,
@@ -702,8 +755,29 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                      if a["article_id"] not in have and "SOCIETY" in (a["topics"] or "")][:_SOCIETY_MAX_PER]
             rows = rows + extra
 
+            # 정상 ACTIVE가 한 건도 없는 국가만 50~54점 후보 중 1건을 '관심 뉴스'로 노출한다.
+            # 빈 화면을 채우려고 전체 임계를 낮추지 않고, 본문 확보 또는 Tier 1 출처라는
+            # 최소 근거가 있으며 출처 충돌·번역 누락이 없는 기사만 허용한다.
+            if not rows and cc in watch_candidates:
+                watch_rows = conn.execute(
+                    f"""
+                    SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language,
+                           a.summary_ko, a.summary_en, a.expanded_summary, a.expanded_summary_en,
+                           a.event_type, a.personnel_move, m.tier, a.topics, a.link,
+                           a.published_at, a.ai_score, a.source_links, a.korean_fi,
+                           {db.publisher_expr()} AS media_name, m.primary_country_code cc
+                    FROM articles_raw a
+                    JOIN media_sources m ON m.source_id = a.source_id
+                    WHERE a.article_id = ?
+                    """,
+                    (watch_candidates[cc],),
+                ).fetchall()
+                rows = watch_rows[:config.COUNTRY_WATCH_MAX]
+                watch_ids = {a["article_id"] for a in rows}
+
         articles = []
         for i, a in enumerate(rows):
+            is_watch = a["article_id"] in watch_ids
             codes = [c for c in (a["topics"] or "").split(",") if c]
             # related links: 같은 사건을 다룬 실제 기사만(다출처 종합 소스 → duplicate_of 형제 →
             # 피드 스토리 묶음). 같은 국가·토픽이 겹친다는 이유로 무관한 기사를 붙이지 않는다.
@@ -719,7 +793,8 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
             articles.append({
                 # 55점 미만으로 뜨는 건 오직 SOCIETY 예외 경로뿐 → 사회 탭에만 노출(정책 등 오염 방지)
                 **({"c": "society", "c2": ""}
-                   if (active_only and a["ai_score"] is not None and a["ai_score"] < config.AI_SCORE_ACTIVE_THRESHOLD)
+                   if (active_only and not is_watch and a["ai_score"] is not None
+                       and a["ai_score"] < config.AI_SCORE_ACTIVE_THRESHOLD)
                    else taxonomy.cat_fields(codes)),
                 "src": a["media_name"],
                 "d": (a["published_at"] or "")[:10],
@@ -732,6 +807,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                 "u": a["link"],
                 "rl": rl,
                 "score": a["ai_score"],
+                "watch": is_watch,
                 "rank_score": ranking.rank_score(a, cm.get(a["article_id"], 0)),
                 "kfi": [c for c in (a["korean_fi"] or "").split(",") if c],
                 "dupn": dedup_n.get(a["article_id"], 1),  # 묶인 유사기사 수(1=단독)
@@ -742,7 +818,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
             "cc": cc,
             "flag": flag,
             "presence": "진출",                 # KB 진출국 — docs/design_미진출국.md
-            "status": "ACTIVE" if articles else "SOURCE WATCH",
+            "status": "WATCH" if watch_ids else "ACTIVE" if articles else "SOURCE WATCH",
             "count": len(articles),
             "kfi_count": kfi_count,              # 한국계 금융기관 태깅된 기사 수(거점 커버리지 배지용)
             "brief": briefs.get(cc),            # 전일+당일 AI 브리핑(한/영) — 없으면 null

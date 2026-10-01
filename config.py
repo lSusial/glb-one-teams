@@ -91,6 +91,8 @@ SYNTH_SNIPPET_MAXLEN = 600    # 다출처 프롬프트에서 소스 1건당 본�
 # ai_score(0~100) 가 이 값 이상이면 UI에서 ACTIVE(노출), 미만은 SOURCE WATCH
 # 60→55: 임계 바로 아래(50~59)에 준수한 거시·금융 뉴스가 몰려 있어 노출 폭을 넓힘
 AI_SCORE_ACTIVE_THRESHOLD = 55
+COUNTRY_WATCH_FLOOR = 50       # ACTIVE가 0건인 국가만 관심 기사 1건을 허용하는 하한
+COUNTRY_WATCH_MAX = 1
 
 # 국가 브리핑에 투입할 기사 상한(국가·기간당)
 BRIEFING_MAX_ARTICLES = 25

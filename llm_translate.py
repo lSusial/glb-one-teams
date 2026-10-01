@@ -58,7 +58,8 @@ def _user(summary, title=""):
 
 def run_translate(conn, provider: LLMProvider | None = None,
                   limit: int | None = None, days: int | None = None,
-                  use_batch: bool | None = None) -> dict:
+                  use_batch: bool | None = None,
+                  article_ids: list[int] | None = None) -> dict:
     """표시분(ACTIVE) 중 한쪽 언어가 비어있는 기사를 번역해 양 언어를 채운다.
 
     use_batch: None=배치(50% 할인, 기본) / False=동기 호출(디버깅).
@@ -71,6 +72,11 @@ def run_translate(conn, provider: LLMProvider | None = None,
 
     # 노출 대상 = ACTIVE(진출국 기준) 또는 미진출국의 채점 완료분(임계 없이 노출됨).
     np_in = ",".join("?" * len(config.NON_PRESENCE_CODES))
+    import export_json
+    # 국가 화면은 항상 전일+당일(days=1) 기준이므로, AI 처리창(--days 2)과 무관하게
+    # 실제 export에 선택되는 관심 기사만 번역한다.
+    watch_ids = set(export_json.country_watch_candidate_ids(conn, 1).values())
+    watch_in = ",".join("?" * len(watch_ids)) or "NULL"
 
     rows = conn.execute(
         f"""
@@ -83,7 +89,8 @@ def run_translate(conn, provider: LLMProvider | None = None,
              OR (m.primary_country_code IN ({np_in}) AND a.ai_score IS NOT NULL)
              -- 55점 미만이어도 화면에 나가는 경로: 국가탭 사회 예외·인사동향·한국계 금융기관(export_json)
              OR (a.topics LIKE '%SOCIETY%' AND a.ai_score >= ?)
-             OR (a.ai_score IS NOT NULL AND (a.personnel_move = 1 OR COALESCE(a.korean_fi, '') <> '')) )
+             OR (a.ai_score IS NOT NULL AND (a.personnel_move = 1 OR COALESCE(a.korean_fi, '') <> ''))
+             OR a.article_id IN ({watch_in}) )
           AND ( (COALESCE(a.summary_en,'')  <> '' AND COALESCE(a.summary_ko,'') = '')
              OR (COALESCE(a.summary_ko,'')  <> '' AND COALESCE(a.summary_en,'') = '')
              OR (COALESCE(a.summary_ko,'')  <> '' AND COALESCE(a.title_ko,'')   = '') )
@@ -92,8 +99,12 @@ def run_translate(conn, provider: LLMProvider | None = None,
         LIMIT ?
         """,
         (config.AI_SCORE_ACTIVE_THRESHOLD, *config.NON_PRESENCE_CODES, config.SOCIETY_ACTIVE_FLOOR,
+         *watch_ids,
          *params, limit),
     ).fetchall()
+    if article_ids:
+        allowed = {int(x) for x in article_ids}
+        rows = [r for r in rows if int(r["article_id"]) in allowed]
 
     stats = dict(total=len(rows), ko=0, en=0)
 

@@ -298,7 +298,9 @@ def cmd_translate(args):
     import llm_translate
     conn = db.open_conn()
     ub = _batch_flag(args)
-    s = _ai_guard(lambda: llm_translate.run_translate(conn, days=getattr(args, "days", None), use_batch=ub), "translate")
+    s = _ai_guard(lambda: llm_translate.run_translate(
+        conn, days=getattr(args, "days", None), use_batch=ub,
+        article_ids=getattr(args, "article_id", None)), "translate")
     print(f"[translate] 대상={s['total']}  KO채움={s['ko']}  EN채움={s['en']}")
 
 
@@ -531,6 +533,8 @@ def main():
     exp.add_argument("--sync", action="store_true", help=_SYNC_HELP)
     trn = sub.add_parser("translate", help="영어 기준본 → 한국어 번역 (표시분, 저비용)")
     trn.add_argument("--days", type=int, help="최근 N일만")
+    trn.add_argument("--article-id", type=int, action="append",
+                     help="지정한 기사 ID만 번역(여러 번 지정 가능)")
     trn.add_argument("--sync", action="store_true", help=_SYNC_HELP)
     rdd = sub.add_parser("dedup-repair", help="저장된 AI 중복그룹 소급 보정(오묶음 해제·대표 재선출, 기본 dry-run)")
     rdd.add_argument("--apply", action="store_true", help="백업 후 실제 반영")
