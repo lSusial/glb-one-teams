@@ -57,6 +57,52 @@ class SchemaContractTests(unittest.TestCase):
         ).fetchone())
 
 
+class ArchiveLinkExportTests(unittest.TestCase):
+    """태그/토픽 아카이브 링크는 국가탭뿐 아니라 모니터링·홈 핵심뉴스·미진출국 카드에서도 빠져야 한다.
+    2026-10-01 배포본: 국가탭에서 걸러진 인옥스 IPO(ET '/topic/pvr-inox-compensation-order')가 모니터링 탭에 남음."""
+
+    def setUp(self):
+        self.db = sqlite3.connect(':memory:')
+        self.db.row_factory = sqlite3.Row
+        self.addCleanup(self.db.close)
+        self.db.executescript((Path(__file__).parents[1] / 'schema.sql').read_text(encoding='utf-8'))
+        self.db.executemany(
+            'INSERT INTO media_sources(source_id, media_name, primary_country_code, language, tier) VALUES(?,?,?,?,?)',
+            [(1, 'Economic Times', 'IN', 'en', 1), (2, 'GNews Philippines', 'PH', 'en', 2)])
+        self.db.executemany('INSERT INTO media_source_feeds(feed_id, source_id, feed_url, feed_section) VALUES(?,?,?,?)',
+                            [(1, 1, 'https://et/rss', 'main'), (2, 2, 'https://gn/ph', 'main')])
+        today = date.today().isoformat()
+        rows = [
+            (1, 1, 'Inox Clean Energy to file IPO', 'https://economictimes.indiatimes.com/topic/pvr-inox-compensation-order'),
+            (2, 1, 'RBI holds repo rate steady', 'https://economictimes.indiatimes.com/news/economy/rbi-holds/articleshow/1.cms'),
+            (3, 2, 'BSP tightens casino payment rules', 'https://www.inquirer.net/tags/casino'),
+            (4, 2, 'BSP keeps policy rate unchanged', 'https://www.inquirer.net/business/bsp-rate'),
+        ]
+        for aid, src, title, link in rows:
+            self.db.execute(
+                "INSERT INTO articles_raw(article_id, feed_id, source_id, title, link, content_hash, published_at,"
+                " ai_score, ai_model, topics, event_type, summary_en, summary_ko, title_ko, title_en)"
+                " VALUES(?,?,?,?,?,?,?,70,'test:model','MARKETS','REG',?,?,?,?)",
+                (aid, src, src, title, link, f'h{aid}', today, f'{title} summary', f'{title} 요약', title, title))
+        self.db.commit()
+
+    def links(self, obj):
+        if isinstance(obj, dict):
+            return ([obj['u']] if 'u' in obj else []) + [u for v in obj.values() for u in self.links(v)]
+        if isinstance(obj, list):
+            return [u for v in obj for u in self.links(v)]
+        return []
+
+    def test_monitoring_home_and_non_presence_cards_skip_archive_links(self):
+        for name, out in (('topics', export_json._compute_topics(self.db)),
+                          ('top_news', export_json._compute_top_news(self.db)),
+                          ('non_presence', export_json._compute_non_presence(self.db))):
+            with self.subTest(name):
+                links = self.links(out)
+                self.assertTrue(links, name)
+                self.assertFalse([u for u in links if '/topic/' in u or '/tags/' in u], name)
+
+
 class RankRerunTests(unittest.TestCase):
     def setUp(self):
         self.db = sqlite3.connect(':memory:')
