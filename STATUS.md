@@ -115,7 +115,7 @@ fetch → keyword_filter(통과≥2, SOCIETY 독립경로) → dedup → prefilt
 ## 7. 다음 과제 (우선순위)
 
 1. **다음 정기 실행 검증** — 9/29 배포 이후 머지분 첫 실행. 링크 해소(429 발생 위치·소요시간), 4차원 점수 분포·국가별 통과율, 표시 감사 19항목, `eval_dedup_guard.py` 임계 재측정.
-2. **정기 자동화·실패 알림** — 맥북 launchd로 수집→분석→감사→배포 전 산출 자동화 + Telegram 실패 알림(`docs/operations.md` §4, 기술부채 점검 1순위). 실행을 건너뛰면 그 기간이 영구 공백.
+2. ~~정기 자동화·실패 알림~~ **(10/6 구현)**: `scripts/daily_pipeline.sh` + launchd(`com.glbteam.dailypipeline`, 매일 01:00 KST)로 수집→AI→지표→배포 자동 실행, 중복 실행 방지(PID 락)·일일 DB 백업·로그 보관 포함. 실패 시 Telegram 알림 코드는 넣었으나 **현재 이 네트워크에서 Telegram API가 TLS 단계에서 차단돼 있어(`docs/operations.md` §4) 당분간 `data/logs/pipeline-*.log` 직접 확인 필요**. 상세는 `docs/operations.md` §4.
 3. **4차원 ai_score·rank_score 재튜닝** — `market_importance`·`kb_relevance` 분포를 함께 측정하고 라벨을 확대해 가중치 조정.
 5. **시연 준비** — #14 문구 반영, #12 결정.
 6. **Telegram 정기 발송** — 채널·독자 결정 후 파이프라인 연결.

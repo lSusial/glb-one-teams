@@ -68,8 +68,18 @@ wrangler pages deploy data/export --project-name kb-global-daily --commit-dirty=
 
 권장 로드맵: **단기 A**(수일 내, 정기 자동화 과제 즉시 해소) → **중기 C+D**(맥북 의존 제거) → B는 백업 옵션. 브리프가 매일 05:00 KST 생성으로 확정돼 자동화는 사실상 필수.
 
+**A안 구현 완료(2026-10-06)**: `scripts/daily_pipeline.sh`가 매일 01:00 KST에 `main.py run` → `main.py ai --days 2` → `main.py indicators` → `deploy_web.sh` 순서로 실행. launchd(`com.glbteam.dailypipeline`)가 `caffeinate -s`로 맥북 절전을 막고 트리거한다.
+
+- 설치: `./scripts/install_launchd.sh` (plist를 `~/Library/LaunchAgents/`에 설치하고 `launchctl load`)
+- 수동 전체 실행: `./scripts/daily_pipeline.sh`
+- 중복 실행 방지: `data/logs/.pipeline.pid` — 전날 실행(배치 큐 지연 등)이 안 끝났으면 건너뜀
+- 단계별 실패 시 즉시 중단하고 `scripts/tg_notify.py`로 Telegram 알림 시도(실패해도 파이프라인 자체는 계속 중단 상태로 로그만 남김)
+- 백업: 실행마다 `data/backups/news.db.daily-*` 생성, 최근 5개만 보관
+- 로그: `data/logs/pipeline-*.log`(파이프라인 전체 출력, 14일 보관), `data/logs/launchd.out/.err`(launchd 자체 로그)
+- **알려진 제약(2026-10-06)**: 이 맥북 네트워크에서 Telegram API(`api.telegram.org`)가 TLS Client Hello 직후 연결 리셋 — SNI 기반 차단으로 추정(구글 등 일반 인터넷은 정상). `tg_notify.py`는 그대로 둬서 네트워크가 풀리면 바로 동작하지만, **지금은 실패 알림이 안 가므로 `data/logs/pipeline-*.log`를 직접 확인해야 한다.**
+
 | 결정 | 결론 | 담당 | 기한 |
 |---|---|---|---|
 | 1. 주 대상 독자 | | | |
 | 2. 배포 채널 | | | |
-| 3. 운영 인프라 | | | |
+| 3. 운영 인프라 | A안(맥북 launchd) 구현 완료, 가동은 10/6부터 | | |

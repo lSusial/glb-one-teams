@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  glb-one-teams 일일 파이프라인 launchd 작업 정의.
+  설치: ./scripts/install_launchd.sh
+  제거: launchctl unload ~/Library/LaunchAgents/com.glbteam.dailypipeline.plist
+  로그: data/logs/pipeline-*.log(파이프라인 내용), data/logs/launchd.out|err(launchd 자체 stdout/stderr)
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.glbteam.dailypipeline</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/caffeinate</string>
+        <string>-s</string>
+        <string>__REPO_DIR__/scripts/daily_pipeline.sh</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__REPO_DIR__</string>
+
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>1</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <key>StandardOutPath</key>
+    <string>__REPO_DIR__/data/logs/launchd.out</string>
+    <key>StandardErrorPath</key>
+    <string>__REPO_DIR__/data/logs/launchd.err</string>
+
+    <key>RunAtLoad</key>
+    <false/>
+</dict>
+</plist>
