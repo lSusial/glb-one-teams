@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 
 import config
 import db
@@ -40,11 +41,24 @@ _ALLOWED_PRIMARY = set(kb_network.KB_NETWORK.keys()) | set(config.NON_PRESENCE_C
 _PRIMARY_COUNTRY_CODES = ", ".join(
     list(kb_network.KB_NETWORK.keys()) + list(config.NON_PRESENCE_CODES) + ["KR"]
 )
+_ISO2_RE = re.compile(r"[A-Z]{2}")
 
 
 def _valid_primary_country(v) -> str | None:
+    """목록 밖 코드는 두 가지로 갈린다 — 형식만 보고 구분한다(프롬프트 지시만으로는
+    모델이 이탈리아 같은 특정국을 GLOBAL 대신 "IT"로 내는 경우가 잦았다, 2026-10-06).
+
+    빈 값/형식이 다른 응답 -> None(모름) -> 표시 시 매체 국적 폴백(원래 설계, 피드백 7).
+    ISO2 형식인데 우리 목록에 없는 코드(예: "IT") -> 이미 특정국이 식별된 것이므로
+    매체 국적으로 새지 않고 GLOBAL로 — 영국 매체가 쓴 이탈리아 은행 합병 기사가
+    GB 국가탭에 뜨던 문제(Intesa/Monte dei Paschi)가 이 경로였다.
+    """
     cc = str(v or "").strip().upper()
-    return cc if cc in _ALLOWED_PRIMARY else None
+    if cc in _ALLOWED_PRIMARY:
+        return cc
+    if _ISO2_RE.fullmatch(cc):
+        return "GLOBAL"
+    return None
 
 
 # 카테고리 중복 시 우선순위 판단기준(피드백 첨부 "판단 기준" 표) — full/light 공통.
@@ -67,14 +81,23 @@ _PRIMARY_COUNTRY_BLOCK = (
     "(its subject), which may differ from the outlet's home country. Example: a Xinhua (Chinese "
     "outlet) story about Indonesia's central bank -> \"ID\". Choose ONE from: "
     + _PRIMARY_COUNTRY_CODES
-    + ". If the article is genuinely global or about a country not in this list, output \"GLOBAL\"."
+    + ". These are the ONLY valid codes — never output a country code that is not in this list, "
+    "even if you know the article's real subject country precisely. If the subject country is "
+    "not in the list (e.g. an Italian bank merger reported by Reuters UK, or a German election "
+    "covered by a US outlet), output \"GLOBAL\" — do NOT default to the outlet's own country and "
+    "do NOT invent the subject country's own code."
 )
 
 _SCORE_FACTORS_BLOCK = (
     "\n\nscore_factors — score each dimension independently as an INTEGER 0-4; do not choose "
     "the same value by default:\n"
     "- directness: 0 unrelated, 1 indirect/global context, 2 relevant to the market, "
-    "3 direct host-market banking impact, 4 direct KB entity/host authority action.\n"
+    "3 a standalone local-media story squarely about the host market's banking/financial "
+    "sector or a market-moving macro event -- e.g. a central bank/regulator grants or revokes "
+    "a banking licence, a bank or asset manager's M&A/market expansion, a trade/export/import "
+    "data release, a stock-market move, an IPO filing or bond-market development; count these "
+    "as 3 even with no KB mention -- 4 names a KB entity or a host authority action directed "
+    "at KB specifically.\n"
     "- magnitude: 0 negligible, 1 small, 2 meaningful, 3 market-wide, 4 systemic/sovereign.\n"
     "- urgency: 0 no action horizon, 1 long-term, 2 monitor this week, 3 brief today, "
     "4 immediate response required.\n"
@@ -84,7 +107,7 @@ _SCORE_FACTORS_BLOCK = (
     "so assess the four factors carefully and independently."
 )
 
-_SCORE_FACTOR_WEIGHTS = {"directness": 7, "magnitude": 6, "urgency": 5, "novelty": 4}
+_SCORE_FACTOR_WEIGHTS = {"directness": 8, "magnitude": 6, "urgency": 5, "novelty": 4}
 
 
 def _checked_title_en(title_en: str, title: str, summary_en: str) -> str:
@@ -108,8 +131,13 @@ def _checked_title_ko(title_ko: str, title: str, title_en: str, summary_en: str)
 def _score_from_data(data: dict) -> tuple[int | None, dict | None]:
     """4개 품질 차원을 결정적 점수로 합산한다. 구 응답은 ai_score로 호환한다.
 
-    8 + 7D + 6M + 5U + 4N: 전부 2점인 일반 관심기사는 52점, 직접적·중대한
-    당일 조치(3,3,3,3)는 74점, 전 차원 최고는 96점이다.
+    8 + 8D + 6M + 5U + 4N: 전부 2점인 일반 관심기사는 54점, 직접적·중대한
+    당일 조치(3,3,3,3)는 77점, 전 차원 최고는 100점이다. directness 가중치는
+    2026-10-06에 7→8로 올렸다 — "KB 자체 영업에 영향"까지 요구하면 현지
+    은행업·시장 전체를 뒤흔드는 뉴스조차 directness가 낮게 나와 임계(55점) 아래로
+    몰렸다(홍콩 수출입 급증 기사가 directness=1로 46점). directness 3을 "현지
+    매체가 독립 기사로 다룬 은행업/금융권 사건"으로 넓히고(KB 언급 불필요),
+    가중치를 올려 3점 자체가 ACTIVE 문턱을 안정적으로 넘도록 했다.
     """
     raw = data.get("score_factors")
     if isinstance(raw, dict):
@@ -213,25 +241,25 @@ def _system_prompt() -> str:
         + _TOPIC_DISAMBIG_BLOCK
         + _PRIMARY_COUNTRY_BLOCK
         + _SCORE_FACTORS_BLOCK
-        + "\n\nai_score rubric — use the FULL 0-100 range and DIFFERENTIATE. Do NOT cluster scores "
-        "in a narrow band: most routine articles belong below 55, and a typical day yields only a "
-        "handful of 80+ items. Score THIS article's specific importance (directness × magnitude × "
-        "novelty), not its topic in general — two articles on the same theme can differ by 20+ points.\n"
-        "85-100  CRITICAL · DIRECT: a KB branch/subsidiary is materially and directly affected NOW —\n"
-        "  host-country central-bank rate decision, capital controls, KB entity under regulatory\n"
-        "  action/sanction, sovereign downgrade in a KB market, FX convertibility crisis,\n"
-        "  failure/run at a KB counterparty. (rare — only a few per day across all markets)\n"
-        "65-84   IMPORTANT · ACTIONABLE: a banker at THIS hub must brief/act within the day —\n"
-        "  a large NON-ROUTINE host-market move (sharp FX break, new local banking regulation,\n"
-        "  banking-sector M&A/stress in KB geography, coup/sanctions risk in a KB market).\n"
-        "45-64   CONTEXTUAL: worth knowing, no near-term action — foreign central-bank path\n"
-        "  (Fed/BoJ/ECB) reaching this market indirectly, ROUTINE currency fluctuation,\n"
-        "  regional macro, a sector/policy trend relevant to KB but not urgent.\n"
-        "25-44   BACKGROUND: general or global trends only indirectly relevant to KB geographies;\n"
-        "  developed-market macro far from a KB market; broad industry research.\n"
-        "0-24    NOISE / UNRELATED: sports, entertainment, unrelated crime, non-financial local events.\n"
-        "Anti-clustering rule: if you are about to score 60-69, re-check — is it truly actionable "
-        "(→65+) or merely contextual (→45-60)? Avoid defaulting to the middle."
+        + "\n\nai_score rubric (fallback only — used if score_factors is missing/invalid; keep it "
+        "consistent with the score_factors directions above, do not contradict them). Use the "
+        "FULL 0-100 range and DIFFERENTIATE: most routine articles belong below 55, and a typical "
+        "day yields only a handful of 80+ items.\n"
+        "85-100  a KB entity or host regulator names KB directly, OR a systemic/sovereign shock "
+        "hits the host market right now (capital controls, sovereign downgrade, FX convertibility "
+        "crisis, a bank run). Rare — only a few per day across all markets.\n"
+        "65-84   a standalone local-media story squarely about the host market's banking/financial "
+        "sector or a market-wide move — a central bank/regulator grants or revokes a licence, a "
+        "bank/asset-manager M&A or expansion, a trade/export/import data release, a large stock-"
+        "market move, an IPO filing, a bond-market development — even with NO KB mention.\n"
+        "45-64   worth knowing, no near-term action — a foreign central bank's path (Fed/BoJ/ECB) "
+        "reaching this market only indirectly, routine currency fluctuation, a general sector/"
+        "policy trend.\n"
+        "25-44   general or global trends only indirectly relevant to this market; developed-"
+        "market macro far away; broad industry research.\n"
+        "0-24    sports, entertainment, unrelated crime, non-financial local events.\n"
+        "Anti-clustering rule: if you are about to score 60-69, re-check — is it truly a standalone "
+        "banking/market story (→65+) or just general context (→45-60)? Avoid defaulting to the middle."
         + _STYLE_AND_SYNTH_BLOCK
     )
 

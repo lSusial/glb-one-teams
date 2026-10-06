@@ -7,6 +7,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import briefing
+import config
 import db
 import export_json
 import llm_dedup
@@ -148,7 +149,7 @@ class RankRerunTests(unittest.TestCase):
             'FROM articles_raw WHERE article_id=1'
         ).fetchone()
         self.assertEqual((first['ai_score'], first['market_importance'], first['kb_relevance']),
-                         (67, 63, 75))
+                         (70, 63, 75))
         self.assertIsNone(first['summary_ko'])
         self.assertIsNone(first['expanded_summary'])
         self.assertEqual(self.db.execute(
@@ -218,8 +219,16 @@ class QualityTests(unittest.TestCase):
         score, factors = llm_ranker._score_from_data({"score_factors": {
             "directness": 3, "magnitude": 2, "urgency": 3, "novelty": 2,
         }, "ai_score": 62})
-        self.assertEqual(score, 64)
+        self.assertEqual(score, 67)
         self.assertEqual(factors["directness"], 3)
+
+    def test_standalone_banking_sector_story_crosses_active_threshold(self):
+        """2026-10-06: directness=3(KB 미언급, 현지 은행업 단독 기사)이 통상적인
+        magnitude·urgency·novelty와 맞물리면 ACTIVE 임계(55)를 넘어야 한다."""
+        score, _ = llm_ranker._score_from_data({"score_factors": {
+            "directness": 3, "magnitude": 2, "urgency": 1, "novelty": 2,
+        }})
+        self.assertGreaterEqual(score, config.AI_SCORE_ACTIVE_THRESHOLD)
 
     def test_rank_score_falls_back_to_legacy_value(self):
         self.assertEqual(llm_ranker._score_from_data({"ai_score": 72}), (72, None))
@@ -231,6 +240,23 @@ class QualityTests(unittest.TestCase):
 
     def test_invalid_rank_score_is_not_silently_saved_as_50(self):
         self.assertEqual(llm_ranker._score_from_data({}), (None, None))
+
+    def test_off_list_country_code_resolves_to_global_not_media_fallback(self):
+        """2026-10-06: 영국 매체(Reuters UK)가 쓴 이탈리아 은행 합병 기사에서 모델이
+        목록에 없는 'IT'를 내자 매체 국적(GB)으로 새어 GB 탭에 뜬 문제. ISO2 형식의
+        목록 밖 코드는 '특정국은 식별됐다'는 뜻이므로 GLOBAL로 처리해 매체 국적
+        폴백을 막는다."""
+        self.assertEqual(llm_ranker._valid_primary_country("IT"), "GLOBAL")
+        self.assertEqual(llm_ranker._valid_primary_country("it"), "GLOBAL")
+
+    def test_truly_empty_country_code_still_falls_back_to_media(self):
+        """빈 값/형식이 다른 응답은 기존 설계대로 None(표시 시 매체 국적 폴백)."""
+        self.assertIsNone(llm_ranker._valid_primary_country(""))
+        self.assertIsNone(llm_ranker._valid_primary_country(None))
+        self.assertIsNone(llm_ranker._valid_primary_country("unknown"))
+
+    def test_known_country_code_passes_through(self):
+        self.assertEqual(llm_ranker._valid_primary_country("jp"), "JP")
 
     def test_cross_source_single_amount_conflict_is_detected(self):
         conflict = numeric_guard.source_amount_conflicts([

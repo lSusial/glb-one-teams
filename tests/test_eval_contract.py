@@ -26,7 +26,7 @@ class RankerEvalContractTests(unittest.TestCase):
         scores = run_eval.parse_scores({"0": {"score_factors": {
             "directness": 3, "magnitude": 2, "urgency": 3, "novelty": 2,
         }, "ai_score": 99}}, 1, production=True)
-        self.assertEqual(scores, [64])
+        self.assertEqual(scores, [67])
 
     def test_invalid_response_is_reported_as_missing(self):
         self.assertEqual(run_eval.parse_scores({"0": {}}, 1, production=True), [None])
