@@ -647,6 +647,10 @@ sources:
     feeds:
       - section: top
         url: https://news.google.com/rss/search?q=site:phnompenhpost.com+when:2d&hl=en-US&gl=US&ceid=US:en
+      # top 쿼리는 사이트 전체(사건사고·생활기사 다수)라 keep 통과율이 낮음(2026-10-06
+      # 소스 보강: 수집=90대, keep 한 자릿수 확인) — business 한정 쿼리로 수율 보강(37건 확인)
+      - section: business
+        url: https://news.google.com/rss/search?q=site:phnompenhpost.com+(business+OR+economy+OR+finance+OR+bank)+when:3d&hl=en-US&gl=US&ceid=US:en
 
   - media_name: Khmer Times
     country: KH
@@ -1047,8 +1051,10 @@ sources:
         url: https://news.google.com/rss/search?q=site:asia.nikkei.com+thailand&hl=en-US&gl=US&ceid=US:en
 
   # ============================================================
-  # 라오스 (1) — Tier 2, 2026-08-28 신규 진출국(제품 기준, 실제 KB 지점 없음
-  #   — "관심시장"). 최소 Google News 국가 쿼리 1건만(경량 수집, MM/KH 대비 소스 희소).
+  # 라오스 (2) — Tier 2, 2026-08-28 신규 진출국(제품 기준, 실제 KB 지점 없음
+  #   — "관심시장"). 2026-10-06 소스 보강: 전담 현지 매체(Laotian Times) 신규 확인.
+  #   vientianetimes.org.la는 RSS 제목이 전부 "Vientiane Times"로만 나오는 깨진
+  #   피드라 제외(site:vientianetimes.org.la 테스트 — 16건 전부 제목 없음).
   # ============================================================
   - media_name: GNews Laos
     country: LA
@@ -1058,6 +1064,17 @@ sources:
     feeds:
       - section: top
         url: https://news.google.com/rss/search?q=Laos+(bank+OR+finance+OR+economy)+when:1d&hl=en-US&gl=US&ceid=US:en
+
+  - media_name: Laotian Times
+    country: LA
+    language: en
+    tier: 2
+    categories: [LA]
+    feeds:
+      # 라오스 전담 매체 발견(2026-10-06, 58건 확인) — 해외 PR 뉴스와이어 콘텐츠도
+      # 섞여 있지만(제약·테크 보도자료 등) 키워드 필터가 걸러낸다.
+      - section: top
+        url: https://news.google.com/rss/search?q=site:laotiantimes.com+when:14d&hl=en-US&gl=US&ceid=US:en
 
   # ============================================================
   # KB 미진출국 (13) — 통합 피드 전용, 경량 수집(Google News 국가명+금융 키워드)

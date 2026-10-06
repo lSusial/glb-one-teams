@@ -48,6 +48,17 @@ _CA_BUNDLE = certifi.where()
 
 log = logging.getLogger("collector")
 
+# RSS 피드가 실제 기사 대신 워드프레스 캐시 인덱스·카테고리 아카이브·페이지네이션을
+# 내놓는 경우(2026-10-06: 소스 보강 중 발견 — 미얀마·캄보디아 매체 다수가 이 패턴).
+# eval/display_audit.py의 JUNK_RE(표시 단계)와 같은 철학이지만 더 이르게, 수집
+# 단계에서 걸러 prefilter LLM 호출까지 안 가게 한다.
+_JUNK_TITLE_RE = _re_mod.compile(
+    r"^index of /|wp-content|^404\b|not found|just a moment|access denied|attention required|"
+    r"enable javascript|captcha|cloudflare|are you a robot|^subscribe|^sign in|^log in|"
+    r"page unavailable|\barchives?\s*$|\barchives?\s*-|"
+    r"-\s*page\s*\d+\s*(of\s*\d+)?\s*-|^videos?\s*-\s*page\s*\d+",
+    _re_mod.I)
+
 
 def ensure_article_columns(conn: sqlite3.Connection) -> None:
     db.ensure_columns(conn, "articles_raw", [
@@ -372,6 +383,8 @@ def fetch_feed(feed_id: int, source_id: int, url: str) -> tuple[FetchResult, lis
         title = (entry.get("title") or "").strip()
         link = (entry.get("link") or "").strip()
         if not title or not link:
+            continue
+        if _JUNK_TITLE_RE.search(title):
             continue
         summary = _strip_html(entry.get("summary") or entry.get("description") or "")
         published = _parse_published(entry) or fetched_now
