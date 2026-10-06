@@ -68,7 +68,7 @@ wrangler pages deploy data/export --project-name kb-global-daily --commit-dirty=
 
 권장 로드맵: **단기 A**(수일 내, 정기 자동화 과제 즉시 해소) → **중기 C+D**(맥북 의존 제거) → B는 백업 옵션. 브리프가 매일 05:00 KST 생성으로 확정돼 자동화는 사실상 필수.
 
-**A안 구현 완료(2026-10-06)**: `scripts/daily_pipeline.sh`가 매일 01:00 KST에 `main.py run` → `main.py ai --days 2` → `main.py indicators` → `deploy_web.sh` 순서로 실행. launchd(`com.glbteam.dailypipeline`)가 `caffeinate -s`로 맥북 절전을 막고 트리거한다.
+**A안 구현 완료(2026-10-06)**: `scripts/daily_pipeline.sh`가 매일 01:00 KST에 `main.py run` → `main.py ai --days 2` → `main.py indicators` → (월요일만 `main.py indicators-history`) → `deploy_web.sh` 순서로 실행. launchd(`com.glbteam.dailypipeline`)가 `caffeinate -s`로 맥북 절전을 막고 트리거한다. 지표 히스토리(6개월 주간 스파크라인)는 주봉 데이터라 매일 돌릴 필요가 없어 월요일에만 편입 — 이 백필이 일일 파이프라인에 없던 동안 9/21 이후 15일째 `STALE_SPARK`가 쌓여 있던 걸 10/6에 발견.
 
 - 설치: `./scripts/install_launchd.sh` (plist를 `~/Library/LaunchAgents/`에 설치하고 `launchctl load`)
 - 수동 전체 실행: `./scripts/daily_pipeline.sh`

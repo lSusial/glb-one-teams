@@ -54,6 +54,14 @@ ls -1t "$BACKUP_DIR"/news.db.daily-* 2>/dev/null | tail -n +6 | xargs -r rm -f
 run_step "수집(main.py run)" .venv/bin/python main.py run
 run_step "AI 분석(main.py ai --days 2)" .venv/bin/python main.py ai --days 2
 run_step "지표(main.py indicators)" .venv/bin/python main.py indicators
+
+# 지표 스파크라인(6개월 주간 추세)은 주 1회만 갱신하면 충분하다(일봉이 아닌 주봉 데이터).
+# 월요일(KST)에만 돌려 불필요한 yfinance 호출을 피한다. 2026-10-06: 이 백필이 빠져 있던
+# 동안 9/21 이후 15일째 STALE_SPARK가 쌓였던 걸 발견 — 일일 자동화에 편입.
+if [ "$(date +%u)" = "1" ]; then
+    run_step "지표 히스토리(주간, main.py indicators-history)" .venv/bin/python main.py indicators-history
+fi
+
 run_step "배포(deploy_web.sh)" ./deploy_web.sh
 
 echo "✓ $(date '+%Y-%m-%d %H:%M:%S') 전체 완료" | tee -a "$LOG"
