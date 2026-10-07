@@ -486,12 +486,13 @@
     $('#issue-rows').innerHTML = highlights.map((h,i) => {
       const top = i === 0;
       const cc0 = (h.country_codes||[])[0];
-      const flagSym = cc0 ? 'fl-'+cc0.toLowerCase() : null;
+      const wantSym = 'fl-'+(cc0||'global').toLowerCase();
+      const flagSym = document.getElementById(wantSym) ? wantSym : 'fl-global';
       const tag = h.category ? (top
         ? `<span class="cat" style="color:#B67611;background:#FEEAB8">${esc(hlCat(h))}</span>`
         : `<span class="cat mono">${esc(hlCat(h))}</span>`) : '';
       return `<li class="row${top?' row-top':''}" onclick="openHlModal(${i})">
-        ${flagSym?svg(flagSym,28,28,'row-flag'):''}
+        ${svg(flagSym,28,28,'row-flag')}
         ${tag}
         <span class="row-t">${esc(hlHead(h))}</span>
         <span class="row-ar">${svg('ico-chev-r',16,16)}</span>
