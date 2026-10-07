@@ -128,6 +128,38 @@ def amount_mismatch(source_text: str, output_text: str) -> bool:
     return any(_mismatch(src.get(code, []), vals) for code, vals in out.items())
 
 
+_KO_CURRENCY = {"USD": "달러", "INR": "루피", "HKD": "홍콩달러", "SGD": "싱가포르달러", "CNY": "위안",
+                "JPY": "엔", "IDR": "루피아", "VND": "동", "THB": "바트", "GBP": "파운드", "EUR": "유로",
+                "PHP": "페소", "MYR": "링깃", "BDT": "타카"}
+
+
+def _ko_amount(v: float) -> str:
+    """금액을 한국어 표기로(2e11 → '2,000억', 1.6601e12 → '1조 6,601억', 4.05e8 → '4.05억')."""
+    if v >= 1e12:
+        jo, rest = int(v // 1e12), round((v % 1e12) / 1e8)
+        return f"{jo}조" + (f" {rest:,}억" if rest else "")
+    if v >= 1e8:
+        return f"{float(f'{v / 1e8:.4g}'):,g}억".replace(",", "@").replace("@", ",")
+    return f"{float(f'{v / 1e4:.4g}'):,g}만"
+
+
+def korean_amount_hints(text: str) -> str:
+    """원문(영문)의 금액을 코드로 정확히 환산한 한국어 표기 목록. 번역·요약 프롬프트에 붙여
+    LLM이 crore·billion을 억·조로 직접 옮기다 자릿수를 틀리는 것을 막는다(2026-10-07 방글라데시
+    'Tk20,000 crore → 2조 타카' 등이 재생성마다 반복). 1만 미만(주가 등)은 생략, 없으면 ''."""
+    found = {"USD": usd_values(text), "INR": inr_values(text), **fx_values(text)}
+    items = []
+    for code, vals in found.items():
+        for v in vals:
+            s = f"{_ko_amount(v)} {_KO_CURRENCY[code]}"
+            if v >= 1e4 and s not in items:
+                items.append(s)
+    if not items:
+        return ""
+    return ("금액 한국어 표기(원문 금액을 코드로 환산한 정확한 값 — 단위를 직접 환산하지 말고 이 값을 그대로 쓸 것): "
+            + "; ".join(items))
+
+
 def source_amount_conflicts(texts: list[str]) -> dict[str, list[float]]:
     """여러 출처가 같은 사건의 단일 금액을 서로 다르게 보도하면 통화별 값을 반환한다.
 

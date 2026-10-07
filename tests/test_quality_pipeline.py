@@ -839,6 +839,24 @@ class OtherCurrencyGuardTests(unittest.TestCase):
         # 원문에 USD가 있고 출력에 HK$가 있어도 USD 불일치로 오판하지 않는다
         self.assertFalse(numeric_guard.amount_mismatch('$3 billion; HK$500 billion', 'HK$500 billion'))
 
+    def test_korean_amount_hints_give_exact_korean_values(self):
+        # 2026-10-07: 재생성해도 LLM이 crore·billion을 억·조로 옮기며 매번 10배 틀려 한국어가 비었다
+        hint = numeric_guard.korean_amount_hints(
+            'a Tk20,000 crore fund; RM9.273 billion owed; S$405 million plant; Rs 1,785 per share')
+        for want in ('2,000억 타카', '92.73억 링깃', '4.05억 싱가포르달러'):
+            self.assertIn(want, hint)
+        self.assertNotIn('루피', hint)                      # 1만 미만 소액(주가)은 힌트 불필요
+        self.assertEqual(numeric_guard.korean_amount_hints('no amounts here'), '')
+        self.assertIn('1조 6,601억 타카', numeric_guard.korean_amount_hints('Tk166,010 crore'))
+        # 힌트 값은 검증을 통과해야 한다
+        src = 'a Tk20,000 crore fund'
+        self.assertFalse(numeric_guard.amount_mismatch(src, '2,000억 타카 규모 기금'))
+
+    def test_translation_prompt_carries_korean_amount_hints(self):
+        import llm_translate
+        user = llm_translate._user('Businesses seek loans from a Tk20,000 crore fund.', 'Tk20,000cr fund')
+        self.assertIn('2,000억 타카', user)
+
     def test_korean_dong_word_is_not_an_amount(self):
         self.assertFalse(numeric_guard.amount_mismatch('VND 50 trillion', '금리를 3.5%로 동결했다'))
         self.assertEqual(numeric_guard.fx_values('정부가 동결 방침을 밝혔다'), {})

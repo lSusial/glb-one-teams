@@ -53,6 +53,11 @@ def _user(summary, title=""):
     if title:
         lines.append(f"title: {title[:200]}")
     lines.append(f"summary: {(summary or '')[:1500]}")
+    # 금액은 코드가 환산한 한국어 표기를 함께 준다(LLM이 crore·billion을 억·조로 옮기다 10배 틀림).
+    # 출력 금액 가드가 summary와 대조하므로 힌트도 summary 기준.
+    hint = numeric_guard.korean_amount_hints((summary or "")[:1500])
+    if hint:
+        lines.append(hint)
     return "\n".join(lines)
 
 
