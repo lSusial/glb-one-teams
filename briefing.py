@@ -156,6 +156,12 @@ def _last_completed_week(today: date | None = None) -> tuple[str, str]:
     return week_start.isoformat(), week_end.isoformat()
 
 
+_AMOUNT_RETRY_NOTE = (
+    "\n\n[재요청] 직전 응답의 금액이 기사 목록과 달라 폐기됐다. 금액은 기사 목록에 적힌 숫자·단위·통화를 "
+    "그대로 옮겨 쓰고 직접 단위를 환산하지 마라(crore·billion 등을 억·조로 바꾸며 자릿수를 틀리지 않게)."
+)
+
+
 def run_briefing(
     conn,
     provider: LLMProvider | None = None,
@@ -232,71 +238,89 @@ def run_briefing(
     results = provider.complete_json_batch(requests) if requests else {}
 
     cur = conn.cursor()
-    for cc, arts in meta.items():
-        data = results.get(cc) or {}
-        if not arts:
-            data = {"summary_ko": "해당 기간에 브리핑 기준을 충족한 기사가 없습니다.",
-                    "summary_en": "No articles met the briefing criteria for this period."}
-        if not data:
-            continue
-        if daily:
-            summary    = str(data.get("summary_ko") or data.get("summary") or "")[:2000]
-            summary_en = str(data.get("summary_en") or "")[:2000]
-            issues = issues_en = outlook = outlook_en = keywords = keywords_en = key_stat = key_stat_en = ""
-        else:  # weekly — 이중언어
-            summary    = str(data.get("summary_ko") or data.get("summary") or "")[:2000]
-            summary_en = str(data.get("summary_en") or "")[:2000]
-            issues     = json.dumps(data.get("issues_ko") or data.get("issues") or [], ensure_ascii=False)
-            issues_en  = json.dumps(data.get("issues_en") or [], ensure_ascii=False)
-            outlook    = str(data.get("outlook_ko") or data.get("outlook") or "")[:1000]
-            outlook_en = str(data.get("outlook_en") or "")[:1000]
-            keywords   = json.dumps(data.get("keywords_ko") or data.get("keywords") or [], ensure_ascii=False)
-            keywords_en = json.dumps(data.get("keywords_en") or [], ensure_ascii=False)
-            key_stat   = str(data.get("key_stat_ko") or data.get("key_stat") or "")[:200]
-            key_stat_en = str(data.get("key_stat_en") or "")[:200]
-
-        if arts:
-            generated = " ".join((summary, summary_en, issues, issues_en,
-                                  outlook, outlook_en, key_stat, key_stat_en))
-            if numeric_guard.amount_mismatch(bullets_by_cc.get(cc, ""), generated):
-                log.warning("브리핑 금액 불일치 — 저장 안 함(국가=%s, %s): %s",
-                            cc, briefing_type, summary[:80])
+    # 금액 검증에서 거부된 국가는 '금액 그대로' 지시를 붙여 1회 재요청한다. 재요청 없이 버리면
+    # 옛 브리핑이 계속 남았다(2026-10-07 IN 브리핑 6일째 미갱신).
+    req_by_cc = {r[0]: r for r in requests}
+    pending = [(cc, results.get(cc) or {}) for cc in meta]
+    for attempt in (1, 2):
+        retry = []
+        for cc, data in pending:
+            arts = meta[cc]
+            if not arts:
+                data = {"summary_ko": "해당 기간에 브리핑 기준을 충족한 기사가 없습니다.",
+                        "summary_en": "No articles met the briefing criteria for this period."}
+            if not data:
                 continue
+            if daily:
+                summary    = str(data.get("summary_ko") or data.get("summary") or "")[:2000]
+                summary_en = str(data.get("summary_en") or "")[:2000]
+                issues = issues_en = outlook = outlook_en = keywords = keywords_en = key_stat = key_stat_en = ""
+            else:  # weekly — 이중언어
+                summary    = str(data.get("summary_ko") or data.get("summary") or "")[:2000]
+                summary_en = str(data.get("summary_en") or "")[:2000]
+                issues     = json.dumps(data.get("issues_ko") or data.get("issues") or [], ensure_ascii=False)
+                issues_en  = json.dumps(data.get("issues_en") or [], ensure_ascii=False)
+                outlook    = str(data.get("outlook_ko") or data.get("outlook") or "")[:1000]
+                outlook_en = str(data.get("outlook_en") or "")[:1000]
+                keywords   = json.dumps(data.get("keywords_ko") or data.get("keywords") or [], ensure_ascii=False)
+                keywords_en = json.dumps(data.get("keywords_en") or [], ensure_ascii=False)
+                key_stat   = str(data.get("key_stat_ko") or data.get("key_stat") or "")[:200]
+                key_stat_en = str(data.get("key_stat_en") or "")[:200]
 
-        cur.execute(
-            """
-            INSERT INTO country_briefings
-                (cc, briefing_date, briefing_type, generated_at, summary, summary_en,
-                 issues, issues_en, outlook, outlook_en, keywords, keywords_en, key_stat, key_stat_en,
-                 model, article_count, source_articles, week_start, week_end)
-            VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT(cc, briefing_date, briefing_type) DO UPDATE SET
-                generated_at    = CURRENT_TIMESTAMP,
-                summary         = excluded.summary,
-                summary_en      = excluded.summary_en,
-                issues          = excluded.issues,
-                issues_en       = excluded.issues_en,
-                outlook         = excluded.outlook,
-                outlook_en      = excluded.outlook_en,
-                keywords        = excluded.keywords,
-                keywords_en     = excluded.keywords_en,
-                key_stat        = excluded.key_stat,
-                key_stat_en     = excluded.key_stat_en,
-                model           = excluded.model,
-                article_count   = excluded.article_count,
-                source_articles = excluded.source_articles,
-                week_start      = excluded.week_start,
-                week_end        = excluded.week_end
-            """,
-            (
-                cc, bdate, briefing_type, summary, summary_en,
-                issues, issues_en, outlook, outlook_en, keywords, keywords_en, key_stat, key_stat_en,
-                provider.model_id if arts else "rules:insufficient-evidence", len(arts),
-                json.dumps([a["link"] for a in arts], ensure_ascii=False),
-                week_start, week_end,
-            ),
-        )
-        stats["written"] += 1
+            if arts:
+                generated = " ".join((summary, summary_en, issues, issues_en,
+                                      outlook, outlook_en, key_stat, key_stat_en))
+                if numeric_guard.amount_mismatch(bullets_by_cc.get(cc, ""), generated):
+                    if attempt == 1:
+                        log.warning("브리핑 금액 불일치 — 재요청(국가=%s, %s): %s",
+                                    cc, briefing_type, summary[:80])
+                        retry.append(cc)
+                        continue
+                    log.warning("브리핑 금액 불일치 — 저장 안 함(국가=%s, %s): %s",
+                                cc, briefing_type, summary[:80])
+                    continue
+
+            cur.execute(
+                """
+                INSERT INTO country_briefings
+                    (cc, briefing_date, briefing_type, generated_at, summary, summary_en,
+                     issues, issues_en, outlook, outlook_en, keywords, keywords_en, key_stat, key_stat_en,
+                     model, article_count, source_articles, week_start, week_end)
+                VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(cc, briefing_date, briefing_type) DO UPDATE SET
+                    generated_at    = CURRENT_TIMESTAMP,
+                    summary         = excluded.summary,
+                    summary_en      = excluded.summary_en,
+                    issues          = excluded.issues,
+                    issues_en       = excluded.issues_en,
+                    outlook         = excluded.outlook,
+                    outlook_en      = excluded.outlook_en,
+                    keywords        = excluded.keywords,
+                    keywords_en     = excluded.keywords_en,
+                    key_stat        = excluded.key_stat,
+                    key_stat_en     = excluded.key_stat_en,
+                    model           = excluded.model,
+                    article_count   = excluded.article_count,
+                    source_articles = excluded.source_articles,
+                    week_start      = excluded.week_start,
+                    week_end        = excluded.week_end
+                """,
+                (
+                    cc, bdate, briefing_type, summary, summary_en,
+                    issues, issues_en, outlook, outlook_en, keywords, keywords_en, key_stat, key_stat_en,
+                    provider.model_id if arts else "rules:insufficient-evidence", len(arts),
+                    json.dumps([a["link"] for a in arts], ensure_ascii=False),
+                    week_start, week_end,
+                ),
+            )
+            stats["written"] += 1
+
+        if attempt == 2 or not retry:
+            break
+        again = provider.complete_json_batch([
+            (cc, system, req_by_cc[cc][2] + _AMOUNT_RETRY_NOTE, req_by_cc[cc][3]) for cc in retry
+        ])
+        pending = [(cc, again.get(cc) or {}) for cc in retry]
     conn.commit()
 
     log.info(

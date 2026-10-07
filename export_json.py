@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import config
 import db
@@ -131,8 +131,11 @@ def _ensure_ai_columns(conn) -> None:
     ])
 
 
-def _daily_briefs(conn) -> dict:
-    """country_briefings(daily) 최신본을 {cc: {ko, en, date}} 로 반환. 없으면 {}."""
+def _daily_briefs(conn, snapshot: str | None = None) -> dict:
+    """country_briefings(daily) 최신본을 {cc: {ko, en, date}} 로 반환. 없으면 {}.
+
+    snapshot(기준일)보다 하루 넘게 지난 브리핑은 내보내지 않는다 — 생성 실패·금액 검증 거부가
+    이어지면 옛 브리핑이 그대로 남아 보였다(2026-10-07 IN 탭에 10/1자 '준비 중' 문구가 6일째 노출)."""
     try:
         cols = [c[1] for c in conn.execute("PRAGMA table_info(country_briefings)")]
     except Exception:
@@ -145,10 +148,17 @@ def _daily_briefs(conn) -> dict:
         f"SELECT {sel} FROM country_briefings WHERE briefing_type='daily' "
         "ORDER BY briefing_date DESC, generated_at DESC"
     ).fetchall()
+    oldest = None
+    if snapshot:
+        oldest = (datetime.strptime(snapshot, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
     out = {}
+    seen = set()
     for r in rows:
         cc = r["cc"]
-        if cc in out:            # 국가별 최신 1건만
+        if cc in seen:           # 국가별 최신 1건만
+            continue
+        seen.add(cc)
+        if oldest and (r["briefing_date"] or "") < oldest:
             continue
         out[cc] = {
             "ko": r["summary"] or "",
@@ -718,7 +728,7 @@ def country_watch_candidate_ids(conn, days: int = 1) -> dict[str, int]:
 def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
     _ensure_ai_columns(conn)
     dc, dparams = _date_clause(days)   # 현지언론 = 전일+당일 (max-1일 이후)
-    briefs = _daily_briefs(conn)
+    briefs = _daily_briefs(conn, _snapshot_date(conn))
     indicators = _country_indicators(conn)
     """국가별 기사를 UI 데이터 계약(countries.json)으로 내보낸다.
 
