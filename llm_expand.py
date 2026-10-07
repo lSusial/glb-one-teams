@@ -151,6 +151,9 @@ def run_expand(conn, provider: LLMProvider | None = None,
         if siblings:
             stats["synthesized"] += 1
         user = f"매체: {r['media_name']}  국가: {r['cc']}\n" + "\n\n".join(blocks)
+        hint = numeric_guard.korean_amount_hints("\n".join(blocks))
+        if hint:
+            user += f"\n\n{hint}"
         sys_prompt = _SYS_THIN if sum(len(s) for s in snippets) <= _THIN_SOURCE_MAXLEN else _SYS
         requests.append((cid, sys_prompt, user, 4000))
         row_by_id[cid] = r
