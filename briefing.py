@@ -99,6 +99,24 @@ def _system_highlights(count: int) -> str:
     )
 
 
+# 오늘의 탑이슈 퀴즈 — daily_highlights 항목 중 하나를 골라 2~4지선다 1문항 생성(하루 1회 1콜).
+_SYSTEM_QUIZ = (
+    "You are creating ONE short, easy multiple-choice quiz question for KB bank employees, "
+    "based strictly on today's top global financial news items below. Pick ONE simple, "
+    "concrete, verifiable fact explicitly stated in the items (a number, a country, a bank "
+    "name, a rate, a policy action) — not analysis or opinion. Write the question so an "
+    "employee who skimmed today's headlines can answer it. Provide 2-4 answer choices "
+    "(exactly one correct), in BOTH Korean and English, in the SAME order so index i means "
+    "the same choice in both languages. Output ONLY JSON:\n"
+    '{"question_ko": "퀴즈 질문(한국어)", "question_en": "the question (English)", '
+    '"choices_ko": ["선택지1", "선택지2", "..."], "choices_en": ["choice1", "choice2", "..."], '
+    '"correct_index": 0, '
+    '"explanation_ko": "정답 근거 1문장", "explanation_en": "1-sentence reason for the answer", '
+    '"source_article_id": 123}\n'
+    '"source_article_id" must be exactly one of the article_id values shown in the input.'
+)
+
+
 def ensure_table(conn) -> None:
     conn.execute(_CREATE)
     # 구 DB 호환: 일일 브리핑 영어본 컬럼 보강
@@ -426,6 +444,143 @@ def generate_daily_highlights(
         (tdate, json.dumps(items, ensure_ascii=False), provider.model_id),
     )
     conn.commit()
+
+
+_CREATE_QUIZ = """
+CREATE TABLE IF NOT EXISTS daily_quiz (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    date              TEXT NOT NULL,
+    question_ko       TEXT NOT NULL,
+    question_en       TEXT NOT NULL,
+    choices_ko        TEXT NOT NULL,
+    choices_en        TEXT NOT NULL,
+    correct_index     INTEGER NOT NULL,
+    explanation_ko    TEXT,
+    explanation_en    TEXT,
+    source_article_id INTEGER,
+    model             TEXT,
+    generated_at      TEXT,
+    UNIQUE(date)
+)
+"""
+
+
+def ensure_quiz_table(conn) -> None:
+    conn.execute(_CREATE_QUIZ)
+    conn.commit()
+
+
+def _validate_quiz(data: dict, allowed_ids: set[int]) -> dict | None:
+    """LLM 퀴즈 응답 검증 — 선택지 2~4개(한/영 동일 개수), correct_index 범위 내,
+    출처 article_id가 입력 후보 집합에 있어야 저장(없으면 화면에 가짜 출처로 보일 위험)."""
+    if not isinstance(data, dict):
+        return None
+    q_ko = str(data.get("question_ko") or "").strip()
+    q_en = str(data.get("question_en") or "").strip()
+    c_ko, c_en = data.get("choices_ko"), data.get("choices_en")
+    if not q_ko or not q_en or not isinstance(c_ko, list) or not isinstance(c_en, list):
+        return None
+    if not (2 <= len(c_ko) <= 4) or len(c_ko) != len(c_en):
+        return None
+    try:
+        idx = int(data.get("correct_index"))
+    except (TypeError, ValueError):
+        return None
+    if not (0 <= idx < len(c_ko)):
+        return None
+    try:
+        sid = int(data.get("source_article_id"))
+    except (TypeError, ValueError):
+        return None
+    if sid not in allowed_ids:
+        log.warning("퀴즈 출처 무효 — 스킵: %s", q_ko[:60])
+        return None
+    return {
+        "question_ko": q_ko, "question_en": q_en,
+        "choices_ko": [str(c) for c in c_ko], "choices_en": [str(c) for c in c_en],
+        "correct_index": idx,
+        "explanation_ko": str(data.get("explanation_ko") or "").strip(),
+        "explanation_en": str(data.get("explanation_en") or "").strip(),
+        "source_article_id": sid,
+    }
+
+
+def generate_daily_quiz(
+    conn,
+    provider: LLMProvider | None = None,
+    target_date: str | None = None,
+) -> dict:
+    """오늘의 글로벌 핵심(daily_highlights) 기사 중 하나를 골라 2~4지선다 퀴즈 1개 생성.
+    main.py ai 파이프라인상 generate_daily_highlights 바로 다음 단계 — 그 결과물을 입력으로 쓴다.
+    LLM은 하루 1회 1콜(배치 아님). highlights가 없거나 응답이 무효면 저장하지 않는다
+    (화면은 퀴즈 블록을 숨김).
+    """
+    ensure_quiz_table(conn)
+    tdate = target_date or date.today().isoformat()
+
+    row = conn.execute("SELECT items FROM daily_highlights WHERE date = ?", (tdate,)).fetchone()
+    if not row:
+        log.info("퀴즈 — 오늘의 글로벌 핵심 없음, 스킵")
+        return {"written": 0}
+    try:
+        items = json.loads(row["items"])
+    except (TypeError, ValueError, json.JSONDecodeError):
+        items = []
+    source_ids = sorted({
+        int(sid) for item in items for sid in (item.get("source_article_ids") or [])
+        if isinstance(sid, (int, str)) and str(sid).lstrip("-").isdigit()
+    })
+    if not source_ids:
+        log.info("퀴즈 — 핵심 항목에 출처 없음, 스킵")
+        return {"written": 0}
+
+    placeholders = ",".join("?" for _ in source_ids)
+    arts = conn.execute(
+        f"SELECT article_id, title, summary_ko, summary_en FROM articles_raw "
+        f"WHERE article_id IN ({placeholders})",
+        source_ids,
+    ).fetchall()
+    allowed_ids = {r["article_id"] for r in arts}
+    if not allowed_ids:
+        return {"written": 0}
+
+    bullets = "\n".join(
+        f"- [article_id={r['article_id']}] {r['title']} :: "
+        f"{((r['summary_ko'] or r['summary_en']) or '')[:200]}"
+        for r in arts
+    )
+    user = f"오늘의 글로벌 핵심 기사 목록:\n{bullets}"
+
+    provider = provider or get_provider("smart", use_batch=False)
+    data = provider.complete_json(_SYSTEM_QUIZ, user, max_tokens=700)
+    quiz = _validate_quiz(data, allowed_ids)
+    if not quiz:
+        log.info("퀴즈 — LLM 응답 무효, 스킵")
+        return {"written": 0}
+
+    conn.execute(
+        """
+        INSERT INTO daily_quiz (date, question_ko, question_en, choices_ko, choices_en,
+                                 correct_index, explanation_ko, explanation_en,
+                                 source_article_id, model, generated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(date) DO UPDATE SET
+            question_ko = excluded.question_ko, question_en = excluded.question_en,
+            choices_ko = excluded.choices_ko, choices_en = excluded.choices_en,
+            correct_index = excluded.correct_index,
+            explanation_ko = excluded.explanation_ko, explanation_en = excluded.explanation_en,
+            source_article_id = excluded.source_article_id,
+            model = excluded.model, generated_at = CURRENT_TIMESTAMP
+        """,
+        (tdate, quiz["question_ko"], quiz["question_en"],
+         json.dumps(quiz["choices_ko"], ensure_ascii=False),
+         json.dumps(quiz["choices_en"], ensure_ascii=False),
+         quiz["correct_index"], quiz["explanation_ko"], quiz["explanation_en"],
+         quiz["source_article_id"], provider.model_id),
+    )
+    conn.commit()
+    log.info("퀴즈 생성 완료 — %s", quiz["question_ko"][:60])
+    return {"written": 1}
 
     log.info("글로벌 핵심 완료 — 항목=%d  (%s)", len(items), tdate)
     return {"written": len(items)}

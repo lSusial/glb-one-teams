@@ -11,6 +11,21 @@
 <link rel="stylesheet" href="shared-tokens.css"/>
 <style>
 .hd-count{font-size:clamp(10.5px,1.6cqi,12.5px);color:var(--muted);margin-top:3px}
+.quiz{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+.quiz-tag{display:inline-block;font-size:clamp(10px,1.5cqi,11.5px);font-weight:700;color:#B67611;
+          background:var(--gold-soft);border-radius:6px;padding:2px 8px;letter-spacing:.02em}
+.quiz-q{font-size:clamp(12.5px,1.95cqi,15px);font-weight:600;color:var(--ink);line-height:1.5;
+        margin:8px 0 10px;word-break:keep-all}
+.quiz-opts{display:flex;flex-direction:column;gap:7px}
+.quiz-opt{text-align:left;font-size:clamp(12px,1.85cqi,14px);color:var(--ink-2);background:var(--bg);
+          border:1px solid var(--line-2);border-radius:10px;padding:9px 12px;cursor:pointer;
+          transition:.15s;word-break:keep-all}
+.quiz-opt:hover:not(:disabled){border-color:var(--gold)}
+.quiz-opt.correct{background:var(--positive-bg);border-color:var(--positive);color:#15682E;font-weight:600}
+.quiz-opt.wrong{background:var(--risk-bg);border-color:var(--risk);color:#A80613}
+.quiz-opt:disabled{cursor:default}
+.quiz-exp{margin-top:9px;font-size:clamp(11.5px,1.75cqi,13.5px);color:var(--muted);line-height:1.55;
+          word-break:keep-all}
 </style>
 <!-- 데이터: export_json 이 아래 스크립트에 주입(오프라인). 없으면 pulse.json fetch. -->
 <script id="pulse-data" type="application/json">null</script>
@@ -65,6 +80,12 @@
   <section class="card issues" aria-labelledby="t-issues">
     <div class="sec-h"><h2 class="sec-t en" id="t-issues">TODAY'S TOP ISSUES</h2></div>
     <ul class="rows" id="issue-rows"></ul>
+    <div class="quiz" id="quiz" style="display:none">
+      <span class="quiz-tag" data-en="QUIZ">퀴즈</span>
+      <p class="quiz-q" id="quiz-q"></p>
+      <div class="quiz-opts" id="quiz-opts"></div>
+      <p class="quiz-exp" id="quiz-exp" style="display:none"></p>
+    </div>
   </section>
 
   </div>
@@ -480,6 +501,30 @@
     if (!highlights.length) $('#issue-rows').closest('.card').style.display = 'none';
   }
 
+  // ── 탑이슈 퀴즈: daily_quiz ──
+  const quiz = D.daily_quiz || null;
+  function renderQuiz(){
+    if (!quiz) return;
+    const choices = EN ? (quiz.choices_en || quiz.choices) : (quiz.choices || quiz.choices_en);
+    if (!choices || !choices.length) return;
+    $('#quiz').style.display = '';
+    $('#quiz-q').textContent = EN ? (quiz.q_en || quiz.q) : (quiz.q || quiz.q_en);
+    $('#quiz-opts').innerHTML = choices.map((c,i) =>
+      `<button type="button" class="quiz-opt" data-i="${i}">${esc(c)}</button>`).join('');
+    $('#quiz-opts').querySelectorAll('.quiz-opt').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const picked = Number(btn.dataset.i);
+        $('#quiz-opts').querySelectorAll('.quiz-opt').forEach((b) => {
+          b.disabled = true;
+          if (Number(b.dataset.i) === quiz.correct_index) b.classList.add('correct');
+          else if (b === btn) b.classList.add('wrong');
+        });
+        const exp = EN ? (quiz.explanation_en || quiz.explanation) : (quiz.explanation || quiz.explanation_en);
+        if (exp) { $('#quiz-exp').textContent = exp; $('#quiz-exp').style.display = ''; }
+      }, { once: true });
+    });
+  }
+
 
   /* ── 하단 브랜드 배너 아트: 점 세계지도 + 서울 기점 연결호 ──
      홈 상단 지도는 CROP 을 적용한 확대본이라, 여기서는 같은 LAND 를
@@ -526,6 +571,7 @@
   renderPulse();
   renderBrief();
   renderIssues();
+  renderQuiz();
 
   let rz; addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(renderPulse, 140); });
 

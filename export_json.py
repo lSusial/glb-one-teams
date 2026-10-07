@@ -298,6 +298,37 @@ def _daily_highlights(conn) -> list:
     return items
 
 
+def _daily_quiz(conn) -> dict | None:
+    """오늘의 탑이슈 퀴즈 최신본 (daily_quiz, 2~4지선다 1문항)."""
+    try:
+        cols = [c[1] for c in conn.execute("PRAGMA table_info(daily_quiz)")]
+    except Exception:
+        return None
+    if "question_ko" not in cols:
+        return None
+    row = conn.execute(
+        """SELECT question_ko, question_en, choices_ko, choices_en, correct_index,
+                  explanation_ko, explanation_en, source_article_id
+           FROM daily_quiz ORDER BY date DESC LIMIT 1"""
+    ).fetchone()
+    if not row:
+        return None
+    try:
+        choices_ko = json.loads(row["choices_ko"]) or []
+        choices_en = json.loads(row["choices_en"]) or []
+    except Exception:
+        return None
+    if not choices_ko or not choices_en:
+        return None
+    return {
+        "q": row["question_ko"], "q_en": row["question_en"],
+        "choices": choices_ko, "choices_en": choices_en,
+        "correct_index": row["correct_index"],
+        "explanation": row["explanation_ko"] or "", "explanation_en": row["explanation_en"] or "",
+        "source_article_id": row["source_article_id"],
+    }
+
+
 def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
     """KB 미진출국(14개, docs/design_미진출국.md) 통합 피드 — 국가 구분 없이
     ai_score 상위 limit개. ACTIVE 임계(55점) 게이트는 적용하지 않는다 — 거점이
@@ -1257,6 +1288,7 @@ def export_pulse(conn, days: int | None = None) -> dict:
         "categories": _compute_pulse(conn, days=days),
         "top_news": _compute_top_news(conn, days=days, limit=10),
         "daily_highlights": _daily_highlights(conn),
+        "daily_quiz": _daily_quiz(conn),
         "country_section": _compute_country_section(conn, days=days),
         "country_signals": _compute_country_signals(conn, days=days),
         "market_ticker": _market_ticker(conn),

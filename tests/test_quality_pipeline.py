@@ -447,6 +447,33 @@ class QualityTests(unittest.TestCase):
         out = briefing._validate_highlight_sources(items, rows, 10)
         self.assertEqual(out, [])
 
+    def test_quiz_accepts_valid_payload_with_source_in_allowed_set(self):
+        data = {
+            'question_ko': '기준금리를 몇 bp 인상했나?', 'question_en': 'By how many bp was the rate hiked?',
+            'choices_ko': ['25bp', '50bp'], 'choices_en': ['25bp', '50bp'],
+            'correct_index': 0, 'explanation_ko': '기사 본문 근거', 'explanation_en': 'per the article',
+            'source_article_id': 10,
+        }
+        out = briefing._validate_quiz(data, {10, 20})
+        self.assertIsNotNone(out)
+        self.assertEqual(out['source_article_id'], 10)
+        self.assertEqual(out['correct_index'], 0)
+
+    def test_quiz_rejects_mismatched_choice_counts(self):
+        data = {'question_ko': 'q', 'question_en': 'q', 'choices_ko': ['a', 'b'],
+                'choices_en': ['a'], 'correct_index': 0, 'source_article_id': 10}
+        self.assertIsNone(briefing._validate_quiz(data, {10}))
+
+    def test_quiz_rejects_correct_index_out_of_range(self):
+        data = {'question_ko': 'q', 'question_en': 'q', 'choices_ko': ['a', 'b'],
+                'choices_en': ['a', 'b'], 'correct_index': 2, 'source_article_id': 10}
+        self.assertIsNone(briefing._validate_quiz(data, {10}))
+
+    def test_quiz_rejects_source_not_in_allowed_set(self):
+        data = {'question_ko': 'q', 'question_en': 'q', 'choices_ko': ['a', 'b'],
+                'choices_en': ['a', 'b'], 'correct_index': 0, 'source_article_id': 999}
+        self.assertIsNone(briefing._validate_quiz(data, {10}))
+
     def test_export_resolves_highlight_source_id_to_exact_article(self):
         conn = sqlite3.connect(':memory:')
         conn.row_factory = sqlite3.Row

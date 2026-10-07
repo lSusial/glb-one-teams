@@ -334,6 +334,13 @@ def cmd_highlights(_args):
     print(f"[highlights] 작성={s['written']}")
 
 
+def cmd_quiz(_args):
+    import briefing
+    conn = db.open_conn()
+    s = _ai_guard(lambda: briefing.generate_daily_quiz(conn), "quiz")
+    print(f"[quiz] 작성={s['written']}")
+
+
 def cmd_ai_dedup(args):
     """AI 근접중복 판정 — 같은 사건 다른 표현을 묶어 duplicate_of 마킹."""
     import llm_dedup
@@ -389,13 +396,13 @@ def cmd_ai(args):
     conn = db.open_conn()
     days = getattr(args, "days", None)
     ub = _batch_flag(args)
-    print("▶ [1/7] LLM 프리필터...")
+    print("▶ [1/8] LLM 프리필터...")
     s1 = _ai_guard(lambda: llm_prefilter.run_prefilter(conn, days=days, use_batch=ub), "ai")
     print(f"   keep={s1['keep']} drop={s1['drop']}")
-    print("▶ [2/7] 본문 추출(keep 원문)...")
+    print("▶ [2/8] 본문 추출(keep 원문)...")
     sf = _ai_guard(lambda: fulltext.run_fulltext(conn, days=days), "ai")
     print(f"   본문={sf['extracted']} URL해소={sf['resolved']} 실패={sf['failed']}")
-    print("▶ [3/7] AI 분석[영어]...")
+    print("▶ [3/8] AI 분석[영어]...")
     s2 = _ai_guard(lambda: llm_ranker.run_rank(conn, days=days, use_batch=ub), "ai")
     print(f"   ranked={s2['ranked']} 실패보존={s2.get('failed', 0)} ACTIVE={s2['active']} "
           f"출처충돌={s2.get('source_conflicts', 0)}")
@@ -419,18 +426,21 @@ def cmd_ai(args):
     print("▶ 노출 기사 원문 링크 해소(Google News → 원문, 점수순·순차)...")
     sl = _ai_guard(lambda: fulltext.resolve_display_links(conn, days=days), "ai")
     print(f"   대상={sl['total']} 해소={sl['resolved']}")
-    print("▶ [4/7] 모달 긴 요약(노출 기사만)...")
+    print("▶ [4/8] 모달 긴 요약(노출 기사만)...")
     se = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub), "ai")
     print(f"   대상={se['total']} 작성={se['written']} 다출처={se['synthesized']}")
-    print("▶ [5/7] 한국어 번역(표시분)...")
+    print("▶ [5/8] 한국어 번역(표시분)...")
     st = _ai_guard(lambda: llm_translate.run_translate(conn, days=days, use_batch=ub), "ai")
     print(f"   KO채움={st['ko']} EN채움={st['en']}")
-    print("▶ [6/7] 국가 일일 브리핑(현지언론 상단, 전일+당일)...")
+    print("▶ [6/8] 국가 일일 브리핑(현지언론 상단, 전일+당일)...")
     s3 = _ai_guard(lambda: briefing.run_briefing(conn, briefing_type="daily", days=days, use_batch=ub), "ai")
     print(f"   written={s3['written']}")
-    print("▶ [7/7] 오늘의 글로벌 핵심...")
+    print("▶ [7/8] 오늘의 글로벌 핵심...")
     s4 = _ai_guard(lambda: briefing.generate_daily_highlights(conn), "ai")
     print(f"   written={s4['written']}")
+    print("▶ [8/8] 탑이슈 퀴즈...")
+    s5 = _ai_guard(lambda: briefing.generate_daily_quiz(conn), "ai")
+    print(f"   written={s5['written']}")
 
 
 def cmd_export(args):
@@ -577,7 +587,8 @@ def main():
     brf.add_argument("--days", type=int, help="최근 N일 게시분만 (daily 기본 1=전일+당일)")
     brf.add_argument("--sync", action="store_true", help=_SYNC_HELP)
     sub.add_parser("highlights", help="오늘의 글로벌 핵심 생성(전 거점 횡단, LLM 1콜)")
-    aip = sub.add_parser("ai",        help="prefilter → rank → brief → highlights 일괄")
+    sub.add_parser("quiz", help="탑이슈 퀴즈 1문항 생성(daily_highlights 기반, LLM 1콜)")
+    aip = sub.add_parser("ai",        help="prefilter → rank → brief → highlights → quiz 일괄")
     aip.add_argument("--days", type=int, help="최근 N일 게시 기사만 처리")
     aip.add_argument("--sync", action="store_true", help=_SYNC_HELP)
     exp = sub.add_parser("export", help="DB → data/export/*.json (UI 데이터)")
@@ -610,7 +621,7 @@ def main():
         "indicators": cmd_indicators, "indicators-history": cmd_indicators_history,
         "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "resolve-links": cmd_resolve_links, "rank": cmd_rank,
         "expand": cmd_expand, "ai-dedup": cmd_ai_dedup, "dedup-repair": cmd_dedup_repair,
-        "translate": cmd_translate, "brief": cmd_brief, "highlights": cmd_highlights,
+        "translate": cmd_translate, "brief": cmd_brief, "highlights": cmd_highlights, "quiz": cmd_quiz,
         "ai": cmd_ai, "export": cmd_export, "admin": cmd_admin,
         "broadcast": cmd_broadcast, "eval": cmd_eval,
     }[args.cmd](args)
