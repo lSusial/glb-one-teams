@@ -401,6 +401,43 @@ class QualityTests(unittest.TestCase):
         briefing.run_briefing(self.db, p, briefing_type='daily', countries=['US'])
         self.assertIsNone(self.db.execute('SELECT 1 FROM country_briefings').fetchone())
 
+    def test_briefing_amount_mismatch_is_retried_once_with_exact_amount_instruction(self):
+        # 2026-10-07: 금액 검증 거부 시 재시도가 없어 IN 브리핑이 6일째 갱신되지 않았다
+        self.add(1, cc='US', score=65)
+        self.db.execute("UPDATE articles_raw SET summary_ko=?, summary_en=? WHERE article_id=1",
+                        ('연준이 300억 달러 규모 기구를 발표했다.', 'The Fed announced a $30 billion facility.'))
+        self.db.commit()
+
+        class SeqProvider(Provider):
+            def __init__(self, responses):
+                super().__init__()
+                self.responses = list(responses)
+
+            def complete_json_batch(self, requests):
+                self.requests.extend(requests)
+                resp = self.responses.pop(0)
+                return {r[0]: resp for r in requests}
+
+        p = SeqProvider([
+            {'summary_ko': '연준이 30억 달러 규모 기구를 발표했다.', 'summary_en': 'The Fed announced a $3 billion facility.'},
+            {'summary_ko': '연준이 300억 달러 규모 기구를 발표했다.', 'summary_en': 'The Fed announced a $30 billion facility.'},
+        ])
+        briefing.run_briefing(self.db, p, briefing_type='daily', countries=['US'])
+        self.assertEqual(len(p.requests), 2)
+        self.assertIn('금액', p.requests[1][2])               # 재요청엔 금액 그대로 쓰라는 지시가 붙는다
+        row = self.db.execute('SELECT summary FROM country_briefings').fetchone()
+        self.assertEqual(row[0], '연준이 300억 달러 규모 기구를 발표했다.')
+
+    def test_stale_daily_briefing_is_not_exported(self):
+        # 2026-10-07: IN 탭에 10/1자 '준비 중' 브리핑이 6일째 노출
+        briefing.ensure_table(self.db)
+        for cc, d in (('IN', '2026-10-01'), ('VN', '2026-10-06'), ('US', '2026-10-07')):
+            self.db.execute("INSERT INTO country_briefings(cc, briefing_date, briefing_type, summary, summary_en)"
+                            " VALUES(?,?,'daily',?,?)", (cc, d, f'{cc} 브리핑', f'{cc} brief'))
+        self.db.commit()
+        out = export_json._daily_briefs(self.db, '2026-10-07')
+        self.assertEqual(sorted(out), ['US', 'VN'])          # 기준일·전일만 노출
+
     def test_empty_briefing_is_explicit_without_llm(self):
         self.add(1, source=3, cc='LA', score=8)
         p = Provider()
@@ -764,6 +801,47 @@ class NumericGuardTests(unittest.TestCase):
     def test_dollar_sign_without_digits_does_not_raise(self):
         self.assertEqual(numeric_guard.usd_values('priced in US$, analysts said. Up to $5...'), [5.0])
 
+
+class OtherCurrencyGuardTests(unittest.TestCase):
+    """2026-10-07 HK 브리핑: 원문 HK$500 billion → '500억 홍콩달러'(10배 축소)가 그대로 노출.
+    USD·INR만 검사하던 금액 검증을 거점 통화로 확대."""
+
+    def test_wrong_scale_in_other_currencies_is_flagged(self):
+        cases = [
+            ('HK$500 billion IPO', '5,000억 홍콩달러', '500억 홍콩달러'),
+            ('Rp 9.1 trillion losses', '9.1조 루피아', '91조 루피아'),
+            ('a ¥1.2 trillion package', '1.2조 엔', '12조 엔'),
+            ('10 billion yuan fund', '100억 위안', '10억 위안'),
+            ('RMB 10 billion fund', '100억 위안', '1,000억 위안'),
+            ('VND 50 trillion bonds', '50조 동', '5조 동'),
+            ('a £250,000 loan', '25만 파운드', '250만 파운드'),
+            ('S$2 billion deal', '20억 싱가포르달러', '2억 싱가포르달러'),
+            ('THB 30 billion stimulus', '300억 바트', '30억 바트'),
+            ('€5 billion deal', '50억 유로', '5억 유로'),
+            # 2026-10-07 라이브: 방글라데시 crore를 억으로 옮긴 10배 오류들, 말레이시아·싱가포르·인니
+            ('a Tk20,000 crore revival fund', '2,000억 타카', '2조 타카'),
+            ('Tk 7,000 crore in state investment', '700억 타카', '7000억 타카'),
+            ('debt reached roughly Tk7 lakh crore', '7조 타카', '70조 타카'),
+            ('Tk 32.45b deposit outflow', '324억 타카', '3,245억 타카'),
+            ('RM9.273 billion owed', '92.7억 링깃', '9.27억 링깃'),
+            ('The S$405 million facility', '4억 500만 싱가포르달러', '4억 5천만 싱가포르달러'),
+        ]
+        for src, ok, bad in cases:
+            with self.subTest(src):
+                self.assertFalse(numeric_guard.amount_mismatch(src, ok))
+                self.assertTrue(numeric_guard.amount_mismatch(src, bad))
+
+    def test_hong_kong_dollar_sign_is_not_read_as_us_dollar(self):
+        self.assertEqual(numeric_guard.usd_values('HK$500bn and S$2bn'), [])
+        self.assertEqual(numeric_guard.usd_values('US$5bn'), [5e9])
+        self.assertEqual(numeric_guard.fx_values('US$500 million'), {})   # US$의 S$를 싱가포르달러로 읽지 않음
+        self.assertEqual(numeric_guard.inr_values('Rs 7 lakh crore'), [7e12])
+        # 원문에 USD가 있고 출력에 HK$가 있어도 USD 불일치로 오판하지 않는다
+        self.assertFalse(numeric_guard.amount_mismatch('$3 billion; HK$500 billion', 'HK$500 billion'))
+
+    def test_korean_dong_word_is_not_an_amount(self):
+        self.assertFalse(numeric_guard.amount_mismatch('VND 50 trillion', '금리를 3.5%로 동결했다'))
+        self.assertEqual(numeric_guard.fx_values('정부가 동결 방침을 밝혔다'), {})
 
 if __name__ == '__main__':
     unittest.main()

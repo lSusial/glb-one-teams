@@ -1,7 +1,7 @@
 """
 금액 검증 공용 유틸 (numeric_guard.py)
 
-LLM이 생성·번역한 텍스트가 원문의 금액(USD·INR)을 그대로 보존했는지 확인한다.
+LLM이 생성·번역한 텍스트가 원문의 금액(USD·INR·거점 통화)을 그대로 보존했는지 확인한다.
 단위 오변환(예: $133 billion → "133억 달러", 정답은 "1,330억 달러")을 잡기 위해
 briefing.py(글로벌 핵심 출처검증)와 llm_translate.py(기사 번역)가 공용으로 쓴다.
 """
@@ -23,7 +23,9 @@ def usd_values(text: str) -> list[float]:
     단위어)와 한국어(조/억/만 달러, "1억9천만 달러" 같은 복합) 표기를 모두 인식한다."""
     text = text or ""
     values: list[float] = []
-    for m in re.finditer(rf"(?:\$|\bUSD)\s*({_NUM})\s*(trillion|billion|million|bn|m)?\b", text, re.I):
+    # HK$·S$ 같은 다른 달러는 제외(US$는 포함) — 홍콩달러 금액이 USD로 잡혀 오판하지 않게
+    for m in re.finditer(rf"(?:\bUS\$|(?<![A-Za-z])\$|\bUSD)\s*({_NUM})\s*(trillion|billion|million|bn|m)?\b",
+                         text, re.I):
         values.append(float(m.group(1).replace(",", "")) * _UNITS[(m.group(2) or "").lower()])
     for m in re.finditer(
             rf"({_NUM})\s*[- ]?(trillion|billion|million|bn|m)\s*[- ]?(?:USD|US dollars?)\b",
@@ -38,8 +40,8 @@ def usd_values(text: str) -> list[float]:
 
 
 _INR_UNITS = {"": 1, "lakh": 1e5, "crore": 1e7, "cr": 1e7, "million": 1e6, "mn": 1e6, "m": 1e6,
-              "billion": 1e9, "bn": 1e9, "trillion": 1e12}
-_INR_UNIT_RE = r"(lakh|crore|cr|trillion|billion|million|bn|mn|m)"
+              "billion": 1e9, "bn": 1e9, "trillion": 1e12, "lakh crore": 1e12}
+_INR_UNIT_RE = r"(lakh crore|lakh|crore|cr|trillion|billion|million|bn|mn|m)"
 
 
 def inr_values(text: str) -> list[float]:
@@ -62,6 +64,49 @@ def inr_values(text: str) -> list[float]:
     return values
 
 
+# 거점 통화(2026-10-07 HK 브리핑 'HK$500 billion → 500억 홍콩달러' 10배 오류로 확대).
+# 코드: (영문 앞 표기, 영문 뒤 표기, 한국어 표기). 원화(원)는 환산값이라 대조하지 않는다.
+_FX = {
+    "HKD": (r"HK\$|\bHKD", r"Hong Kong dollars?", r"홍콩\s?달러"),
+    "SGD": (r"(?<![A-Za-z])S\$|\bSGD", r"Singapore dollars?", r"싱가포르\s?달러"),
+    "CNY": (r"\bRMB|\bCNY", r"yuan|renminbi", r"위안"),
+    "JPY": (r"¥|\bJPY", r"yen", r"엔(?!화)"),
+    "IDR": (r"\bRp\.?|\bIDR", r"rupiah", r"루피아"),
+    "VND": (r"\bVND", r"dong", r"동(?![가-힣])"),
+    "THB": (r"฿|\bTHB", r"baht", r"바트"),
+    "GBP": (r"£|\bGBP", r"pounds?(?: sterling)?", r"파운드"),
+    "EUR": (r"€|\bEUR", r"euros?", r"유로"),
+    "PHP": (r"₱|\bPHP", r"pesos?", r"페소"),
+    "MYR": (r"\bRM|\bMYR", r"ringgit", r"링깃"),
+    "BDT": (r"৳|\bBDT|\bTk\.?", r"taka", r"타카"),
+}
+# 방글라데시 타카도 인도처럼 crore·lakh로 쓴다(Tk 20,000 crore = 2,000억 타카).
+_EN_UNIT_RE = r"(lakh crore|trillion|billion|million|crore|lakh|bn|mn|tn|cr|b|m)"
+_EN_UNITS = {**_UNITS, "mn": 1e6, "tn": 1e12, "b": 1e9,
+             "crore": 1e7, "cr": 1e7, "lakh": 1e5, "lakh crore": 1e12}
+
+
+def fx_values(text: str) -> dict[str, list[float]]:
+    """USD·INR 외 거점 통화 금액을 {통화코드: [값]}으로 반환. 영어(HK$500 billion, 10 billion yuan)와
+    한국어(5,000억 홍콩달러, 1.2조 엔) 표기를 인식한다. 금액이 없는 통화는 키가 없다."""
+    text = text or ""
+    out: dict[str, list[float]] = {}
+    for code, (pre, post, ko) in _FX.items():
+        vals: list[float] = []
+        for m in re.finditer(rf"(?:{pre})\s*({_NUM})(?:\s*-?\s*{_EN_UNIT_RE}\b)?", text, re.I):
+            vals.append(float(m.group(1).replace(",", "")) * _EN_UNITS[(m.group(2) or "").lower()])
+        for m in re.finditer(rf"({_NUM})\s*-?\s*(?:{_EN_UNIT_RE}\s+)?(?:{post})\b", text, re.I):
+            vals.append(float(m.group(1).replace(",", "")) * _EN_UNITS[(m.group(2) or "").lower()])
+        for m in re.finditer(rf"((?:{_KO_PART}\s*)+)(?:{ko})", text):
+            vals.append(sum(float(n.replace(",", "")) * _KO_UNITS[u]
+                            for n, u in re.findall(_KO_PART, m.group(1))))
+        for m in re.finditer(rf"(?<![\d,.조억만])({_NUM})\s*(?:{ko})", text):
+            vals.append(float(m.group(1).replace(",", "")))
+        if vals:
+            out[code] = vals
+    return out
+
+
 def _mismatch(src: list[float], out: list[float]) -> bool:
     if not src or not out:
         return False
@@ -75,9 +120,12 @@ def usd_mismatch(source_text: str, output_text: str) -> bool:
 
 
 def amount_mismatch(source_text: str, output_text: str) -> bool:
-    """USD·INR 금액을 통화별로 각각 대조한다(usd_mismatch 확장). 한쪽이라도 어긋나면 True."""
-    return (usd_mismatch(source_text, output_text)
-            or _mismatch(inr_values(source_text), inr_values(output_text)))
+    """USD·INR·거점 통화 금액을 통화별로 각각 대조한다(usd_mismatch 확장). 한쪽이라도 어긋나면 True."""
+    if (usd_mismatch(source_text, output_text)
+            or _mismatch(inr_values(source_text), inr_values(output_text))):
+        return True
+    src, out = fx_values(source_text), fx_values(output_text)
+    return any(_mismatch(src.get(code, []), vals) for code, vals in out.items())
 
 
 def source_amount_conflicts(texts: list[str]) -> dict[str, list[float]]:
