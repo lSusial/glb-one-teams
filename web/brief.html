@@ -11,11 +11,9 @@
 <link rel="stylesheet" href="shared-tokens.css"/>
 <style>
 .hd-count{font-size:clamp(10.5px,1.6cqi,12.5px);color:var(--muted);margin-top:3px}
-.quiz{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
-.quiz-tag{display:inline-block;font-size:clamp(10px,1.5cqi,11.5px);font-weight:700;color:#B67611;
-          background:var(--gold-soft);border-radius:6px;padding:2px 8px;letter-spacing:.02em}
+.quiz-card{padding:14px var(--pad)}
 .quiz-q{font-size:clamp(12.5px,1.95cqi,15px);font-weight:600;color:var(--ink);line-height:1.5;
-        margin:8px 0 10px;word-break:keep-all}
+        margin:11px 0 10px;word-break:keep-all}
 .quiz-opts{display:flex;flex-direction:column;gap:7px}
 .quiz-opt{text-align:left;font-size:clamp(12px,1.85cqi,14px);color:var(--ink-2);background:var(--bg);
           border:1px solid var(--line-2);border-radius:10px;padding:9px 12px;cursor:pointer;
@@ -80,12 +78,13 @@
   <section class="card issues" aria-labelledby="t-issues">
     <div class="sec-h"><h2 class="sec-t en" id="t-issues">TODAY'S TOP ISSUES</h2></div>
     <ul class="rows" id="issue-rows"></ul>
-    <div class="quiz" id="quiz" style="display:none">
-      <span class="quiz-tag" data-en="QUIZ">퀴즈</span>
-      <p class="quiz-q" id="quiz-q"></p>
-      <div class="quiz-opts" id="quiz-opts"></div>
-      <p class="quiz-exp" id="quiz-exp" style="display:none"></p>
-    </div>
+  </section>
+
+  <section class="card quiz-card" id="quiz" style="display:none" aria-labelledby="t-quiz">
+    <div class="sec-h"><h2 class="sec-t en" id="t-quiz">TODAY'S QUIZ</h2></div>
+    <p class="quiz-q" id="quiz-q"></p>
+    <div class="quiz-opts" id="quiz-opts"></div>
+    <p class="quiz-exp" id="quiz-exp" style="display:none"></p>
   </section>
 
   </div>
