@@ -109,6 +109,113 @@ class ArchiveLinkExportTests(unittest.TestCase):
                 self.assertFalse([u for u in links if '/topic/' in u or '/tags/' in u], name)
 
 
+class StoryRepresentativeRegressionTests(unittest.TestCase):
+    """같은 사건 여러 매체 보도 → 국가탭·홈 상단 대표 1건, 결과가 나온 예고 기사 숨김(실제 배포본).
+    10/7 RBI '인상 추진'(예고)과 '25bp 인상'(결과) 동시 노출, 10/8 인도 탭 RBI 인상 3건(모두 77점),
+    10/7 홈 한국 은행 AI 해킹 2건(다른 매체)."""
+
+    RBI_PREVIEW = ('RBI poised for first rate hike in nearly four years amid rupee, inflation pressures',
+                   "India's Reserve Bank is preparing to raise its benchmark interest rate for the first time in "
+                   'almost four years, driven by persistent inflation and rupee weakness.')
+    RBI_TOI = ('RBI raises repo rate 25bp to 5.5% for first time since Feb 2023',
+               "India's Reserve Bank raised its repo rate by 25 basis points to 5.5% on Wednesday, the first "
+               'increase in 44 months, citing stronger-than-expected growth and price pressures from the West Asia '
+               "conflict. The move will shift the RBI's policy stance from neutral to calibrated tightening.")
+    RBI_ET = ('RBI raises repo rate 25 bps to 5.50% for first time in nearly 4 years',
+              "India's central bank raised its repo rate by 25 basis points to 5.50% and shifted its policy stance "
+              'to calibrated tightening, citing persistent inflation pressures. RBI Governor Sanjay Malhotra '
+              'signaled that rate cuts are off the table in the near term.')
+    RBI_BFSI = ('RBI raises repo rate 25 bps to 5.5%, shifts to calibrated tightening',
+                "India's Reserve Bank Monetary Policy Committee voted unanimously to raise the repo rate by 25 basis "
+                'points to 5.5% on October 7, citing rising inflation and broad-based price pressures.')
+    SEBI = ("India's SEBI to reverse derivative settlement rules; market stocks rise",
+            "India's market regulator SEBI will partially reverse derivative closing-price rules, lifting "
+            'shares of exchanges and brokers.')
+    HACK_BT = ('South Korea probes AI use in bank cyberattacks; KB among targets',
+               'South Korean authorities are investigating whether artificial intelligence was used in recent '
+               'cyberattacks against major banks including KB Kookmin Bank, Hana Bank, and Shinhan Bank. The '
+               'National Office of Investigation has launched a formal inquiry into the incidents.')
+    HACK_FMT = ('South Korea reports AI-assisted bank hacks affecting major lenders',
+                "South Korea's government said there were signs that artificial intelligence was used in "
+                'cyberattacks against multiple commercial banks, including KB Kookmin Bank, Shinhan Bank, Hana '
+                'Bank, and Woori Bank, resulting in breaches of customer personal information. Police launched a '
+                'full-scale investigation.')
+
+    def setUp(self):
+        from datetime import timedelta
+        self.db = sqlite3.connect(':memory:')
+        self.db.row_factory = sqlite3.Row
+        self.addCleanup(self.db.close)
+        self.db.executescript((Path(__file__).parents[1] / 'schema.sql').read_text(encoding='utf-8'))
+        media = [(1, 'Business Standard', 'IN', 1), (2, 'The Times of India', 'IN', 1),
+                 (3, 'Economic Times BFSI', 'IN', 2), (4, 'The Economic Times', 'IN', 1),
+                 (5, 'The Business Times', 'SG', 1), (6, 'Free Malaysia Today', 'MY', 2)]
+        self.db.executemany('INSERT INTO media_sources(source_id, media_name, primary_country_code, language, tier)'
+                            " VALUES(?,?,?,'en',?)", media)
+        self.db.executemany('INSERT INTO media_source_feeds(feed_id, source_id, feed_url, feed_section) VALUES(?,?,?,?)',
+                            [(i, i, f'https://feed/{i}', 'main') for i, *_ in media])
+        today = date.today()
+        yday = (today - timedelta(days=1)).isoformat()
+        # (id, 매체, 기사, 점수, 게시일, 주제국가) — RBI 4건은 모두 77점(동점)
+        arts = [(1, 1, self.RBI_PREVIEW, 77, yday, 'IN'), (2, 2, self.RBI_TOI, 77, today.isoformat(), 'IN'),
+                (3, 3, self.RBI_BFSI, 77, today.isoformat(), 'IN'), (4, 4, self.RBI_ET, 77, today.isoformat(), 'IN'),
+                (7, 4, self.SEBI, 71, yday, 'IN'),
+                (5, 5, self.HACK_BT, 85, yday, 'KR'), (6, 6, self.HACK_FMT, 82, yday, 'KR')]
+        for aid, src, (title, summary), score, pub, pc in arts:
+            self.db.execute(
+                "INSERT INTO articles_raw(article_id, feed_id, source_id, title, link, content_hash, published_at,"
+                " ai_score, ai_model, topics, event_type, summary_en, summary_ko, title_ko, title_en, primary_country)"
+                " VALUES(?,?,?,?,?,?,?,?,'test:model','POLICY','',?,?,?,?,?)",
+                (aid, src, src, title, f'https://news/{aid}', f'h{aid}', pub, score, summary,
+                 f'{title} 요약', f'{title} (ko)', title, pc))
+        self.db.commit()
+        self.url = {aid: f'https://news/{aid}' for aid in range(1, 8)}
+
+    def rbi(self, cards):
+        return [c for c in cards if 'RBI' in c['t_en']]
+
+    def test_country_tab_shows_one_rbi_result_with_others_as_related(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp, patch.object(config, 'EXPORT_DIR', Path(tmp)):
+            export_json.export_countries(self.db)
+            data = json.loads((Path(tmp) / 'countries.json').read_text(encoding='utf-8'))
+        cards = next(c for c in data['countries'] if c['cc'] == 'IN')['articles']
+        rbi = self.rbi(cards)
+        self.assertEqual(len(rbi), 1, [c['t_en'] for c in cards])            # 3건 중복 → 대표 1건
+        self.assertNotEqual(rbi[0]['u'], self.url[1])                         # 예고 기사는 대표·노출 아님
+        related = {x['u'] for x in rbi[0]['rl'][1:]}
+        self.assertTrue(related, rbi[0]['rl'])
+        self.assertTrue(related <= {self.url[2], self.url[3], self.url[4]})   # 관련뉴스 = 같은 사건 결과 기사만
+        self.assertIn(self.SEBI[0], [c['t_en'] for c in cards])               # 다른 사건은 그대로
+
+    def test_home_top_news_shows_each_event_once(self):
+        top = export_json._compute_top_news(self.db, limit=10)
+        rbi = self.rbi(top)
+        self.assertEqual(len(rbi), 1)
+        self.assertNotEqual(rbi[0]['u'], self.url[1])
+        hacks = [c for c in top if 'South Korea' in c['t_en']]
+        self.assertEqual(len(hacks), 1)
+        self.assertEqual(hacks[0]['u'], self.url[5])                          # 점수 높은 BT가 대표
+        self.assertIn(self.url[6], [x['u'] for x in hacks[0]['rl']])          # 다른 매체 보도는 관련뉴스로
+
+    def test_result_beats_preview_and_tier_breaks_score_ties(self):
+        row = StoryDedupTests.row
+        preview = row(1, 'RBI expected to raise repo rate 25 bps to 5.5% on Wednesday',
+                      "India's Reserve Bank is expected to raise its repo rate by 25 basis points to 5.5% on "
+                      'Wednesday, citing inflation and price pressures.')
+        result = row(2, *self.RBI_BFSI)
+        preview.update(ai_score=77, published_at='2026-10-07', tier=1)
+        result.update(ai_score=77, published_at='2026-10-07', tier=2)
+        reps, _, mem = export_json._dedup_country_feed([preview, result], {})   # 예고가 rank 1위여도
+        self.assertEqual([r['article_id'] for r in reps], [2])
+        self.assertEqual([m['article_id'] for m in mem[2]], [1])
+        a, b = row(3, *self.RBI_TOI), row(4, *self.RBI_BFSI)
+        a.update(ai_score=77, published_at='2026-10-07', tier=2)
+        b.update(ai_score=77, published_at='2026-10-07', tier=1)
+        reps, _, _ = export_json._dedup_country_feed([a, b], {})                 # 동점·같은 날 → tier 1
+        self.assertEqual([r['article_id'] for r in reps], [4])
+
+
 class CountryRoutingRegressionTests(unittest.TestCase):
     """주제국가가 불명확한 GLOBAL 사건이 매체 국가로 배치되던 사례(실제 배포본).
     ① 10/6 홈 핵심: Reuters(GB) 이탈리아 은행 M&A → GB  ② 10/7 Straits Times 호르무즈 → SG 탭
