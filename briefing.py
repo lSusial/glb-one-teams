@@ -468,6 +468,7 @@ def generate_daily_highlights(
         (tdate, json.dumps(items, ensure_ascii=False), provider.model_id),
     )
     conn.commit()
+    return {"written": len(items)}
 
 
 _CREATE_QUIZ = """

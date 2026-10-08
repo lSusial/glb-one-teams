@@ -32,6 +32,11 @@ class Provider:
             raise RuntimeError('API unavailable')
         return {r[0]: self.response for r in requests}
 
+    def complete_json(self, system, user, **kw):
+        if self.fail:
+            raise RuntimeError('API unavailable')
+        return self.response
+
 
 class SchemaContractTests(unittest.TestCase):
     def test_fresh_schema_contains_runtime_columns_and_history(self):
@@ -693,6 +698,43 @@ class QualityTests(unittest.TestCase):
         self.db.executescript("CREATE TABLE fetch_runs(run_id INTEGER PRIMARY KEY, started_at TEXT);")
         self.assertEqual(export_json._snapshot_date(self.db),
                           export_json._snapshot_date(None))
+
+
+class DailyHighlightsReturnTests(unittest.TestCase):
+    """2026-10-08: generate_daily_highlights()가 성공 경로(항목 저장 후)에서 return 없이
+    끝나 None을 반환, main.py의 s4['written']이 TypeError로 전체 ai 파이프라인을 죽였다
+    (실제 운영 중 발생 — 오늘의 글로벌 핵심은 DB에 정상 저장됐으나 이후 퀴즈·지표·배포
+    단계가 전부 스킵됨). 성공 시에도 dict를 반환하는지 회귀 테스트로 고정."""
+
+    def setUp(self):
+        self.db = sqlite3.connect(':memory:')
+        self.db.row_factory = sqlite3.Row
+        self.db.executescript('''
+            CREATE TABLE media_sources(source_id INTEGER PRIMARY KEY,
+                primary_country_code TEXT, tier INTEGER, media_name TEXT);
+            INSERT INTO media_sources VALUES (1,'US',1,'US Test');
+            CREATE TABLE articles_raw(article_id INTEGER PRIMARY KEY, source_id INTEGER,
+                primary_country TEXT, title_ko TEXT, title TEXT, ai_score INTEGER,
+                ai_model TEXT, published_at TEXT, duplicate_of INTEGER, dup_by_ai INTEGER,
+                summary_ko TEXT, summary_en TEXT, link TEXT, event_type TEXT,
+                korean_fi TEXT, personnel_move INTEGER, topics TEXT);
+        ''')
+        self.db.execute(
+            "INSERT INTO articles_raw VALUES(1,1,'US',NULL,'Fed raises rates',70,'test:model',?,"
+            "NULL,0,'요약','Evidence summary','https://example.com/1','', '', 0, NULL)",
+            (date.today().isoformat(),))
+        self.db.commit()
+        self.addCleanup(self.db.close)
+
+    def test_successful_run_returns_written_count_not_none(self):
+        provider = Provider({'highlights': [{
+            'category': '금리', 'headline_ko': '연준 금리 인상', 'headline_en': 'Fed raises rates',
+            'country_codes': ['US'], 'source_article_ids': [1],
+        }]})
+        result = briefing.generate_daily_highlights(self.db, provider=provider)
+        self.assertEqual(result, {'written': 1})
+        self.assertIsNotNone(
+            self.db.execute('SELECT items FROM daily_highlights').fetchone())
 
 
 class NumericGuardTests(unittest.TestCase):
