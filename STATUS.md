@@ -30,7 +30,7 @@ fetch → keyword_filter(통과≥2, SOCIETY 독립경로) → dedup → prefilt
 | 랭킹 | `ranking.py` | ✅ 표시 정렬 rank_score(`docs/rank_score_spec.md`), 다출처 보너스는 독립 발행사 수 기준. 게이트는 ai_score≥55 |
 | export | `export_json.py` | ✅ 대체된 예고 기사 제거(`superseded_ids`), 토픽·태그 페이지 링크 제외, 관련 링크 최대 4건(원문+같은 사건 3)·사건 유사도 검증, 홈 지도 무데이터 분리 |
 | 지표 | `indicators.py` | ✅ 환율·지수·정책금리·미국채, 1/3/6개월 추세(주 1회 `indicators-history`) |
-| 표시 감사 | `eval/display_audit.py` | ✅ 19개 항목. `deploy_web.sh --strict`는 탑이슈 출처 무결성만 배포 차단, 나머지는 보고 전용(§6 결정 대기) |
+| 표시 감사 | `eval/display_audit.py` | ✅ 21개 항목(2026-10-08 PAST_DEADLINE·CATEGORY_MISMATCH 추가). `--strict` 배포 차단 = 탑이슈 출처 무결성·AMOUNT_MISMATCH·JUNK_TITLE, 나머지는 검토 경고 |
 | 품질 경보 | `quality_report.py` | ✅ 국가·소스 단계별 수율, ACTIVE 본문률, 점수 집중, 근거 강도, 피드 실패를 JSON/Markdown으로 기록. 배포 전 critical 차단 |
 | 배포 | `deploy_web.sh` | ✅ export + 감사 + wrangler. 서버 rsync는 SSH 타임아웃으로 비활성 |
 | 메신저 | `broadcaster.py` | 🟡 Telegram 구현, 정기 발송 미가동·채널 확정 대기 |

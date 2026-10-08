@@ -1,6 +1,7 @@
 import json
 import re
 import sqlite3
+import sys
 import unittest
 from datetime import date
 from pathlib import Path
@@ -107,6 +108,109 @@ class ArchiveLinkExportTests(unittest.TestCase):
                 links = self.links(out)
                 self.assertTrue(links, name)
                 self.assertFalse([u for u in links if '/topic/' in u or '/tags/' in u], name)
+
+
+def _load_display_audit():
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(
+        'display_audit', Path(__file__).parents[1] / 'eval' / 'display_audit.py')
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+class PreDeployValidationTests(unittest.TestCase):
+    """배포 전 데이터 검증(2026-10-08): 지난 만료일·주제어만 겹친 관련뉴스·분류 불일치, 차단/경고 구분."""
+
+    RARE_EARTH_EN = ("China's one-year suspension of its most restrictive rare earth export rules expires "
+                     'November 10, 2025, with no indication from Beijing whether the pause will be extended. '
+                     'The one-year pause was formalized on November 7, 2025, when the Ministry of Commerce agreed '
+                     'to the suspension. The underlying April 2025 licensing regime remains in effect.')
+    RARE_EARTH_KO = '중국의 가장 강력한 희토류 수출 통제 조치 유예가 2025년 11월 10일 만료되며, 연장 가능성이 보이지 않는다.'
+    FED = {'title': 'Fed announces major overhaul of bank supervision structure and regional organization',
+           'title_en': 'Fed announces major overhaul of bank supervision structure and regional organization',
+           'summary_en': "Federal Reserve Vice Chair for Supervision Michelle Bowman unveiled a major overhaul of "
+                         "the Fed's bank supervision structure, consolidating supervisory responsibilities and "
+                         'reorganizing regional reserve bank oversight of large banks.'}
+    FDIC = {'title': "FDIC's Hill defends supervision and merger reforms",
+            'title_en': 'FDIC chairman defends bank supervision and merger review reforms',
+            'summary_en': 'FDIC Chairman Travis Hill defended the agency\'s changes to bank supervision and merger '
+                          'review before lawmakers, saying the reforms make large bank oversight more efficient.'}
+    FED_REUTERS = {'title': 'Fed plans overhaul of bank supervision responsibilities, Bowman says',
+                   'title_en': 'Fed plans overhaul of bank supervision responsibilities, Bowman says',
+                   'summary_en': 'The Federal Reserve plans to overhaul how it divides bank supervision '
+                                 'responsibilities, Vice Chair for Supervision Michelle Bowman said.'}
+    KB_COOP = {'t': 'KB은행, 협동조합 인수설 부인', 'u': 'https://kompas/kb', 'd': '2026-10-06',
+               'c': 'markets', 'c2': 'geopolitics',
+               't_en': 'KB Bank denies cooperative takeover plan, reaffirms KB Kookmin control',
+               'q_en': 'KB Bank Indonesia issued a statement denying reports that cooperatives plan to retake '
+                       "ownership of the lender, formerly known as Bukopin. The bank's corporate communications "
+                       'head confirmed no change in shareholding structure and that KB Kookmin Bank remains the '
+                       'controlling shareholder.'}
+
+    def setUp(self):
+        self.audit = _load_display_audit()
+
+    def test_past_expiry_date_is_flagged_but_background_date_is_not(self):
+        hits = self.audit.past_deadlines(self.RARE_EARTH_EN, date(2026, 10, 8))
+        self.assertEqual([d for _, d in hits], [date(2025, 11, 10)])      # 'formalized on Nov 7, 2025'·'April 2025'은 배경
+        self.assertEqual([d for _, d in self.audit.past_deadlines(self.RARE_EARTH_KO, date(2026, 10, 8))],
+                         [date(2025, 11, 10)])
+        self.assertEqual(self.audit.past_deadlines(self.RARE_EARTH_EN.replace('2025, with', '2026, with'),
+                                                   date(2026, 10, 8)), [])   # 올바른 연도면 경고 없음
+
+    def test_related_links_need_same_institution_not_shared_theme_words(self):
+        # 감독·개혁·합병 같은 주제어만 겹친 FDIC 기사는 연준 개편 기사의 관련뉴스가 아니다(겹침 자체는 0.12 이상)
+        ov = llm_dedup.overlap(llm_dedup._tokens(' '.join(self.FED.values())),
+                               llm_dedup._tokens(' '.join(self.FDIC.values())))
+        self.assertGreaterEqual(ov, export_json._RELATED_MIN_OVERLAP)
+        self.assertFalse(export_json._same_story_for_link(self.FED, self.FDIC))
+        self.assertTrue(export_json._same_story_for_link(self.FED, self.FED_REUTERS))   # 같은 연준 개편 보도
+        rbi_a = {'title': StoryRepresentativeRegressionTests.RBI_TOI[0], 'summary_en': StoryRepresentativeRegressionTests.RBI_TOI[1]}
+        rbi_b = {'title': StoryRepresentativeRegressionTests.RBI_ET[0], 'summary_en': StoryRepresentativeRegressionTests.RBI_ET[1]}
+        self.assertTrue(export_json._same_story_for_link(rbi_a, rbi_b))
+
+    def test_geopolitics_without_geo_facts_is_flagged_as_governance(self):
+        reason = self.audit.category_mismatch(self.KB_COOP)
+        self.assertIn('지배구조', reason)
+        hormuz = dict(self.KB_COOP, c='geopolitics', c2='economy',
+                      t_en='Hormuz tanker attacks hit weekly record since Iran conflict began', q_en='')
+        self.assertIsNone(self.audit.category_mismatch(hormuz))
+        self.assertIsNone(self.audit.category_mismatch(dict(self.KB_COOP, c='policy', c2='markets')))
+
+    def test_strict_blocks_wrong_facts_but_only_warns_heuristics(self):
+        import contextlib
+        import io
+        import tempfile
+        card = dict(self.KB_COOP, t='중국 희토류 수출 유예 11월 10일 만료', q='희토류 유예 만료', score=61,
+                    u='https://startupfortune/rare-earth', c='geopolitics', c2='economy',
+                    t_en="China's rare earth export truce expires Nov. 10", q_en=self.RARE_EARTH_EN, rl=[])
+        kb = dict(self.KB_COOP, q='KB은행 인수설 부인', score=74, rl=[])
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            sqlite3.connect(tmp / 'empty.db').executescript(
+                'CREATE TABLE articles_raw(article_id INTEGER, link TEXT, primary_country TEXT, summary_en TEXT, '
+                'title TEXT, title_en TEXT, published_at TEXT, ai_score INTEGER, duplicate_of INTEGER, '
+                'dup_by_ai INTEGER, source_conflict TEXT);')
+
+            def run(cards):
+                (tmp / 'countries.json').write_text(json.dumps(
+                    {'snapshot_date': '2026-10-08', 'countries': [{'cc': 'CN', 'articles': cards}]}), encoding='utf-8')
+                out = io.StringIO()
+                argv = ['display_audit.py', '--export-dir', str(tmp), '--db', str(tmp / 'empty.db'), '--strict']
+                with patch.object(sys, 'argv', argv), contextlib.redirect_stdout(out):
+                    code = self.audit.main()
+                return code, out.getvalue()
+
+            code, out = run([card, kb])
+            self.assertEqual(code, 0, out)                                   # 날짜·분류는 경고만
+            self.assertRegex(out, r'✖ PAST_DEADLINE\s+1건\s+\[경고\]')
+            self.assertRegex(out, r'✖ CATEGORY_MISMATCH\s+1건\s+\[경고\]')
+            wrong = dict(card, t_en='Fund of Tk20,000 crore', q_en='Businesses seek loans from a Tk20,000 crore fund.',
+                         q='2조 타카 기금')                                     # 10배 금액 오류
+            code, out = run([wrong])
+            self.assertEqual(code, 1, out)                                   # 틀린 금액은 배포 차단
+            self.assertIn('배포 차단 항목: AMOUNT_MISMATCH', out)
 
 
 class StoryRepresentativeRegressionTests(unittest.TestCase):

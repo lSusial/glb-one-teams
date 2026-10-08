@@ -18,7 +18,7 @@ echo ""
 echo "▶ [1a] 뉴스 품질·소스 수율 점검 (critical 시 배포 중단)..."
 .venv/bin/python main.py quality --strict
 echo ""
-echo "▶ [1b] 표시 감사 (탑이슈 출처 무결성 실패 시 배포 중단)..."
+echo "▶ [1b] 표시 감사 (출처 무결성·금액 오류·쓰레기 제목 시 배포 중단, 나머지는 경고)..."
 .venv/bin/python eval/display_audit.py --strict
 echo ""
 
