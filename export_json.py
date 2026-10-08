@@ -431,11 +431,38 @@ def _dedup_country_feed(rows, cm):
             buckets.append({"tk": tk, "mem": [r]})
     reps, sizes, members = [], {}, {}
     for b in buckets:
-        rep = b["mem"][0]           # rank 최고(입력 첫)
-        reps.append(rep)
+        rep = max(b["mem"], key=_rep_key(b["mem"]))
+        reps.append(rep)            # 버킷 순서 = 첫 멤버(최고 rank) 순서
         sizes[rep["article_id"]] = len(b["mem"])
-        members[rep["article_id"]] = b["mem"][1:]
+        members[rep["article_id"]] = [m for m in b["mem"] if m is not rep]
     return reps, sizes, members
+
+
+def _rep_key(mem):
+    """같은 사건 묶음의 대표 선정 키: 결과 기사(예고 아님) → ai_score → 최신 → 출처 tier → 입력(rank) 순.
+    ai_score가 같은 여러 매체 보도(10/8 RBI 인상 3건 모두 77)에서 예고 기사가 대표가 되지 않게 한다."""
+    pos = {id(m): i for i, m in enumerate(mem)}
+
+    def key(r):
+        keys = r.keys()
+        val = lambda k: r[k] if k in keys else None   # noqa: E731
+        tier = val("tier")
+        return (not llm_dedup.is_preview(val("title_ko"), val("title_en"), val("title")),
+                val("ai_score") or 0, (val("published_at") or "")[:10],
+                -(tier if tier is not None else 9), -pos[id(r)])
+    return key
+
+
+def _drop_superseded(conn, rows):
+    """같은 사건의 후속(연기·취소)이나 결과 기사가 있으면 앞선 예고 기사를, 기준일보다 오래된 예고 기사를 뺀다.
+    국가탭·홈 핵심뉴스 공용(10/7 홈·인도 탭에 RBI '인상 추진'과 '25bp 인상'이 함께 노출)."""
+    gone = llm_dedup.superseded_ids([(a["article_id"], a["published_at"] or "",
+                                      a["title_en"] or a["title"] or "") for a in rows])
+    gone |= llm_dedup.expired_preview_ids(
+        [(a["article_id"], a["published_at"] or "", a["title_ko"], a["title_en"], a["title"])
+         for a in rows],
+        _snapshot_date(conn))
+    return [a for a in rows if a["article_id"] not in gone]
 
 
 # 매체 태그/토픽 아카이브 페이지는 실제 기사가 아니다(korean_fi·personnel과 같은 기준). 국가탭·모니터링·
@@ -791,17 +818,10 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
         story_mem = {}
         if active_only:
             ordered = ranking.order(conn, rows, cluster_map=cm)   # 표시 정렬 = 복합 rank_score
+            # 연기·취소·결과 기사가 있으면 그 전 예고성 기사를 내린다(파업 '개시'와 '연기'가 같이 뜨던 문제)
+            ordered = _drop_superseded(conn, ordered)
             # 근접중복 스토리 축소(같은 사건 여러 각도 → 대표 1건). UPI·Fed 류 홍수 방지.
             ordered, dedup_n, story_mem = _dedup_country_feed(ordered, cm)
-            # 연기·취소 등 후속 기사가 있으면 그 전 예고성 기사를 내린다(파업 '개시'와 '연기'가 같이 뜨던 문제)
-            gone = llm_dedup.superseded_ids([(a["article_id"], a["published_at"] or "",
-                                              a["title_en"] or a["title"] or "") for a in ordered])
-            gone |= llm_dedup.expired_preview_ids(
-                [(a["article_id"], a["published_at"] or "",
-                  a["title_ko"], a["title_en"], a["title"])
-                 for a in ordered],
-                _snapshot_date(conn))
-            ordered = [a for a in ordered if a["article_id"] not in gone]
             rows = ordered[:config.COUNTRY_MAX_ARTICLES]        # 국가당 노출 상한
             # 상한에서 밀린 사회기사 몇 건 되살림(위 where로 이미 후보에 포함됨).
             have = {a["article_id"] for a in rows}
@@ -1058,19 +1078,20 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
     ).fetchall()
     rows = ranking.order(conn, rows)   # 표시 정렬 = 복합 rank_score(근접중복·국가상한은 아래서 적용)
     siblings_map = _story_links_map(conn)
+    # 국가탭과 같은 기준: 결과가 나온 예고 기사 제외 → 같은 사건 다른 매체는 대표 1건(나머지는 관련뉴스로)
+    rows, _sizes, story_mem = _dedup_country_feed(_drop_superseded(conn, rows), {})
 
-    out, seen_tokens, seen_story, per_cc = [], [], [], {}
+    out, seen_tokens, per_cc = [], [], {}
     for r in rows:
         tk = _sig_tokens(r["title"])
-        story = _story_sig(r)
-        if any(_jaccard(tk, s) >= config.TOP_NEWS_SIM for s in seen_tokens) or _same_story(story, seen_story):
-            continue                                   # 근접 중복(같은 기사 재탕·같은 사건 다른 매체)
+        if any(_jaccard(tk, s) >= config.TOP_NEWS_SIM for s in seen_tokens):
+            continue                                   # 근접 중복(같은 기사 재탕)
         cc = kb_network.route_country(r["cc"], _route_text(r))   # 매체 국가로 샌 GLOBAL 사건은 GLOBAL로
         if per_cc.get(cc, 0) >= config.TOP_NEWS_PER_COUNTRY:
             continue                                   # 국가별 상한
         codes = [c for c in (r["topics"] or "").split(",") if c]
-        # related: 같은 사건 기사(duplicate_of 형제)만 — 같은 국가·토픽 겹침으로 붙이지 않음
-        rl = _related_links(r, None, siblings_map.get(r["article_id"], []), [])
+        # related: 같은 사건 기사(duplicate_of 형제·같은 사건 묶음 멤버)만 — 같은 국가·토픽 겹침으로 붙이지 않음
+        rl = _related_links(r, None, siblings_map.get(r["article_id"], []), story_mem.get(r["article_id"], []))
         t_ko = r["title_ko"] if "title_ko" in r.keys() else None
         out.append(dict(cc=cc, flag=_FLAGS_ALL.get(cc, ""), src=r["media_name"],
                         d=(r["published_at"] or "")[:10],
@@ -1080,7 +1101,6 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
                         expanded_summary_en=r["expanded_summary_en"] or "",
                         **taxonomy.cat_fields(codes), score=r["ai_score"], u=r["link"], rl=rl))
         seen_tokens.append(tk)
-        seen_story.append(story)
         per_cc[cc] = per_cc.get(cc, 0) + 1
         if len(out) >= limit:
             break
