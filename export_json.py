@@ -17,6 +17,7 @@ from datetime import datetime, timedelta, timezone
 
 import config
 import db
+import kb_network
 import llm_dedup
 import ranking
 import taxonomy
@@ -407,14 +408,12 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
 def _dedup_country_feed(rows, cm):
     """국가 피드 근접중복 축소 — 같은 스토리 여러 각도를 대표 1건으로 접는다.
     rows는 rank_score 내림차순 정렬 가정(대표=버킷 첫=최고 rank).
-    시그니처=제목(한국어 우선)+요약 토큰, 임계=config.COUNTRY_STORY_DEDUP_SIM.
+    시그니처=_story_sig(영문 제목+요약), 임계=config.COUNTRY_STORY_DEDUP_SIM.
     반환: (대표만 남긴 rows, {article_id: 묶인 기사 수}, {article_id: 대표 외 묶인 rows}).
     세 번째 값은 모달 '관련 기사 링크'에 쓴다(같은 사건을 다룬 실제 기사만)."""
     buckets = []
     for r in rows:
-        text = ((r["title_ko"] or r["title"] or "") + " " +
-                (r["summary_ko"] or r["summary_en"] or ""))[:400]
-        tk = _sig_tokens(text)
+        tk = _story_sig(r)
         for b in buckets:
             if _overlap_ratio(tk, b["tk"]) >= config.COUNTRY_STORY_DEDUP_SIM:
                 b["mem"].append(r); break
@@ -775,6 +774,9 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
             """,
             (cc, *params_tail, *dparams),
         ).fetchall()
+        # 이 나라를 한 번도 언급하지 않는 기사는 탭에서 뺀다(주제국가 미지정 → 매체 국적 폴백 오분류)
+        rows = [r for r in rows if kb_network.mentions_country(
+            cc, f"{r['title']} {r['title_en'] or ''} {r['summary_en'] or ''}")]
         dedup_n = {}
         story_mem = {}
         if active_only:
@@ -987,6 +989,20 @@ def _sig_tokens(text: str) -> set:
             if w not in _TN_STOP and len(w) > 2}
 
 
+def _story_sig(r) -> set:
+    """같은 사건 판정용 시그니처 — 영문 기준본(title_en·summary_en, 없으면 원제목) 토큰.
+    _sig_tokens는 [a-z0-9]만 보므로 한국어 제목·요약으로 만들면 빈 집합이 되어 근접중복 축소가
+    사실상 꺼져 있었다(2026-10-08 IN 탭 RBI 금리 인상 3건 동시 노출)."""
+    keys = r.keys()
+    title = (r["title_en"] if "title_en" in keys else None) or r["title"] or ""
+    summary = (r["summary_en"] if "summary_en" in keys else None) or ""
+    return _sig_tokens(f"{title} {summary}"[:600])
+
+
+def _same_story(tk: set, seen: list) -> bool:
+    return any(_overlap_ratio(tk, s) >= config.COUNTRY_STORY_DEDUP_SIM for s in seen)
+
+
 def _jaccard(a: set, b: set) -> float:
     return len(a & b) / len(a | b) if a and b else 0.0
 
@@ -1033,11 +1049,12 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
     rows = ranking.order(conn, rows)   # 표시 정렬 = 복합 rank_score(근접중복·국가상한은 아래서 적용)
     siblings_map = _story_links_map(conn)
 
-    out, seen_tokens, per_cc = [], [], {}
+    out, seen_tokens, seen_story, per_cc = [], [], [], {}
     for r in rows:
         tk = _sig_tokens(r["title"])
-        if any(_jaccard(tk, s) >= config.TOP_NEWS_SIM for s in seen_tokens):
-            continue                                   # 근접 중복(같은 기사 재탕)
+        story = _story_sig(r)
+        if any(_jaccard(tk, s) >= config.TOP_NEWS_SIM for s in seen_tokens) or _same_story(story, seen_story):
+            continue                                   # 근접 중복(같은 기사 재탕·같은 사건 다른 매체)
         cc = r["cc"]
         if per_cc.get(cc, 0) >= config.TOP_NEWS_PER_COUNTRY:
             continue                                   # 국가별 상한
@@ -1053,6 +1070,7 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
                         expanded_summary_en=r["expanded_summary_en"] or "",
                         **taxonomy.cat_fields(codes), score=r["ai_score"], u=r["link"], rl=rl))
         seen_tokens.append(tk)
+        seen_story.append(story)
         per_cc[cc] = per_cc.get(cc, 0) + 1
         if len(out) >= limit:
             break
@@ -1396,11 +1414,15 @@ def _event_bucket(rows: list, code: str, max_per: int, build) -> tuple[list, set
     """rows(이미 rank_score 순 정렬)에서 event_type 코드가 code인 기사를 최대 max_per개
     골라 (기사 dict 리스트, 국가코드 집합)으로 반환. build(row)가 표시 필드를 만든다
     (진출/미진출 카드 필드가 달라 호출부에서 주입; c 필드는 topics 기반으로 build 내부에서 유도)."""
-    arts, ccs = [], set()
+    arts, ccs, seen = [], set(), []
     for r in rows:
         ev_codes = [c.strip() for c in (r["event_type"] or "").split(",") if c.strip()]
         if code not in ev_codes:
             continue
+        story = _story_sig(r)
+        if _same_story(story, seen):
+            continue                     # 같은 사건 다른 매체(KR 은행 해킹 2건 동시 노출, 2026-10-08)
+        seen.append(story)
         art = build(r)
         arts.append(art)
         ccs.add(art["cc"])

@@ -9,6 +9,8 @@ KB 시사점(kb_implication) 및 국가 브리핑 생성 시, LLM 프롬프트�
 """
 from __future__ import annotations
 
+import re
+
 # country_code → 거점 정보
 KB_NETWORK: dict[str, dict] = {
     "GB": {"city": "런던",      "type": "지점",   "entity": "KB 런던지점"},
@@ -44,3 +46,30 @@ def all_context() -> str:
     return "; ".join(
         f"{cc}={v['entity']}({v['type']})" for cc, v in KB_NETWORK.items()
     )
+
+
+# 국가 언급 앵커(국명·형용사·수도·대표 기관·통화·지수) — 영문 기준본(title_en·summary_en)에서 찾는다.
+# 주제국가가 비어 매체 국적으로 떨어진 기사가 그 나라를 한 번도 언급하지 않으면 해당 국가 기사가 아니다
+# (2026-10-08 Straits Times '호르무즈 유조선 공격'이 SG 탭에 노출). 9/23~10/8 배포본 134건 측정: 오탐 0.
+_MENTION = {
+    "GB": r"brit|\bu\.?k\.?\b|united kingdom|england|london|scotland|\bboe\b|\bfca\b|\bpra\b|ftse|sterling|\bgilts?\b",
+    "US": (r"\bu\.?s\.?\b|united states|america|washington|new york|wall street|\bfed\b|federal|treasury|"
+           r"\bsec\b|fdic|\bocc\b|\bhud\b|cfpb|nasdaq|s&p|\bdow\b|trump|white house|congress"),
+    "HK": r"hong kong|hkma|hang seng|hkex",
+    "CN": r"china|chinese|beijing|shanghai|shenzhen|pboc|yuan|renminbi|\brmb\b",
+    "JP": r"japan|tokyo|\bboj\b|bank of japan|nikkei|topix|\byen\b",
+    "SG": r"singapore|\bmas\b|\bsgx\b|straits",
+    "IN": r"india|\brbi\b|sebi|mumbai|delhi|rupee|sensex|nifty|\bnse\b|\bbse\b",
+    "VN": r"vietnam|viet nam|hanoi|ho chi minh|\bsbv\b",
+    "MM": r"myanmar|burma|yangon|naypyi",
+    "ID": r"indonesia|jakarta|\bojk\b|rupiah|\bidx\b|bukopin|\bkbi\b|danantara",
+    "KH": r"cambodia|phnom penh|prasac|\briel",
+    "TH": r"thai|bangkok|baht",
+    "LA": r"\blaos?\b|\blao\b|vientiane",
+}
+
+
+def mentions_country(cc: str | None, text: str | None) -> bool:
+    """text가 진출국 cc를 언급하는지. 앵커가 없는 국가(미진출국·GLOBAL)는 판단하지 않고 True."""
+    pat = _MENTION.get((cc or "").upper())
+    return True if pat is None else bool(re.search(pat, text or "", re.I))

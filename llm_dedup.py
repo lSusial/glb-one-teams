@@ -96,7 +96,7 @@ _EVENT_GENERIC.update({
 # 결과 기사의 원문 제목에만 남아있는 경우를 오탐하지 않는다 — 호출부 참고).
 # "전망"은 단독으로는 실적 가이던스 등 확정 소식에도 흔해 오탐이 잦아 제외했다.
 _PREVIEW_RE = re.compile(
-    r"\b(ahead of|expected to|what to expect|preview|poised to|girds?|braces?|brace for|"
+    r"\b(ahead of|expected to|what to expect|preview|poised (?:to|for)|girds?|braces?|brace for|"
     r"awaits?|looms?|counting the votes|to decide|will decide|likely to)\b|임박|앞두고",
     re.I)
 
@@ -150,7 +150,9 @@ _SUPERSEDE_GENERIC = {"agreement", "agreements", "deal", "deals", "talks", "sign
 
 def superseded_ids(items, threshold: float = _SUPERSEDE_MIN_OVERLAP) -> set:
     """items=[(id, 게시일, 제목)] 한 탭의 카드. 같은 날 이후의 기사가 연기·취소 등 후속 전개를 알리고
-    제목에 공통 고유주체(국가명·일반어 제외)가 있으면, 그런 신호가 없는 이전 기사 id를 돌려준다."""
+    제목에 공통 고유주체(국가명·일반어 제외)가 있으면, 그런 신호가 없는 이전 기사 id를 돌려준다.
+    예고성 기사(is_preview)는 같은 주체의 같은 날 이후 비예고 기사가 있으면 결과가 나온 것으로 보고
+    내린다(2026-10-08 IN 'RBI poised for first rate hike'가 실제 인상 기사 옆에 남음)."""
     def day(d):
         try:
             return date.fromisoformat((d or "")[:10])
@@ -160,11 +162,13 @@ def superseded_ids(items, threshold: float = _SUPERSEDE_MIN_OVERLAP) -> set:
     rows = [(i, day(d), t or "", _tokens(t)) for i, d, t in items]
     gone = set()
     for nid, nd, nt, ntok in rows:
-        if nd is None or not _SUPERSEDE_RE.search(nt):
+        follow_up = bool(_SUPERSEDE_RE.search(nt))
+        if nd is None or not (follow_up or not is_preview(nt)):
             continue
         for oid, od, ot, otok in rows:
-            if (oid == nid or od is None or od > nd or (nd - od).days > _SUPERSEDE_WINDOW_DAYS
-                    or _SUPERSEDE_RE.search(ot)):
+            if oid == nid or od is None or od > nd or (nd - od).days > _SUPERSEDE_WINDOW_DAYS:
+                continue
+            if not ((follow_up and not _SUPERSEDE_RE.search(ot)) or is_preview(ot)):
                 continue
             if (overlap(ntok, otok) >= threshold
                     and (ntok & otok) - _EVENT_GENERIC - _SUPERSEDE_GENERIC):

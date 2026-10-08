@@ -22,7 +22,7 @@ import config
 import db
 import numeric_guard
 from llm_provider import LLMProvider, get_provider
-from llm_ranker import _cluster_sources, _source_snippet
+from llm_ranker import _cluster_sources, _published_line, _source_snippet
 
 log = logging.getLogger("llm_expand")
 
@@ -128,7 +128,7 @@ def run_expand(conn, provider: LLMProvider | None = None,
         have_clause = " AND a.expanded_summary IS NULL"
 
     rows = conn.execute(
-        f"""SELECT a.article_id, a.title, a.summary, a.full_text, a.link,
+        f"""SELECT a.article_id, a.title, a.summary, a.full_text, a.link, a.published_at,
                    m.primary_country_code AS cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL
@@ -150,7 +150,7 @@ def run_expand(conn, provider: LLMProvider | None = None,
             blocks.append(f"Source {n} ({src['media_name']}): {src['title']}\n{snippets[n-1]}")
         if siblings:
             stats["synthesized"] += 1
-        user = f"매체: {r['media_name']}  국가: {r['cc']}\n" + "\n\n".join(blocks)
+        user = _published_line(r) + f"매체: {r['media_name']}  국가: {r['cc']}\n" + "\n\n".join(blocks)
         hint = numeric_guard.korean_amount_hints("\n".join(blocks))
         if hint:
             user += f"\n\n{hint}"
