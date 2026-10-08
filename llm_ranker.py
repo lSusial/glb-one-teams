@@ -71,7 +71,9 @@ _TOPIC_DISAMBIG_BLOCK = (
     "(yield, FX, equity or credit-spread moves). Guidance: MARKETS = market-price change (rates, FX, bonds, "
     "equities, insurance/securities); ECONOMY = real-economy change (growth, prices, jobs, trade, "
     "consumption); POLICY = regulatory / central-bank / ESG-policy change; GEO = geopolitical or "
-    "country risk (war, coup, election, sanctions, sovereign risk); TECH = technology/digital "
+    "country risk (war, coup, election, sanctions, sovereign risk) — a company's ownership, takeover, "
+    "shareholder or governance issue is MARKETS/POLICY, not GEO, unless a state actor or sanction "
+    "drives it; TECH = technology/digital "
     "change (AI, fintech, platforms, semiconductors); SOCIETY = social/cultural change "
     "(population, labor, culture, consumer trends)."
 )
@@ -328,6 +330,14 @@ def _cluster_sources(conn, article_id: int, exclude_media: str) -> list:
     return out
 
 
+def _published_line(row) -> str:
+    """기사 게시일 줄. 연도 없는 날짜('Nov. 10')를 모델이 학습 시점 연도로 채우지 않게 기준일을 준다
+    (2026-10-08 CN 희토류 유예 만료 'November 10, 2025' — 실제는 2026년, 본문엔 '5주 남음')."""
+    d = (row["published_at"] or "")[:10]
+    return (f"게시일: {d} — 연도가 없는 날짜·'내달' 같은 상대 표현은 이 게시일 기준으로 연도를 정할 것\n"
+            if d else "")
+
+
 def _source_snippet(row) -> str:
     body = (row["full_text"] or "").strip() or (row["summary"] or "").strip()
     return body[:config.SYNTH_SNIPPET_MAXLEN]
@@ -371,7 +381,7 @@ def run_rank(conn, provider: LLMProvider | None = None,
 
     rows = conn.execute(
         f"""
-        SELECT a.article_id, a.title, a.summary, a.full_text, a.link,
+        SELECT a.article_id, a.title, a.summary, a.full_text, a.link, a.published_at,
                m.primary_country_code AS cc, {db.publisher_expr()} AS media_name
         FROM articles_raw a
         JOIN media_sources m ON m.source_id = a.source_id
@@ -436,6 +446,7 @@ def run_rank(conn, provider: LLMProvider | None = None,
             # KB 미진출국 — 거점 맥락 없이 경량 프롬프트
             system = system_light
             user = f"매체: {r['media_name']}  국가: {r['cc']}\n{content_block}"
+        user = _published_line(r) + user
         requests.append((cid, system, user, 700))
         row_by_id[cid] = r
 
@@ -469,6 +480,10 @@ def run_rank(conn, provider: LLMProvider | None = None,
 
         title_en = _checked_title_en(str(data.get("title_en") or "")[:300], r["title"] or "", summary_en)
         title_ko = _checked_title_ko(title_ko, r["title"] or "", title_en, summary_en)
+        if (primary_country in (None, r["cc"])
+                and not kb_network.mentions_country(r["cc"], f"{r['title']} {title_en} {summary_en}")):
+            # 매체 국가를 한 번도 언급하지 않는 기사(싱가포르 매체의 호르무즈 기사)는 그 나라 탭으로 보내지 않는다
+            primary_country = "GLOBAL"
 
         cur.execute(
             """UPDATE articles_raw

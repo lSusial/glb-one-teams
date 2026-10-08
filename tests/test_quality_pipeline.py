@@ -169,6 +169,22 @@ class RankRerunTests(unittest.TestCase):
         self.assertEqual(result['failed'], 1)
         self.assertEqual(tuple(row), (60, '기존 요약', '기존 긴 요약'))
 
+    def test_article_not_mentioning_media_country_goes_global(self):
+        # 2026-10-08 Straits Times '호르무즈 유조선 공격'이 SG 탭에 노출 — 매체 국가 언급이 없으면 GLOBAL
+        hormuz = dict(self.response(), title_en='Hormuz tanker attacks hit weekly record',
+                      summary_en='Attacks on tankers near Iran hit a record.', primary_country='')
+        llm_ranker.run_rank(self.db, provider=Provider(hormuz), article_ids=[1])
+        local = dict(self.response(), summary_en='The Federal Reserve tightened bank capital rules.')
+        llm_ranker.run_rank(self.db, provider=Provider(local), article_ids=[2])
+        pc = dict(self.db.execute('SELECT article_id, primary_country FROM articles_raw').fetchall())
+        self.assertEqual(pc, {1: 'GLOBAL', 2: 'US'})
+
+    def test_rank_and_expand_prompts_carry_publication_date(self):
+        # 연도 없는 'Nov. 10'을 2025년으로 채운 희토류 기사(실제 2026) — 게시일을 기준으로 주어야 한다
+        provider = Provider(self.response())
+        llm_ranker.run_rank(self.db, provider=provider, article_ids=[1])
+        self.assertIn(f'게시일: {date.today().isoformat()}', provider.requests[0][2])
+
     def test_empty_exact_scope_does_not_fall_back_to_unscored_queue(self):
         provider = Provider(self.response())
         result = llm_ranker.run_rank(self.db, provider=provider, article_ids=[])
@@ -902,6 +918,75 @@ class OtherCurrencyGuardTests(unittest.TestCase):
     def test_korean_dong_word_is_not_an_amount(self):
         self.assertFalse(numeric_guard.amount_mismatch('VND 50 trillion', '금리를 3.5%로 동결했다'))
         self.assertEqual(numeric_guard.fx_values('정부가 동결 방침을 밝혔다'), {})
+
+
+class StoryDedupTests(unittest.TestCase):
+    """2026-10-08 배포본: 같은 사건이 국가탭·홈 핵심뉴스·모니터링에 여러 건 노출."""
+
+    @staticmethod
+    def row(aid, title_en, summary_en, title_ko='한국어 제목', event_type='', cc='IN'):
+        return {'article_id': aid, 'title': title_en, 'title_en': title_en, 'title_ko': title_ko,
+                'summary_en': summary_en, 'summary_ko': '한국어 요약', 'event_type': event_type, 'cc': cc}
+
+    RBI_A = ('RBI raises repo rate 25bp to 5.5% for first time since Feb 2023',
+             "India's Reserve Bank raised its repo rate by 25 basis points to 5.5% on Wednesday, the first "
+             'increase in 44 months, citing stronger-than-expected growth and price pressures.')
+    RBI_B = ('RBI raises repo rate 25 bps to 5.5%, shifts to calibrated tightening',
+             "India's Reserve Bank Monetary Policy Committee voted unanimously to raise the repo rate by 25 "
+             'basis points to 5.5% on October 7, citing rising inflation and broad-based price pressures.')
+    NRI = ('NRI deposit inflows surge 6x to $36.2bn in Apr-Jul FY27',
+           'Non-resident Indian (NRI) deposit flows surged over sixfold to $36.2 billion during April-July '
+           'FY27, according to RBI data. The sharp increase reflects strong capital inflows from overseas '
+           'Indians, likely driven by higher domestic interest rates and rupee stability. This surge has '
+           'significant implications for Indian banking sector liquidity and foreign exchange reserves.')
+    RBI_FX = ("RBI's net dollar purchases hit record $18.65bn in July",
+              "India's central bank purchased a record net $18.65 billion in dollars during July, according "
+              "to the RBI's monthly bulletin. The surge in dollar accumulation reflects efforts to manage "
+              'currency volatility and bolster foreign exchange reserves amid broader capital flow dynamics '
+              'in the Indian market.')
+
+    def test_country_feed_merges_same_story_even_with_korean_titles(self):
+        rows = [self.row(1, *self.RBI_A), self.row(2, *self.RBI_B), self.row(3, *self.NRI)]
+        reps, sizes, _ = export_json._dedup_country_feed(rows, {})
+        self.assertEqual([r['article_id'] for r in reps], [1, 3])
+        self.assertEqual(sizes[1], 2)
+
+    def test_different_stories_from_same_institution_are_not_merged(self):
+        reps, _, _ = export_json._dedup_country_feed([self.row(1, *self.NRI), self.row(2, *self.RBI_FX)], {})
+        self.assertEqual(len(reps), 2)
+
+    def test_monitoring_bucket_skips_same_incident(self):
+        hack_a = ('South Korea probes AI use in bank cyberattacks; KB among targets',
+                  'South Korean authorities are investigating whether AI was used in cyberattacks on '
+                  'major banks including KB Kookmin.')
+        hack_b = ('South Korea reports AI-assisted bank hacks affecting major lenders',
+                  'South Korean authorities reported AI-assisted hacking attempts on major banks, '
+                  'and investigators are examining the cyberattacks.')
+        rows = [self.row(1, *hack_a, event_type='INCIDENT', cc='KR'),
+                self.row(2, *hack_b, event_type='INCIDENT', cc='KR'),
+                self.row(3, *self.RBI_A, event_type='INCIDENT')]
+        arts, _ = export_json._event_bucket(rows, 'INCIDENT', 10, lambda r: {'id': r['article_id'], 'cc': r['cc']})
+        self.assertEqual([a['id'] for a in arts], [1, 3])
+
+    def test_preview_is_hidden_once_the_decision_is_reported(self):
+        items = [(1, '2026-10-06', 'RBI poised for first rate hike in nearly four years amid rupee, inflation pressures'),
+                 (2, '2026-10-07', 'RBI raises repo rate 25bp to 5.5% for first time since Feb 2023'),
+                 (3, '2026-10-06', "India's SEBI to reverse derivative settlement rules")]
+        self.assertEqual(llm_dedup.superseded_ids(items), {1})
+        # 결정 기사보다 나중의 예고(다음 회의 전망)는 남는다
+        self.assertEqual(llm_dedup.superseded_ids(
+            [(1, '2026-10-08', 'RBI poised for another rate hike in December'), items[1]]), set())
+
+
+class CountryMentionTests(unittest.TestCase):
+    def test_country_mentions(self):
+        import kb_network
+        self.assertFalse(kb_network.mentions_country(
+            'SG', 'Hormuz tanker attacks hit weekly record since Iran conflict began'))
+        self.assertTrue(kb_network.mentions_country('SG', "Singapore's MAS issues AI risk guidelines"))
+        self.assertTrue(kb_network.mentions_country('US', 'HUD probes Wells Fargo over lending under Trump'))
+        self.assertTrue(kb_network.mentions_country('MY', 'anything'))   # 앵커 없는 국가는 판단 안 함
+
 
 if __name__ == '__main__':
     unittest.main()
