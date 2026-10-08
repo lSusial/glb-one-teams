@@ -97,10 +97,11 @@ _GEO_SIGNAL_RE = re.compile(
     r"\b(?:wars?|conflicts?|sanction\w*|tariff\w*|election\w*|military|army|troops|coup|geopolit\w*|"
     r"diplomat\w*|missiles?|invasion|invad\w*|borders?|terror\w*|nuclear|embargo|unrest|protest\w*|summit|"
     r"bilateral|trade (?:war|tension\w*|deal|talks|dispute)|tensions?|attacks?|ceasefire|hostages?|"
-    r"national security|sovereign\w*|regime|iran\w*|israel\w*|russia\w*|ukrain\w*|gaza|hormuz|"
-    r"cyberattacks?|espionage|crackdown|scams?|money.laundering)\b", re.I)
+    r"national security|sovereign\w*|iran\w*|israel\w*|russia\w*|ukrain\w*|gaza|hormuz|"
+    r"cyberattacks?|espionage|crackdown|scams?|money.laundering|export (?:controls?|restrictions?|rules|bans?)|"
+    r"truce|extraterritorial)\b", re.I)
 _GOVERNANCE_RE = re.compile(
-    r"\b(?:takeover|stake|shareholding|shareholders?|ownership|controlling|control|acquisition|acquire|"
+    r"\b(?:takeover|stake|shareholding|shareholders?|ownership|controlling|acquisition|acquire|"
     r"governance|buyback|repurchase|retake)\b", re.I)
 
 
