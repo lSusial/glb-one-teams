@@ -260,7 +260,7 @@ export
 
 ### 7.2 표시 감사
 
-`eval/display_audit.py`는 생성된 화면 데이터를 대상으로 빈 요약, 오래된 기사, 국가 불일치, 중복, 무관 관련 링크, 금액 오류, 한국어 누락, Top Issues 근거 무결성 등 19개 항목을 검사한다. 현재 strict 차단 범위는 Top Issues 출처 무결성이다.
+`eval/display_audit.py`는 생성된 화면 데이터를 대상으로 빈 요약, 오래된 기사, 국가 불일치, 중복, 무관 관련 링크, 금액 오류, 한국어 누락, Top Issues 근거 무결성, 지난 만료·시행일(PAST_DEADLINE), 분류-본문 불일치(CATEGORY_MISMATCH) 등 21개 항목을 검사한다. strict 차단 범위(BLOCKING)는 Top Issues 출처 무결성·금액 오류(AMOUNT_MISMATCH)·쓰레기 제목(JUNK_TITLE)이고, 나머지는 검토 경고다.
 
 ## 8. 재실행과 장애 처리
 

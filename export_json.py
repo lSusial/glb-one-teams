@@ -472,6 +472,15 @@ _ARCHIVE_LINK_EXCL = (" AND a.link NOT LIKE '%/tag/%' AND a.link NOT LIKE '%/tag
                       " AND a.link NOT LIKE '%/topic/%' AND a.link NOT LIKE '%/topics/%'")
 _RL_MAX = 4   # 모달 '관련 기사 링크' 최대 개수(본 기사 포함 — 원문 1 + 같은 사건 3). 2026-09-29 5→4
 _RELATED_MIN_OVERLAP = 0.12
+_RELATED_SAME_TEXT = 0.45   # 제목 앵커가 없어도 같은 사건으로 볼 본문 겹침(사실상 같은 기사 재탕)
+# 여러 별개 사건에 공통으로 쓰이는 정책·주제어 — 관련뉴스 고유 앵커로 인정하지 않는다
+_LINK_THEME_WORDS = {
+    "supervision", "supervisory", "oversight", "regulation", "regulations", "regulatory", "regulator",
+    "regulators", "rule", "rules", "reform", "reforms", "overhaul", "merger", "mergers", "law", "laws",
+    "bill", "new", "major", "plan", "plans", "announces", "announced", "says", "said", "report", "reports",
+    "data", "growth", "inflation", "loans", "loan", "credit", "lenders", "lending", "capital", "risk",
+    "risks", "investors", "investment", "structure", "framework", "changes", "change", "defends",
+}
 
 
 def _same_story_for_link(rep, child) -> bool:
@@ -488,7 +497,16 @@ def _same_story_for_link(rep, child) -> bool:
 
     rep_text = " ".join(value(rep, k) for k in ("title", "title_en", "summary_en"))
     child_text = " ".join(value(child, k) for k in ("title", "title_en", "summary_en"))
-    return llm_dedup.overlap(llm_dedup._tokens(rep_text), llm_dedup._tokens(child_text)) >= _RELATED_MIN_OVERLAP
+    ov = llm_dedup.overlap(llm_dedup._tokens(rep_text), llm_dedup._tokens(child_text))
+    if ov < _RELATED_MIN_OVERLAP:
+        return False
+    # 공통 키워드(감독·개혁·합병 같은 주제어)만 겹친 별개 보도는 잇지 않는다 — 제목에 같은 기관·기업·인물·
+    # 정책명(고유 앵커)이 있어야 같은 사건으로 본다. 본문이 거의 같으면(재탕) 앵커 없이도 허용.
+    # 2026-10-08 미 연준 감독체계 개편 기사에 FDIC 감독·합병 개혁 기사가 관련뉴스로 붙음.
+    rep_title = llm_dedup._tokens(" ".join(value(rep, k) for k in ("title", "title_en")))
+    child_title = llm_dedup._tokens(" ".join(value(child, k) for k in ("title", "title_en")))
+    anchors = (rep_title & child_title) - llm_dedup._EVENT_GENERIC - _LINK_THEME_WORDS
+    return bool(anchors) or ov >= _RELATED_SAME_TEXT
 
 
 def _story_links_map(conn) -> dict[int, list[dict]]:

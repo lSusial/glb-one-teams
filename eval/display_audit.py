@@ -30,6 +30,11 @@ LLM 호출·DB 쓰기 없음. export 직후 돌린다:
                         (2026-09-28 IN 탭 '3일 파업 28일 개시' 옆에 '파업 연기'가 이미 있었음)
  18 KO_MISSING         한국어 요약(q)이 비어 한국어 화면에 영어 요약이 뜨는 카드 — 번역 대상 누락·거절
  19 SOURCE_AMOUNT_CONFLICT 다출처 종합 후보의 단일 금액이 출처끼리 충돌해 종합을 보류한 기사
+ 20 PAST_DEADLINE      만료·시행·마감 등 앞으로의 일로 쓴 날짜가 기준일보다 이미 지남
+                       (2026-10-07 CN 희토류 유예 '2025-11-10 만료' — 실제 2026, 연도 오류). 과거형 배경 날짜는 제외
+ 21 CATEGORY_MISMATCH  지정학(geopolitics) 분류인데 본문에 지정학 신호(전쟁·제재·관세·선거·군사 등)가 없음
+                       (2026-10-08 KB은행 협동조합 인수설 부인 = 지배구조·규제 기사가 markets+geopolitics)
+등급: BLOCKING(--strict 시 배포 차단) = 탑이슈 출처 무결성·금액 오류·쓰레기 제목. 나머지는 검토 경고.
 '점검 통과'가 '정확함'을 뜻하진 않는다 — 규칙으로 잡히는 결함만 센다.
 """
 from __future__ import annotations
@@ -46,6 +51,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import config  # noqa: E402
+import export_json  # noqa: E402
 import llm_dedup as L  # noqa: E402
 import numeric_guard  # noqa: E402
 
@@ -53,6 +59,62 @@ JUNK_RE = re.compile(
     r"^index of /|wp-content|^404\b|not found|just a moment|access denied|attention required|"
     r"enable javascript|captcha|cloudflare|are you a robot|^subscribe|^sign in|^log in|page unavailable",
     re.I)
+
+
+# 배포 전 차단 — 화면에 틀린 사실(출처 없는 탑이슈·틀린 금액)이나 기사 아닌 페이지가 나가는 경우만.
+# 규칙 기반 추정(날짜·분류·관련성·중복 등)은 오탐 여지가 있어 검토 경고로 남긴다.
+BLOCKING = ("HIGHLIGHT_SOURCE_MISSING", "HIGHLIGHT_SOURCE_INVALID", "AMOUNT_MISMATCH", "JUNK_TITLE")
+
+_MONTHS = {m: i for i, m in enumerate("jan feb mar apr may jun jul aug sep oct nov dec".split(), 1)}
+_DATE = (r"(?P<mon>Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|June?|July?|Aug(?:ust)?|"
+         r"Sept?(?:ember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)\.?\s+(?P<day>\d{1,2}),?\s+(?P<year>20\d\d)")
+# 앞으로의 일을 말하는 동사 바로 뒤(30자 안) 날짜만 본다 — 'was formalized on Nov 7, 2025' 같은 배경 날짜 제외
+_FORWARD_DATE_RE = re.compile(
+    r"\b(?:expires?|expiring|will expire|(?:is )?set to (?:expire|take effect)|takes? effect|will take effect|"
+    r"comes? into (?:force|effect)|goes into effect|effective (?:from|on)|deadline (?:of|on|is)|due (?:on|by)|"
+    r"scheduled (?:for|on)|will be (?:held|decided|announced|implemented|enforced))\b[^.;]{0,30}?" + _DATE, re.I)
+_KO_FORWARD_DATE_RE = re.compile(
+    r"(?P<year>20\d\d)년\s*(?P<mon>\d{1,2})월\s*(?P<day>\d{1,2})일\s*(?:에|부터|까지)?\s*"
+    r"(?:만료|시행|발효|마감)(?:되|될|된다|하|할|예정)")
+
+
+def past_deadlines(text: str | None, as_of: date) -> list[tuple[str, date]]:
+    """text에서 '만료·시행·마감' 등 앞으로의 일로 쓴 날짜 중 as_of보다 앞선 것 [(원문 구절, 날짜)]."""
+    out = []
+    for rx, ko in ((_FORWARD_DATE_RE, False), (_KO_FORWARD_DATE_RE, True)):
+        for m in rx.finditer(text or ""):
+            mon = int(m["mon"]) if ko else _MONTHS[m["mon"][:3].lower()]
+            try:
+                d = date(int(m["year"]), mon, int(m["day"]))
+            except ValueError:
+                continue
+            if d < as_of:
+                out.append((m.group(0), d))
+    return out
+
+
+_GEO_SIGNAL_RE = re.compile(
+    r"\b(?:wars?|conflicts?|sanction\w*|tariff\w*|election\w*|military|army|troops|coup|geopolit\w*|"
+    r"diplomat\w*|missiles?|invasion|invad\w*|borders?|terror\w*|nuclear|embargo|unrest|protest\w*|summit|"
+    r"bilateral|trade (?:war|tension\w*|deal|talks|dispute)|tensions?|attacks?|ceasefire|hostages?|"
+    r"national security|sovereign\w*|regime|iran\w*|israel\w*|russia\w*|ukrain\w*|gaza|hormuz|"
+    r"cyberattacks?|espionage|crackdown|scams?|money.laundering)\b", re.I)
+_GOVERNANCE_RE = re.compile(
+    r"\b(?:takeover|stake|shareholding|shareholders?|ownership|controlling|control|acquisition|acquire|"
+    r"governance|buyback|repurchase|retake)\b", re.I)
+
+
+def category_mismatch(card) -> str | None:
+    """지정학(geopolitics) 주·보조 분류인데 영문 본문에 지정학 신호가 하나도 없으면 사유 문자열.
+    실측(9/23~10/8 카드 43건 중 10건 표시): 은행 파산·소비자 부채·제인스트리트 소송·KB 협동조합 등."""
+    if "geopolitics" not in (card.get("c"), card.get("c2")):
+        return None
+    text = " ".join(card.get(k) or "" for k in ("t_en", "q_en", "expanded_summary_en"))
+    if not text.strip() or _GEO_SIGNAL_RE.search(text):
+        return None
+    if _GOVERNANCE_RE.search(text):
+        return "지정학 신호 없음 — 지분·지배구조 성격(policy/markets 검토)"
+    return "지정학 신호 없음"
 
 
 def walk(o, path=""):
@@ -107,7 +169,7 @@ def main() -> int:
     ap.add_argument("--db", default=str(config.DB_PATH))
     ap.add_argument("--stale-days", type=int, default=3)
     ap.add_argument("--json", action="store_true", help="요약 집계를 JSON 한 줄로도 출력")
-    ap.add_argument("--strict", action="store_true", help="탑이슈 출처 무결성 오류가 있으면 종료코드 1")
+    ap.add_argument("--strict", action="store_true", help="BLOCKING 항목이 하나라도 있으면 종료코드 1(배포 차단)")
     args = ap.parse_args()
 
     export_dir = Path(args.export_dir)
@@ -124,7 +186,7 @@ def main() -> int:
 
     def db_row(link):
         return conn.execute(
-            "SELECT article_id, primary_country, summary_en, title, published_at, ai_score "
+            "SELECT article_id, primary_country, summary_en, title, title_en, published_at, ai_score "
             "FROM articles_raw WHERE link=?", (link,)).fetchone()
 
     # 12~13 홈 탑이슈 출처 무결성. 새 계약은 생성 시 검증된 article_id를 저장하고
@@ -226,12 +288,15 @@ def main() -> int:
     for w, cc, a in tabs:
         rl = a.get("rl") or []
         base = L._tokens(a.get("q_en") or a.get("t_en") or "")
+        rep = db_row(a["u"]) or {"title": a.get("t_en") or "", "title_en": a.get("t_en"),
+                                 "summary_en": a.get("q_en")}
         for x in rl[1:]:
             r = db_row(x["u"])
             if not r:
                 continue
             ov = L.overlap(base, L._tokens((r["title"] or "") + " " + (r["summary_en"] or "")))
-            if ov < 0.12:
+            # export와 같은 기준(겹침 + 제목의 같은 기관·기업·정책 앵커) — 공통 주제어만 겹친 연결을 잡는다
+            if not export_json._same_story_for_link(rep, r):
                 add("UNRELATED_LINKS", f"[{w}] {short(a, 34)} ↔ 관련: {(x.get('t') or '')[:40]} (겹침 {ov:.2f})")
 
     # 9 HIDDEN_NEWER_REP (더 새 기사뿐 아니라 더 높은 점수의 기사나 ACTIVE 자식이
@@ -348,16 +413,38 @@ def main() -> int:
             add("SOURCE_AMOUNT_CONFLICT",
                 f"#{r['article_id']} {(r['title'] or '')[:60]} · {r['source_conflict']}")
 
+    # 20 PAST_DEADLINE / 21 CATEGORY_MISMATCH (화면 카드 기준, 같은 기사 1회)
+    seen_check = set()
+    for f, w, cc, a in cards:
+        if a.get("u") in seen_check:
+            continue
+        seen_check.add(a.get("u"))
+        try:
+            pub = date.fromisoformat((a.get("d") or "")[:10])
+        except ValueError:
+            pub = today
+        for key in ("t_en", "q_en", "expanded_summary_en", "t", "q", "expanded_summary"):
+            hits = past_deadlines(a.get(key), today)
+            if hits:
+                phrase, d = hits[0]
+                why = "게시일보다 앞섬(연도 오류 의심)" if d < pub else "기준일 기준 이미 지남"
+                add("PAST_DEADLINE", f"{w} {key} '{phrase}' — {why} · {short(a)}")
+                break
+        reason = category_mismatch(a)
+        if reason:
+            add("CATEGORY_MISMATCH", f"{w} [{a.get('c')}+{a.get('c2') or '-'}] {reason} · {short(a)}")
+
     order = ["EMPTY_SUMMARY", "STALE", "PREVIEW_SHOWN", "COUNTRY_MISMATCH", "NEAR_DUP_IN_TAB",
              "JUNK_TITLE", "UNRELATED_LINKS", "TITLE_SUMMARY_GAP", "HIDDEN_NEWER_REP", "THIN_TABS",
              "SELF_TITLE_MISMATCH", "HIGHLIGHT_SOURCE_MISSING", "HIGHLIGHT_SOURCE_INVALID",
              "AMOUNT_MISMATCH", "STALE_WEEKLY", "STALE_SPARK", "SUPERSEDED", "KO_MISSING",
-             "SOURCE_AMOUNT_CONFLICT"]
+             "SOURCE_AMOUNT_CONFLICT", "PAST_DEADLINE", "CATEGORY_MISMATCH"]
     print(f"표시 감사 — 기준일 {today} · 카드 {len(cards)}장 (국가탭 {len(tabs)}장) · export={export_dir}")
     print("-" * 78)
     for k in order:
         v = issues.get(k, [])
-        print(f"{'✔' if not v else '✖'} {k:<18} {len(v):>3}건")
+        grade = "차단" if k in BLOCKING else "경고"
+        print(f"{'✔' if not v else '✖'} {k:<24} {len(v):>3}건  [{grade}]")
     print("-" * 78)
     for k in order:
         v = issues.get(k, [])
@@ -370,8 +457,10 @@ def main() -> int:
             print(f"  … 외 {len(v) - 12}건")
     if args.json:
         print(json.dumps({k: len(issues.get(k, [])) for k in order}, ensure_ascii=False))
-    critical = issues.get("HIGHLIGHT_SOURCE_MISSING", []) + issues.get("HIGHLIGHT_SOURCE_INVALID", [])
-    return 1 if args.strict and critical else 0
+    blocked = [k for k in BLOCKING if issues.get(k)]
+    if blocked:
+        print(f"\n배포 차단 항목: {', '.join(blocked)}" + ("" if args.strict else " (--strict 아님 — 보고만)"))
+    return 1 if args.strict and blocked else 0
 
 
 if __name__ == "__main__":
