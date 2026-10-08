@@ -347,6 +347,15 @@ def ensure_highlights_table(conn) -> None:
     conn.commit()
 
 
+def _route_text(r) -> str | None:
+    """국가 언급 판정용 영문 텍스트(export_json._route_text와 같은 기준). 영문 요약이 없으면 None → 판단 보류."""
+    keys = r.keys()
+    if "summary_en" not in keys or not (r["summary_en"] or "").strip():
+        return None
+    title_en = r["title_en"] if "title_en" in keys else ""
+    return f"{r['title'] or ''} {title_en or ''} {r['summary_en']}"
+
+
 def _validate_highlight_sources(items: list, rows, limit: int) -> list[dict]:
     """LLM 출처 ID를 입력 후보 집합에 대해 검증한다.
 
@@ -391,15 +400,16 @@ def _validate_highlight_sources(items: list, rows, limit: int) -> list[dict]:
             continue
         clean = dict(item)
         clean["source_article_ids"] = valid
-        # 국가 태그가 근거 기사 주제국가와 하나도 겹치지 않으면 근거 기사 기준으로 바로잡는다
-        # (근거 기사는 CN뿐인데 JP로 태그돼 지도·칩에 일본으로 뜨던 문제)
-        src_ccs = {val_of(allowed[aid], "subject_cc") or val_of(allowed[aid], "cc") for aid in valid}
-        src_ccs -= {"", "GLOBAL"}
-        codes = item.get("country_codes") if isinstance(item.get("country_codes"), list) else []
-        if src_ccs and not src_ccs & set(codes):
-            log.warning("글로벌 핵심 국가 태그 교정 %s → %s: %s", codes, sorted(src_ccs),
-                        item.get("headline_ko", "")[:60])
-            clean["country_codes"] = sorted(src_ccs)
+        # 국가 태그 = 근거 기사의 주제국가(LLM이 붙인 태그는 쓰지 않는다). 근거가 전부 GLOBAL이면 GLOBAL.
+        # 2026-10-06 이탈리아 은행 M&A가 GB, 10/7 중국-라오스 군사훈련센터가 TH+LA(방콕포스트 매체국)로
+        # 태그됨 — 겹치면 LLM 태그를 유지하던 규칙이 매체 국가를 통과시켰다.
+        src_ccs = {kb_network.route_country(val_of(allowed[aid], "subject_cc") or val_of(allowed[aid], "cc"),
+                                            _route_text(allowed[aid])) for aid in valid} - {""}
+        codes = sorted(src_ccs - {"GLOBAL"}) or ["GLOBAL"]
+        if codes != item.get("country_codes"):
+            log.info("글로벌 핵심 국가 태그 %s → %s: %s", item.get("country_codes"), codes,
+                     item.get("headline_ko", "")[:60])
+        clean["country_codes"] = codes
         out.append(clean)
     return out
 
