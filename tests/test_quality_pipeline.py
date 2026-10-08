@@ -176,6 +176,12 @@ class PreDeployValidationTests(unittest.TestCase):
         hormuz = dict(self.KB_COOP, c='geopolitics', c2='economy',
                       t_en='Hormuz tanker attacks hit weekly record since Iran conflict began', q_en='')
         self.assertIsNone(self.audit.category_mismatch(hormuz))
+        # 수출통제·휴전은 지정학 — 'export controls'의 control을 지배구조로 읽던 오탐(10/8 맥북 감사)
+        rare_earth = dict(self.KB_COOP, c='geopolitics', c2='economy',
+                          t_en="China's rare earth export truce expires Nov. 10 with no renewal signal",
+                          q_en="China's suspension of its rare earth export controls expires on November 10, "
+                               '2026, with no renewal signal from Beijing.')
+        self.assertIsNone(self.audit.category_mismatch(rare_earth))
         self.assertIsNone(self.audit.category_mismatch(dict(self.KB_COOP, c='policy', c2='markets')))
 
     def test_strict_blocks_wrong_facts_but_only_warns_heuristics(self):
