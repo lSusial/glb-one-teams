@@ -64,7 +64,16 @@ def _eff_cc(r) -> str:
         pc = r["primary_country"]
     except (IndexError, KeyError):
         pc = None
-    return pc or r["cc"]
+    return kb_network.route_country(pc or r["cc"], _route_text(r))
+
+
+def _route_text(r) -> str | None:
+    """국가 언급 판정용 영문 텍스트. 영문 요약이 없는 행(구 데이터·summary_en 미선택)은 None → 판단 보류."""
+    keys = r.keys()
+    if "summary_en" not in keys or not (r["summary_en"] or "").strip():
+        return None
+    title_en = r["title_en"] if "title_en" in keys else ""
+    return f"{r['title'] or ''} {title_en or ''} {r['summary_en']}"
 
 
 def _snapshot_date(conn=None, date: str | None = None) -> str:
@@ -286,7 +295,8 @@ def _daily_highlights(conn) -> list:
 
     def card(r):
         return {
-            "article_id": r["article_id"], "cc": r["cc"], "src": r["media_name"],
+            "article_id": r["article_id"], "cc": kb_network.route_country(r["cc"], _route_text(r)),
+            "src": r["media_name"],
             "d": (r["published_at"] or "")[:10],
             "t": r["title_ko"] or r["title"], "t_en": _t_en(r),
             "q": r["summary_ko"] or "", "q_en": r["summary_en"] or "",
@@ -1055,7 +1065,7 @@ def _compute_top_news(conn, days: int | None = None, limit: int = 8) -> list[dic
         story = _story_sig(r)
         if any(_jaccard(tk, s) >= config.TOP_NEWS_SIM for s in seen_tokens) or _same_story(story, seen_story):
             continue                                   # 근접 중복(같은 기사 재탕·같은 사건 다른 매체)
-        cc = r["cc"]
+        cc = kb_network.route_country(r["cc"], _route_text(r))   # 매체 국가로 샌 GLOBAL 사건은 GLOBAL로
         if per_cc.get(cc, 0) >= config.TOP_NEWS_PER_COUNTRY:
             continue                                   # 국가별 상한
         codes = [c for c in (r["topics"] or "").split(",") if c]
@@ -1180,7 +1190,7 @@ def _compute_country_section(conn, days: int | None = 1, top_n: int = 5) -> list
     ph = ",".join("?" * len(_FLAGS))
     rows = conn.execute(
         f"""SELECT a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.topics, a.event_type,
-                   {db.effective_country_expr()} cc
+                   a.summary_en, {db.effective_country_expr()} cc
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL
               AND {db.effective_country_expr()} IN ({ph}){dc}
@@ -1190,7 +1200,8 @@ def _compute_country_section(conn, days: int | None = 1, top_n: int = 5) -> list
 
     by_cc: dict[str, list] = {}
     for r in rows:
-        by_cc.setdefault(r["cc"], []).append(r)
+        if kb_network.route_country(r["cc"], _route_text(r)) == r["cc"]:   # 그 나라를 다루는 기사만
+            by_cc.setdefault(r["cc"], []).append(r)
     if not by_cc:
         return []
 
@@ -1238,7 +1249,7 @@ def _compute_country_signals(conn, days: int | None = 1) -> list[dict]:
     ph = ",".join("?" * len(_FLAGS))
     rows = conn.execute(
         f"""SELECT a.ai_score, a.title, a.title_ko, a.title_en, m.language, a.topics, a.event_type,
-                   {db.effective_country_expr()} cc
+                   a.summary_en, {db.effective_country_expr()} cc
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL
               AND {db.effective_country_expr()} IN ({ph}){dc}
@@ -1248,7 +1259,8 @@ def _compute_country_signals(conn, days: int | None = 1) -> list[dict]:
 
     by_cc: dict[str, list] = {cc: [] for cc in _FLAGS}
     for r in rows:
-        by_cc[r["cc"]].append(r)
+        if kb_network.route_country(r["cc"], _route_text(r)) == r["cc"]:
+            by_cc[r["cc"]].append(r)
 
     indicators = _country_indicators(conn)
 

@@ -73,3 +73,12 @@ def mentions_country(cc: str | None, text: str | None) -> bool:
     """text가 진출국 cc를 언급하는지. 앵커가 없는 국가(미진출국·GLOBAL)는 판단하지 않고 True."""
     pat = _MENTION.get((cc or "").upper())
     return True if pat is None else bool(re.search(pat, text or "", re.I))
+
+
+def route_country(cc: str | None, text: str | None) -> str | None:
+    """표시용 국가 = cc, 단 진출국인데 text가 그 나라를 언급하지 않으면 GLOBAL.
+    주제국가가 비어 매체 국가로 폴백된 GLOBAL 사건(Reuters UK의 이탈리아 은행 M&A, Straits Times의
+    호르무즈 기사)이 매체 국가 이름으로 홈·국가 블록에 뜨지 않게 한다. text가 None이면 판단하지 않는다."""
+    if text is None or mentions_country(cc, text):
+        return cc
+    return "GLOBAL"

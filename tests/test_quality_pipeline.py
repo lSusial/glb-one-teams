@@ -109,6 +109,89 @@ class ArchiveLinkExportTests(unittest.TestCase):
                 self.assertFalse([u for u in links if '/topic/' in u or '/tags/' in u], name)
 
 
+class CountryRoutingRegressionTests(unittest.TestCase):
+    """주제국가가 불명확한 GLOBAL 사건이 매체 국가로 배치되던 사례(실제 배포본).
+    ① 10/6 홈 핵심: Reuters(GB) 이탈리아 은행 M&A → GB  ② 10/7 Straits Times 호르무즈 → SG 탭
+    ③ 10/7 Bangkok Post 중국-라오스 군사훈련센터 → 탑이슈 TH+LA"""
+
+    ITALY = ("Intesa's MPS bid to reshape Italian banking sector",
+             'Intesa Sanpaolo launched a bid for Monte dei Paschi di Siena, the third-largest lender in Italy, '
+             'which would reshape the Italian banking sector.')
+    HORMUZ = ('Hormuz tanker attacks hit weekly record since Iran conflict began',
+              'Attacks on tankers in the Strait of Hormuz reached the highest weekly count since the Iran '
+              'conflict began, raising shipping insurance costs in the Gulf.')
+    LAOS = ('China-Laos pilot training centre suspected as military base in Southeast Asia',
+            "A Chinese-funded pilot training centre in Laos is suspected of serving as China's first "
+            'military base in Southeast Asia, analysts said.')
+    MAS = ("Singapore's MAS issues AI risk management guidelines for financial sector",
+           'The Monetary Authority of Singapore issued AI risk management guidelines for financial institutions.')
+
+    def setUp(self):
+        self.db = sqlite3.connect(':memory:')
+        self.db.row_factory = sqlite3.Row
+        self.addCleanup(self.db.close)
+        self.db.executescript((Path(__file__).parents[1] / 'schema.sql').read_text(encoding='utf-8'))
+        self.db.executemany(
+            'INSERT INTO media_sources(source_id, media_name, primary_country_code, language, tier) VALUES(?,?,?,?,?)',
+            [(1, 'Reuters', 'GB', 'en', 1), (2, 'The Straits Times', 'SG', 'en', 1), (3, 'Bangkok Post', 'TH', 'en', 1)])
+        self.db.executemany('INSERT INTO media_source_feeds(feed_id, source_id, feed_url, feed_section) VALUES(?,?,?,?)',
+                            [(1, 1, 'https://r/rss', 'main'), (2, 2, 'https://st/rss', 'main'),
+                             (3, 3, 'https://bp/rss', 'main')])
+        today = date.today().isoformat()
+        # (id, 매체, 기사, 주제국가) — 주제국가 NULL = AI가 비움(매체 국가 폴백 경로)
+        for aid, src, (title, summary), pc in [(1, 1, self.ITALY, None), (2, 2, self.HORMUZ, None),
+                                               (3, 3, self.LAOS, 'LA'), (4, 2, self.MAS, 'SG')]:
+            self.db.execute(
+                "INSERT INTO articles_raw(article_id, feed_id, source_id, title, link, content_hash, published_at,"
+                " ai_score, ai_model, topics, event_type, summary_en, summary_ko, title_ko, title_en, primary_country)"
+                " VALUES(?,?,?,?,?,?,?,?,'test:model','GEO','INCIDENT',?,?,?,?,?)",
+                (aid, src, src, title, f'https://news/{aid}', f'h{aid}', today, 80 - aid, summary,
+                 f'{title} 요약', title, title, pc))
+        self.db.commit()
+
+    def test_home_top_news_shows_global_events_as_global(self):
+        cc = {a['t_en']: a['cc'] for a in export_json._compute_top_news(self.db)}
+        self.assertEqual(cc, {self.ITALY[0]: 'GLOBAL', self.HORMUZ[0]: 'GLOBAL',
+                              self.LAOS[0]: 'LA', self.MAS[0]: 'SG'})
+
+    def test_country_tabs_hold_only_articles_about_that_country(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp, patch.object(config, 'EXPORT_DIR', Path(tmp)):
+            export_json.export_countries(self.db)
+            data = json.loads((Path(tmp) / 'countries.json').read_text(encoding='utf-8'))
+        tabs = {c['cc']: [a['t_en'] for a in c['articles']] for c in data['countries']}
+        self.assertEqual(tabs['SG'], [self.MAS[0]])          # 호르무즈 제외
+        self.assertEqual(tabs['GB'], [])                     # 이탈리아 M&A 제외
+        self.assertEqual(tabs['TH'], [])                     # 라오스 기사는 TH가 아니라
+        self.assertEqual(tabs['LA'], [self.LAOS[0]])         # LA 탭에만
+        # 홈 국가 블록(이슈 상위 국가)도 같은 기준 — 매체 국가 GB·TH는 이슈 국가로 잡히지 않는다
+        section = {s['cc'] for s in export_json._compute_country_section(self.db)}
+        self.assertEqual(sorted(section), ['LA', 'SG'])
+
+    def test_monitoring_and_highlight_tags_use_subject_country(self):
+        cards = {a['t_en']: a['cc'] for c in export_json._compute_topics(self.db) for a in c['articles']}
+        self.assertEqual(cards[self.HORMUZ[0]], 'GLOBAL')
+        self.assertEqual(cards[self.ITALY[0]], 'GLOBAL')
+        rows = [dict(r) for r in self.db.execute(
+            f"""SELECT a.article_id, a.title, a.title_ko, a.summary_ko, a.summary_en,
+                       m.primary_country_code AS cc, {db.effective_country_expr()} AS subject_cc
+                FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id""")]
+        out = briefing._validate_highlight_sources([
+            {'headline_ko': '인테사, 몬테파스키 인수 추진', 'country_codes': ['GB'], 'source_article_ids': [1]},
+            {'headline_ko': '호르무즈 유조선 공격 최고조', 'country_codes': ['SG'], 'source_article_ids': [2]},
+            {'headline_ko': '중국-라오스 훈련센터', 'country_codes': ['TH', 'LA'], 'source_article_ids': [3]},
+        ], rows, 10)
+        self.assertEqual([h['country_codes'] for h in out], [['GLOBAL'], ['GLOBAL'], ['LA']])
+
+    def test_subject_country_is_kept_separate_from_media_country(self):
+        # 랭커는 주제국가를 매체 국가로 채우지 않는다 — 불명확하면 NULL, 매체국을 언급조차 않으면 GLOBAL
+        import kb_network
+        self.assertEqual(kb_network.route_country('GB', ' '.join(self.ITALY)), 'GLOBAL')
+        self.assertEqual(kb_network.route_country('LA', ' '.join(self.LAOS)), 'LA')
+        self.assertEqual(kb_network.route_country('TH', ' '.join(self.LAOS)), 'GLOBAL')
+        self.assertEqual(kb_network.route_country('SG', None), 'SG')   # 영문 요약 없으면 판단 보류
+
+
 class RankRerunTests(unittest.TestCase):
     def setUp(self):
         self.db = sqlite3.connect(':memory:')
@@ -826,7 +909,8 @@ class NumericGuardTests(unittest.TestCase):
             'Indonesia records Rp9.1 trillion scam losses')
 
     def test_highlight_country_codes_follow_source_articles(self):
-        # 2026-09-29 라이브: 근거 기사는 CN뿐인데 탑이슈 국가가 JP로 태그됨
+        # 2026-09-29 라이브: 근거 기사는 CN뿐인데 탑이슈 국가가 JP로 태그됨.
+        # 2026-10-08부터 태그 = 근거 기사 주제국가만(LLM 태그는 겹쳐도 쓰지 않음), 근거가 GLOBAL이면 GLOBAL.
         rows = [{'article_id': 10, 'title': 'Trump offered arms sales to China', 'title_ko': '',
                  'summary_ko': '', 'summary_en': '', 'cc': 'US', 'subject_cc': 'CN'},
                 {'article_id': 20, 'title': 'Fed cuts', 'title_ko': '', 'summary_ko': '',
@@ -836,7 +920,7 @@ class NumericGuardTests(unittest.TestCase):
             {'headline_ko': '미중 관세', 'country_codes': ['US', 'CN'], 'source_article_ids': [10]},
             {'headline_ko': '연준', 'country_codes': ['US'], 'source_article_ids': [20]},
         ], rows, 10)
-        self.assertEqual([h['country_codes'] for h in out], [['CN'], ['US', 'CN'], ['US']])
+        self.assertEqual([h['country_codes'] for h in out], [['CN'], ['CN'], ['GLOBAL']])
 
     def test_translation_rejects_wrong_rupee_amount(self):
         db = sqlite3.connect(':memory:')
