@@ -243,25 +243,12 @@ def _system_prompt() -> str:
         + _TOPIC_DISAMBIG_BLOCK
         + _PRIMARY_COUNTRY_BLOCK
         + _SCORE_FACTORS_BLOCK
-        + "\n\nai_score rubric (fallback only — used if score_factors is missing/invalid; keep it "
-        "consistent with the score_factors directions above, do not contradict them). Use the "
-        "FULL 0-100 range and DIFFERENTIATE: most routine articles belong below 55, and a typical "
-        "day yields only a handful of 80+ items.\n"
-        "85-100  a KB entity or host regulator names KB directly, OR a systemic/sovereign shock "
-        "hits the host market right now (capital controls, sovereign downgrade, FX convertibility "
-        "crisis, a bank run). Rare — only a few per day across all markets.\n"
-        "65-84   a standalone local-media story squarely about the host market's banking/financial "
-        "sector or a market-wide move — a central bank/regulator grants or revokes a licence, a "
-        "bank/asset-manager M&A or expansion, a trade/export/import data release, a large stock-"
-        "market move, an IPO filing, a bond-market development — even with NO KB mention.\n"
-        "45-64   worth knowing, no near-term action — a foreign central bank's path (Fed/BoJ/ECB) "
-        "reaching this market only indirectly, routine currency fluctuation, a general sector/"
-        "policy trend.\n"
-        "25-44   general or global trends only indirectly relevant to this market; developed-"
-        "market macro far away; broad industry research.\n"
-        "0-24    sports, entertainment, unrelated crime, non-financial local events.\n"
-        "Anti-clustering rule: if you are about to score 60-69, re-check — is it truly a standalone "
-        "banking/market story (→65+) or just general context (→45-60)? Avoid defaulting to the middle."
+        + "\n\nai_score (fallback only — used if score_factors is missing/invalid; must not "
+        "contradict it; most routine articles are below 55; only a handful of 80+ per day): "
+        "85-100 KB named directly, or a systemic/sovereign shock hits the host market now; "
+        "65-84 standalone local-media banking/financial-sector or market-wide story, even with "
+        "no KB mention; 45-64 worth knowing, no near-term action; 25-44 indirectly relevant "
+        "global/macro trend; 0-24 non-financial (sports, entertainment, crime)."
         + _STYLE_AND_SYNTH_BLOCK
     )
 
@@ -288,16 +275,12 @@ def _system_prompt_light() -> str:
         + _TOPIC_DISAMBIG_BLOCK
         + _PRIMARY_COUNTRY_BLOCK
         + _SCORE_FACTORS_BLOCK
-        + "\n\nai_score rubric — score general macro/financial materiality for a market with "
-        "no KB entity (assign the highest tier that applies):\n"
-        "75-100  Major sovereign/macro event: central bank decision, currency crisis, "
-        "sovereign rating action, major bank failure or large M&A.\n"
-        "50-74   Significant market-moving financial/economic news: rate moves, major bank "
-        "earnings, regulatory change, large FX swings.\n"
-        "25-49   Useful background: routine economic data, minor market moves, general "
-        "fintech/ESG news.\n"
-        "0-24    Noise: sports, entertainment, crime, local news with no macro/financial "
-        "relevance."
+        + "\n\nai_score (fallback only — general macro/financial materiality, no KB entity "
+        "here): 75-100 major sovereign/macro event (central bank decision, currency crisis, "
+        "rating action, major bank failure/large M&A); 50-74 significant market-moving news "
+        "(rate moves, major earnings, regulatory change, large FX swings); 25-49 useful "
+        "background (routine data, minor moves, general fintech/ESG); 0-24 noise (sports, "
+        "entertainment, crime, non-financial local news)."
         + _STYLE_AND_SYNTH_BLOCK
     )
 

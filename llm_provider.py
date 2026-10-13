@@ -75,6 +75,15 @@ def _cached_system(system: str) -> list[dict]:
     return [{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}]
 
 
+def _needs_no_temperature(model: str) -> bool:
+    """Haiku 5.5+ 세대는 temperature 파라미터를 거부한다(400 — temperature is
+    deprecated for this model). 또한 adaptive thinking이 기본 on 상태라 명시적으로
+    끄지 않으면 thinking에 max_tokens를 전부 써버려 응답(text 블록)이 비어버린다
+    (API 에러는 없음 — 조용히 날아감). 이 두 처리를 함께 묶어서 분기한다.
+    """
+    return "5-5" in model
+
+
 # ---------------------------------------------------------------------------
 # Anthropic (실제 호출)
 # ---------------------------------------------------------------------------
@@ -101,13 +110,17 @@ class AnthropicProvider(LLMProvider):
         last_err: Exception | None = None
         for attempt in range(config.LLM_MAX_RETRIES + 1):
             try:
-                msg = self._client.messages.create(
+                kwargs = dict(
                     model=self.model,
                     max_tokens=max_tokens,
-                    temperature=temperature,
                     system=_cached_system(system),
                     messages=[{"role": "user", "content": user}],
                 )
+                if _needs_no_temperature(self.model):
+                    kwargs["thinking"] = {"type": "disabled"}
+                else:
+                    kwargs["temperature"] = temperature
+                msg = self._client.messages.create(**kwargs)
                 return "".join(
                     b.text for b in msg.content if getattr(b, "type", "") == "text"
                 )
@@ -132,19 +145,19 @@ class AnthropicProvider(LLMProvider):
 
         out: dict[str, str] = {}
         for chunk in _chunks(requests, config.LLM_BATCH_CHUNK):
-            batch_reqs = [
-                {
-                    "custom_id": cid,
-                    "params": {
-                        "model": self.model,
-                        "max_tokens": mt,
-                        "temperature": temperature,
-                        "system": _cached_system(system),
-                        "messages": [{"role": "user", "content": user}],
-                    },
+            batch_reqs = []
+            for cid, system, user, mt in chunk:
+                params = {
+                    "model": self.model,
+                    "max_tokens": mt,
+                    "system": _cached_system(system),
+                    "messages": [{"role": "user", "content": user}],
                 }
-                for cid, system, user, mt in chunk
-            ]
+                if _needs_no_temperature(self.model):
+                    params["thinking"] = {"type": "disabled"}
+                else:
+                    params["temperature"] = temperature
+                batch_reqs.append({"custom_id": cid, "params": params})
             batch = self._client.messages.batches.create(requests=batch_reqs)
             log.info("배치 제출 — id=%s  요청=%d  (24h 내 완료, 50%% 할인)", batch.id, len(chunk))
 
