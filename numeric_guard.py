@@ -101,6 +101,12 @@ def fx_values(text: str) -> dict[str, list[float]]:
             vals.append(sum(float(n.replace(",", "")) * _KO_UNITS[u]
                             for n, u in re.findall(_KO_PART, m.group(1))))
         for m in re.finditer(rf"(?<![\d,.조억만])({_NUM})\s*(?:{ko})", text):
+            # "엔·달러 환율은 ... 158엔" 같은 환율 시세는 금액이 아니다 — 단위 없는
+            # 숫자가 조·억·만 같은 규모어 없이 나오면 거의 항상 환율/주가 같은 시세이고,
+            # "환율" 근처(같은 문장)에 등장하면 특히 그렇다. 2026-10-15 JP 브리핑
+            # "158엔"이 1조 엔과 비교돼 오탐난 사례로 발견.
+            if "환율" in text[max(0, m.start() - 40):m.start()]:
+                continue
             vals.append(float(m.group(1).replace(",", "")))
         if vals:
             out[code] = vals

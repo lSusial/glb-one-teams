@@ -103,6 +103,14 @@ _GEO_SIGNAL_RE = re.compile(
 _GOVERNANCE_RE = re.compile(
     r"\b(?:takeover|stake|shareholding|shareholders?|ownership|controlling|acquisition|acquire|"
     r"governance|buyback|repurchase|retake)\b", re.I)
+# 헤드라인이 반올림 표현("nears $1 trillion")을 쓰고 본문이 정확한 수치($938 billion)를
+# 쓰는 건 번역 오류가 아니라 원문 저널리즘 관행이다(2026-10-15 CN 무역흑자 기사로 발견).
+# AMOUNT_MISMATCH의 (q_en, t_en) 비교(제목↔요약 둘 다 영어 — 통화 바꿔치기 탐지용)에서만
+# 이 표현이 제목에 있으면 건너뛴다.
+_ROUNDING_RE = re.compile(
+    r"\b(?:near(?:s|ing)?|approach(?:es|ing)?|top(?:s|ping)?|surpass(?:es|ing)?|"
+    r"exceed(?:s|ing)?|close to|cusp of|verge of|brink of|edge(?:s|ing)? (?:toward|past)|"
+    r"on track to)\b", re.I)
 
 
 def category_mismatch(card) -> str | None:
@@ -346,6 +354,8 @@ def main() -> int:
         # (q_en, t_en): 영문 제목 금액이 영문 요약과 다름(Rp 9.1조 → "$9.1 trillion" 같은 통화 바꿔치기)
         for en, ko in (("t_en", "t"), ("q_en", "q"), ("expanded_summary_en", "expanded_summary"),
                        ("q_en", "t_en")):
+            if en == "q_en" and ko == "t_en" and _ROUNDING_RE.search(a.get("t_en") or ""):
+                continue
             if a.get(en) and a.get(ko) and numeric_guard.amount_mismatch(a[en], a[ko]):
                 add("AMOUNT_MISMATCH", f"{w} {ko}: {short(a)} · {a.get('u', '')[:70]}")
 

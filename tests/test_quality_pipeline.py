@@ -184,6 +184,14 @@ class PreDeployValidationTests(unittest.TestCase):
         self.assertIsNone(self.audit.category_mismatch(rare_earth))
         self.assertIsNone(self.audit.category_mismatch(dict(self.KB_COOP, c='policy', c2='markets')))
 
+    def test_rounding_headline_is_not_an_amount_mismatch(self):
+        # 2026-10-15: "China's trade surplus nears US$1 trillion"(제목) vs 본문의 정확한
+        # "$938 billion"은 번역 오류가 아니라 헤드라인 반올림 관행 — q_en/t_en 비교에서만 예외.
+        self.assertTrue(self.audit._ROUNDING_RE.search(
+            "China's trade surplus nears US$1 trillion as exports surge"))
+        self.assertIsNone(self.audit._ROUNDING_RE.search("China's trade surplus hits US$1 trillion record"))
+        self.assertTrue(self.audit._ROUNDING_RE.search("Spending is on track to exceed $1 trillion"))
+
     def test_strict_blocks_wrong_facts_but_only_warns_heuristics(self):
         import contextlib
         import io
@@ -1189,6 +1197,18 @@ class OtherCurrencyGuardTests(unittest.TestCase):
             with self.subTest(src):
                 self.assertFalse(numeric_guard.amount_mismatch(src, ok))
                 self.assertTrue(numeric_guard.amount_mismatch(src, bad))
+
+    def test_jpy_exchange_rate_quote_is_not_read_as_an_amount(self):
+        # 2026-10-15: JP 브리핑 "엔·달러 환율은 ... 158엔 중반대로 하락" 이 "약 1조 엔"
+        # 데이터센터 투자액과 같은 JPY 통화로 묶여 비교되며 오탐(158 vs 1조는 당연히 불일치).
+        # "환율" 근처의 단위 없는 숫자는 시세이지 금액이 아니므로 제외해야 한다.
+        src = 'a roughly ¥1 trillion data center; the yen weakened toward the mid-158 range'
+        ko_ok = '약 1조 엔 데이터센터. 엔·달러 환율은 158엔 중반대로 하락했다.'
+        self.assertEqual(numeric_guard.fx_values(ko_ok).get('JPY'), [1e12])
+        self.assertFalse(numeric_guard.amount_mismatch(src, ko_ok))
+        # "환율" 문맥이 없으면 여전히 단위 없는 숫자도 금액으로 잡혀야 한다(과도하게 느슨해지면 안 됨)
+        ko_bad = '약 1조 엔 데이터센터와 별도로 158엔 투자도 있다.'
+        self.assertEqual(numeric_guard.fx_values(ko_bad).get('JPY'), [1e12, 158.0])
 
     def test_hong_kong_dollar_sign_is_not_read_as_us_dollar(self):
         self.assertEqual(numeric_guard.usd_values('HK$500bn and S$2bn'), [])
