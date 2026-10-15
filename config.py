@@ -224,7 +224,12 @@ SOCIETY_ACTIVE_FLOOR = 45   # 사회뉴스 전용 노출 floor(export 국가탭 
 DEDUP_MIN_OVERLAP = 0.25   # [9/28 제목 전용 전환 후 재측정 필요: python3 eval/eval_dedup_guard.py] AI 중복판정 오묶음 가드: 묶인 기사끼리 제목+요약 토큰 겹침 계수가 이 미만이면 같은 사건으로 잇지 않는다(llm_dedup.split_by_overlap). 라벨 70쌍 평가(eval/eval_dedup_guard.py): 0.25=오묶음 20/31 제거·진짜 중복 37/39 유지, 0.30부터 진짜 중복이 급감(30/39)
 DEDUP_PAIR_MIN_OVERLAP = 0.08  # LLM이 SAME인 제목쌍의 최소 겹침. 공통 고유 주체도 반드시 있어야 함
 DEDUP_CANDIDATE_OVERLAP = 0.08  # LLM에 보낼 후보쌍 최소 겹침(최종 병합 가드보다 넓게 잡아 recall 확보)
-DEDUP_MAX_NEIGHBORS = 2         # 라벨 recall 39/39를 유지한 최소 상한 — 국가별 O(n²) 후보 폭증 방지
+DEDUP_MAX_NEIGHBORS = 6         # 2026-10-15: 2는 고볼륨 단일 이벤트 날(예: 싱가포르 MAS 통화정책
+                                 # 발표 40여 건)에 같은 사건이 5개 이상 섬으로 쪼개지는 원인이었다
+                                 # (NEAR_DUP_IN_TAB). 6으로 올려 실측 15건 통합 확인(기존 최대
+                                 # 4~7건씩 쪼개지던 게 1개 그룹으로). LLM 비용은 fast(Haiku)
+                                 # 모델이라 영향 작고, 가드(DEDUP_MIN_OVERLAP)는 그대로라 오탐
+                                 # 방지력은 유지(eval/eval_dedup_guard.py 라벨 70쌍 회귀 불변).
 DEDUP_PAIRS_PER_REQUEST = 20    # Haiku가 뒤쪽 pair 판정을 생략하지 않는 크기(라벨 회귀평가 기준)
 
 

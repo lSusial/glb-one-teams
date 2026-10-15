@@ -248,6 +248,40 @@ class DedupGuardTests(unittest.TestCase):
         self.assertEqual(s['groups'], 1)
         self.assertEqual(s['released'], 1)
 
+    # ── 고볼륨 단일 이벤트 — 이웃 수 상한(DEDUP_MAX_NEIGHBORS) ──────────────
+    def test_candidate_pairs_connect_more_of_a_large_same_event_cluster(self):
+        """2026-10-15: 싱가포르 MAS 통화정책 발표처럼 한 사건에 매체 수십 곳이 몰리는 날,
+        이웃 2개 제한으로는 후보쌍 자체가 너무 적어 같은 사건이 여러 대표로 쪼개졌다
+        (실측 40여 건이 5개 섬으로). 상한을 올리면 같은 입력에서 후보쌍이 늘어 전체가
+        이어질 가능성이 커지는지 확인(LLM 판정·가드는 결정적이 아니므로 메커니즘만 검증)."""
+        arts = [{'article_id': i} for i in range(1, 11)]
+        # 10개 헤드라인이 'mas', 'hold', 'policy' 등 핵심어는 공유하되 나머지 표현은 매체마다
+        # 다르게 섞어 실제 신디케이션처럼 토큰 겹침이 이웃마다 들쭉날쭉하게 만든다.
+        variants = [
+            {'mas', 'hold', 'policy', 'steady'}, {'mas', 'hold', 'policy', 'unexpectedly'},
+            {'mas', 'hold', 'settings', 'pause'}, {'mas', 'keep', 'policy', 'tighten'},
+            {'mas', 'stand', 'pat', 'inflation'}, {'singapore', 'hold', 'policy', 'gdp'},
+            {'mas', 'surprise', 'hold', 'core'}, {'mas', 'tighten', 'slightly', 'risk'},
+            {'singapore', 'mas', 'oversight', 'ai'}, {'mas', 'hold', 'growth', 'moderate'},
+        ]
+        meta = {i: {'candidate_tok': variants[i - 1]} for i in range(1, 11)}
+
+        def edge_count(max_neighbors):
+            orig = L.config.DEDUP_MAX_NEIGHBORS
+            L.config.DEDUP_MAX_NEIGHBORS = max_neighbors
+            try:
+                return len(L._candidate_pairs(arts, meta))
+            finally:
+                L.config.DEDUP_MAX_NEIGHBORS = orig
+
+        few = edge_count(2)
+        many = edge_count(6)
+        self.assertGreater(many, few)
+        # 상한 6에서는 10개 중 최소 8개가 후보 그래프에 등장해야(완전 고립 없이) 섬 분리를
+        # 줄일 여지가 생긴다.
+        touched = {aid for a, b, _ in L._candidate_pairs(arts, meta) for aid in (a, b)}
+        self.assertGreaterEqual(len(touched), 8)
+
 
 if __name__ == '__main__':
     unittest.main()
