@@ -24,8 +24,9 @@ REPORT_PATH = DATA_DIR / "availability_report.md"
 DEFAULT_PROVIDER = os.environ.get("LLM_PROVIDER", "anthropic")
 
 # 작업별 모델 분리 — 싼 모델로 거르고, 좋은 모델로 분석/합성 (비용 최적화)
-ANTHROPIC_MODEL_FAST  = "claude-haiku-5-5"   # llm_prefilter (저비용·고속) — 10/13 Haiku 5.5로 전환(가격 1/10, 캐싱 개선)
-ANTHROPIC_MODEL_SMART = "claude-haiku-5-5"   # llm_ranker / briefing — 10/13 Haiku 5.5로 전환(가격 1/10, 캐싱 개선)
+ANTHROPIC_MODEL_FAST  = "claude-haiku-5-5"   # llm_prefilter/dedup/expand/translate (저비용·고속) — 10/13 Haiku 5.5로 전환(가격 1/10, 캐싱 개선)
+ANTHROPIC_MODEL_SMART = "claude-haiku-5-5"   # llm_ranker / briefing — Sonnet 5.5 승격은 10/14 보류(모델 ID·호환성 미검증 상태로 판단 유보),
+                                               # 둘 다 Haiku 5.5 유지. 보류 배경은 docs/work_log.md 10/14자 참조.
 ANTHROPIC_MAX_TOKENS  = 1024
 
 # OpenAI 등 추가 시 사용할 자리(어댑터는 llm_provider.py)
@@ -66,8 +67,9 @@ LLM_BATCH_MAX_WAIT_SEC = 24 * 3600   # 배치 최대 대기(초, API SLA=24h)
 # 초과분은 PREFILTER_LIMIT과 같은 이유로 --days 2 창 밖으로 밀려나 영구 미처리됨.
 # → 700 채택(실측 피크 552를 여유있게 흡수). 비용은 rank가 prefilter의 약 6배라
 #   피크일에만 최대 +600원 안팎(매일 아님, 평시엔 영향 거의 없음).
-PREFILTER_LIMIT = 1600       # 한 번 실행에 처리할 최대 기사 수(prefilter)
-RANK_LIMIT      = 700        # 한 번 실행에 처리할 최대 기사 수(ranker)
+PREFILTER_LIMIT = 2400       # 한 번 실행에 처리할 최대 기사 수(prefilter) — 10/14 1600→2400(Haiku 5.5 전환으로 비용 여력 생겨 백로그 흡수 확대)
+PREFILTER_SUMMARY_MAXLEN = 900  # prefilter 프롬프트에 넣는 RSS 요약 최대 길이(자) — 10/14 600→900(비용 여력 재투자, llm_prefilter.py에서 사용)
+RANK_LIMIT      = 900        # 한 번 실행에 처리할 최대 기사 수(ranker) — 10/14 700→900(Haiku 5.5 비용 여력으로 상향, 백로그 흡수)
 
 # ── 본문 추출(fulltext.py) ───────────────────────────────────────
 # prefilter 통과분만 원문 본문 추출(무료). 스니펫(~141B) 대신 본문으로 rank 품질↑.
@@ -78,8 +80,8 @@ FULLTEXT_WORKERS = 12        # 병렬 fetch 수
 FULLTEXT_RETRY_DAYS = 3      # 실패 URL 재시도 간격(매일 같은 페이월·차단 URL 재요청 방지)
 DISPLAY_LINK_RESOLVE_LIMIT = 150  # rank 후 노출 기사 GN 링크 추가 해소 한도(순차 요청·Google 429 방지)
 FULLTEXT_MAXLEN  = 12000     # 저장 본문 최대 길이(자)
-RANK_BODY_MAXLEN = 1200      # rank 프롬프트에 넣는 본문 최대 길이(자) — 2026-08-31 토큰
-                              # 다이어트로 4000→2000(rank가 하루 토큰의 ~69%를 차지, 가장 큰 레버)
+RANK_BODY_MAXLEN = 2400      # rank 프롬프트에 넣는 본문 최대 길이(자) — 2026-08-31 토큰 다이어트로 4000→2000→1200까지
+                              # 줄였던 것을, 10/14 Haiku 5.5 전환 후 비용 여력 생겨 2400으로 재확대(근거강도·금액정확도 개선 기대)
 
 # ── 다출처 종합 요약(2026-08-26 회의 결정: 저작권 완화) ────────────────
 # keyword_filter.run_dedup()이 만든 duplicate_of 클러스터(제목유사도≥0.75,
@@ -88,7 +90,7 @@ RANK_BODY_MAXLEN = 1200      # rank 프롬프트에 넣는 본문 최대 길이(
 # "종합" 요약(단일 기사 패러프레이즈 아님)을 생성 — 미만이면 기존 단일기사 방식.
 SYNTH_MIN_SOURCES    = 3      # 이 값 미만이면 다출처 종합 없이 기존 방식(단일 기사)
 SYNTH_MAX_SOURCES    = 5      # 프롬프트 비용 관리 — 클러스터가 더 커도 이 개수까지만
-SYNTH_SNIPPET_MAXLEN = 600    # 다출처 프롬프트에서 소스 1건당 본문/요약 최대 길이(자)
+SYNTH_SNIPPET_MAXLEN = 1000   # 다출처 프롬프트에서 소스 1건당 본문/요약 최대 길이(자) — 10/14 600→1000(비용 여력 재투자)
 
 # ai_score(0~100) 가 이 값 이상이면 UI에서 ACTIVE(노출), 미만은 SOURCE WATCH
 # 60→55: 임계 바로 아래(50~59)에 준수한 거시·금융 뉴스가 몰려 있어 노출 폭을 넓힘

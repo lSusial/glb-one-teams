@@ -88,7 +88,7 @@ def run_prefilter(conn, provider: LLMProvider | None = None,
         cid = str(i)
         user = (
             f"[국가:{r['cc']}] 제목: {r['title']}\n"
-            f"요약: {(r['summary'] or '')[:600]}"
+            f"요약: {(r['summary'] or '')[:config.PREFILTER_SUMMARY_MAXLEN]}"
         )
         requests.append((cid, _SYSTEM, user, 200))
         row_by_id[cid] = r
