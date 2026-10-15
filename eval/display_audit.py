@@ -93,16 +93,10 @@ def past_deadlines(text: str | None, as_of: date) -> list[tuple[str, date]]:
     return out
 
 
-_GEO_SIGNAL_RE = re.compile(
-    r"\b(?:wars?|conflicts?|sanction\w*|tariff\w*|election\w*|military|army|troops|coup|geopolit\w*|"
-    r"diplomat\w*|missiles?|invasion|invad\w*|borders?|terror\w*|nuclear|embargo|unrest|protest\w*|summit|"
-    r"bilateral|trade (?:war|tension\w*|deal|talks|dispute)|tensions?|attacks?|ceasefire|hostages?|"
-    r"national security|sovereign\w*|iran\w*|israel\w*|russia\w*|ukrain\w*|gaza|hormuz|"
-    r"cyberattacks?|espionage|crackdown|scams?|money.laundering|export (?:controls?|restrictions?|rules|bans?)|"
-    r"truce|extraterritorial)\b", re.I)
-_GOVERNANCE_RE = re.compile(
-    r"\b(?:takeover|stake|shareholding|shareholders?|ownership|controlling|acquisition|acquire|"
-    r"governance|buyback|repurchase|retake)\b", re.I)
+import category_guard
+
+_GEO_SIGNAL_RE = category_guard.GEO_SIGNAL_RE    # eval/·production(category_guard.py) 공용
+_GOVERNANCE_RE = category_guard.GOVERNANCE_RE
 # 헤드라인이 반올림 표현("nears $1 trillion")을 쓰고 본문이 정확한 수치($938 billion)를
 # 쓰는 건 번역 오류가 아니라 원문 저널리즘 관행이다(2026-10-15 CN 무역흑자 기사로 발견).
 # AMOUNT_MISMATCH의 (q_en, t_en) 비교(제목↔요약 둘 다 영어 — 통화 바꿔치기 탐지용)에서만
@@ -115,15 +109,13 @@ _ROUNDING_RE = re.compile(
 
 def category_mismatch(card) -> str | None:
     """지정학(geopolitics) 주·보조 분류인데 영문 본문에 지정학 신호가 하나도 없으면 사유 문자열.
-    실측(9/23~10/8 카드 43건 중 10건 표시): 은행 파산·소비자 부채·제인스트리트 소송·KB 협동조합 등."""
+    실측(9/23~10/8 카드 43건 중 10건 표시): 은행 파산·소비자 부채·제인스트리트 소송·KB 협동조합 등.
+    판정 로직은 category_guard.py 공용(production의 fix_ungrounded_geo()와 동일 규칙)."""
     if "geopolitics" not in (card.get("c"), card.get("c2")):
         return None
     text = " ".join(card.get(k) or "" for k in ("t_en", "q_en", "expanded_summary_en"))
-    if not text.strip() or _GEO_SIGNAL_RE.search(text):
-        return None
-    if _GOVERNANCE_RE.search(text):
-        return "지정학 신호 없음 — 지분·지배구조 성격(policy/markets 검토)"
-    return "지정학 신호 없음"
+    reason = category_guard.ungrounded_geo_reason(text)
+    return f"지정학 {reason}" if reason else None
 
 
 def walk(o, path=""):

@@ -60,6 +60,9 @@ run_step "지표(main.py indicators)" .venv/bin/python main.py indicators
 # 동안 9/21 이후 15일째 STALE_SPARK가 쌓였던 걸 발견 — 일일 자동화에 편입.
 if [ "$(date +%u)" = "1" ]; then
     run_step "지표 히스토리(주간, main.py indicators-history)" .venv/bin/python main.py indicators-history
+    # 주간 브리핑도 월요일에만(직전에 완료된 월~일 주 기준, main.py brief --type weekly 기본값).
+    # 2026-10-15 이전엔 일일 자동화에 없어 수동 실행을 놓치면 몇 주씩 밀렸음(STALE_WEEKLY 18일).
+    run_step "주간 브리핑(main.py brief --type weekly)" .venv/bin/python main.py brief --type weekly
 fi
 
 run_step "배포(deploy_web.sh)" ./deploy_web.sh

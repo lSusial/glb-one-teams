@@ -95,8 +95,11 @@ SYNTH_SNIPPET_MAXLEN = 1000   # 다출처 프롬프트에서 소스 1건당 본�
 # ai_score(0~100) 가 이 값 이상이면 UI에서 ACTIVE(노출), 미만은 SOURCE WATCH
 # 60→55: 임계 바로 아래(50~59)에 준수한 거시·금융 뉴스가 몰려 있어 노출 폭을 넓힘
 AI_SCORE_ACTIVE_THRESHOLD = 55
-COUNTRY_WATCH_FLOOR = 50       # ACTIVE가 0건인 국가만 관심 기사 1건을 허용하는 하한
-COUNTRY_WATCH_MAX = 1
+COUNTRY_WATCH_FLOOR = 45       # 관심 기사 후보로 허용하는 점수 하한(SOCIETY_ACTIVE_FLOOR와 동일 선)
+COUNTRY_WATCH_TRIGGER = 2      # ACTIVE가 이 값 미만(얇은 국가 포함)인 국가만 관심 기사로 보충
+COUNTRY_WATCH_MAX = 2          # 보충 후 국가당 최대 기사 수(ACTIVE+관심 합산)
+# 2026-10-15: ACTIVE==0일 때만 1건 보충하던 걸 확대 — 라오스처럼 0건은 물론 1건뿐인
+# '얇은' 국가도 바로 밑 점수대(45~54) 기사로 최소 2건은 보여준다.
 
 # 국가 브리핑에 투입할 기사 상한(국가·기간당)
 BRIEFING_MAX_ARTICLES = 25

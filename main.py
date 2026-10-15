@@ -150,6 +150,13 @@ def cmd_backfill_country(args):
     print(f"[backfill-country] 대상={s['total']}  채움={s['filled']}")
 
 
+def cmd_geo_guard(args):
+    import category_guard
+    conn = db.open_conn()
+    s = category_guard.fix_ungrounded_geo(conn, days=getattr(args, "days", None))
+    print(f"[geo-guard] 검사={s['checked']}  보정={s['fixed']}")
+
+
 def cmd_run(_args):
     """fetch → filter → dedup → 한국계 금융기관·인사동향 태깅 순서 실행 (수집 전용, AI 없음)."""
     print("=" * 50)
@@ -387,6 +394,7 @@ def cmd_dedup_repair(args):
 def cmd_ai(args):
     """prefilter → fulltext/rank → 상위 후보 재분석 → dedup → 후속 생성 순서 실행."""
     import briefing
+    import category_guard
     import llm_prefilter
     import llm_ranker
     import llm_expand
@@ -429,6 +437,9 @@ def cmd_ai(args):
     print("▶ [4/8] 모달 긴 요약(노출 기사만)...")
     se = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub), "ai")
     print(f"   대상={se['total']} 작성={se['written']} 다출처={se['synthesized']}")
+    print("▶ 지정학(GEO) 과다분류 보정...")
+    sg = _ai_guard(lambda: category_guard.fix_ungrounded_geo(conn, days=days), "ai")
+    print(f"   검사={sg['checked']} 보정={sg['fixed']}")
     print("▶ [5/8] 한국어 번역(표시분)...")
     st = _ai_guard(lambda: llm_translate.run_translate(conn, days=days, use_batch=ub), "ai")
     print(f"   KO채움={st['ko']} EN채움={st['en']}")
@@ -543,6 +554,8 @@ def main():
 
     pers = sub.add_parser("personnel", help="금융기관·중앙은행 인사동향(리더십 교체) 언급 태깅")
     pers.add_argument("--recheck", action="store_true", help="전체 재태깅")
+    geog = sub.add_parser("geo-guard", help="지정학(GEO) 과다분류 보정(신호 없으면 토픽에서 제거)")
+    geog.add_argument("--days", type=int, help="최근 N일 게시분만(기본 전체)")
 
     bfc = sub.add_parser("backfill-country", help="기존기사 primary_country 보수적 키워드 폴백(무료, LLM 없음)")
     bfc.add_argument("--recheck", action="store_true", help="전체 재계산")
@@ -616,7 +629,7 @@ def main():
     {
         "init": cmd_init, "fetch": cmd_fetch, "filter": cmd_filter,
         "dedup": cmd_dedup, "korean-fi": cmd_korean_fi, "personnel": cmd_personnel,
-        "backfill-country": cmd_backfill_country,
+        "backfill-country": cmd_backfill_country, "geo-guard": cmd_geo_guard,
         "run": cmd_run, "report": cmd_report, "quality": cmd_quality, "list": cmd_list,
         "indicators": cmd_indicators, "indicators-history": cmd_indicators_history,
         "prefilter": cmd_prefilter, "fulltext": cmd_fulltext, "resolve-links": cmd_resolve_links, "rank": cmd_rank,

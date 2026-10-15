@@ -8,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import briefing
+import category_guard
 import config
 import db
 import export_json
@@ -108,6 +109,97 @@ class ArchiveLinkExportTests(unittest.TestCase):
                 links = self.links(out)
                 self.assertTrue(links, name)
                 self.assertFalse([u for u in links if '/topic/' in u or '/tags/' in u], name)
+
+
+class CategoryGuardTests(unittest.TestCase):
+    """2026-10-15: GEO 과다분류(1MDB-도이치뱅크 소송·제인스트리트 SEBI 조사·기린 공정위
+    압수수색·중국 디지털대출업체 회장 구금·OCC 디뱅킹 조사 등 — 국가 간 갈등·제재·안보·
+    무역분쟁과 무관한 기업소송/국내규제/부패수사)를 랭킹 직후 DB에서 직접 떼는 후처리."""
+
+    def test_strip_ungrounded_geo_removes_geo_keeps_other_topics(self):
+        text = 'Beijing police detained the chairman of a digital lender after product defaults.'
+        self.assertEqual(category_guard.strip_ungrounded_geo('MARKETS,GEO', text), 'MARKETS')
+        self.assertEqual(category_guard.strip_ungrounded_geo('GEO', text), 'ECONOMY')  # 전부 빠지면 폴백
+
+    def test_strip_ungrounded_geo_leaves_real_geopolitics_alone(self):
+        sanctions = 'The US imposed new sanctions tied to the Iran oil trade.'
+        self.assertIsNone(category_guard.strip_ungrounded_geo('GEO,POLICY', sanctions))
+        # 'riots'는 unrest/protest와 같은 성격(정치적 불안정) — GEO 유지가 맞다
+        riots = "Banks in France could collapse as widening riots trigger deposit flight."
+        self.assertIsNone(category_guard.strip_ungrounded_geo('MARKETS,GEO', riots))
+
+    def test_strip_ungrounded_geo_noop_without_geo_or_empty_text(self):
+        self.assertIsNone(category_guard.strip_ungrounded_geo('MARKETS,ECONOMY', 'anything'))
+        self.assertIsNone(category_guard.strip_ungrounded_geo('GEO,MARKETS', ''))  # 판단불가는 그대로 둠
+
+    def test_fix_ungrounded_geo_updates_db_rows_only_when_grounded_check_fails(self):
+        conn = sqlite3.connect(':memory:')
+        conn.row_factory = sqlite3.Row
+        self.addCleanup(conn.close)
+        conn.executescript('''
+            CREATE TABLE articles_raw(article_id INTEGER PRIMARY KEY, ai_score INTEGER,
+                topics TEXT, title_en TEXT, summary_en TEXT, expanded_summary_en TEXT,
+                published_at TEXT);
+        ''')
+        conn.executemany(
+            "INSERT INTO articles_raw VALUES(?,?,?,?,?,?,?)",
+            [(1, 60, 'MARKETS,GEO', 'Yiren Digital chairman detained', 'Beijing police detained the '
+              'chairman after product defaults.', '', date.today().isoformat()),
+             (2, 60, 'GEO,POLICY', 'US sanctions Iran-linked oil traders', 'New sanctions target firms '
+              'tied to the Iran oil trade.', '', date.today().isoformat()),
+             (3, None, 'GEO', 'Unscored article', '', '', date.today().isoformat())])
+        conn.commit()
+        s = category_guard.fix_ungrounded_geo(conn)
+        self.assertEqual(s, {'checked': 2, 'fixed': 1})   # ai_score NULL인 3번은 애초 대상 아님
+        rows = {r['article_id']: r['topics'] for r in conn.execute('SELECT article_id, topics FROM articles_raw')}
+        self.assertEqual(rows[1], 'MARKETS')
+        self.assertEqual(rows[2], 'GEO,POLICY')   # 진짜 제재 뉴스는 그대로
+        self.assertEqual(rows[3], 'GEO')          # 미채점분은 건드리지 않음
+
+
+class WeeklyStalenessTests(unittest.TestCase):
+    """2026-10-15: IN·HK·TH·ID가 18일 전(9/21~9/27) 주간 브리핑을 최신인 것처럼 계속
+    보여주던 문제 — STALE_WEEKLY로 감사에서는 잡혔지만 화면은 안 바뀌었다. 14일 넘게
+    지난 최신본은 내용을 숨기고 '이번 주 자료 부족' 상태로 내보낸다."""
+
+    def setUp(self):
+        self.db = sqlite3.connect(':memory:')
+        self.db.row_factory = sqlite3.Row
+        self.addCleanup(self.db.close)
+        self.db.executescript('''
+            CREATE TABLE country_briefings(
+                briefing_id INTEGER PRIMARY KEY, cc TEXT, briefing_date TEXT,
+                briefing_type TEXT, generated_at TEXT, summary TEXT, summary_en TEXT,
+                issues TEXT, issues_en TEXT, outlook TEXT, outlook_en TEXT,
+                keywords TEXT, keywords_en TEXT, key_stat TEXT, key_stat_en TEXT,
+                week_start TEXT, week_end TEXT);
+        ''')
+
+    def add(self, cc, week_start, week_end, summary='요약', briefing_date=None):
+        self.db.execute(
+            "INSERT INTO country_briefings(cc, briefing_date, briefing_type, summary, "
+            "summary_en, week_start, week_end) VALUES(?,?,'weekly',?,?,?,?)",
+            (cc, briefing_date or week_end, summary, summary, week_start, week_end))
+        self.db.commit()
+
+    def test_stale_country_gets_insufficient_data_placeholder(self):
+        self.add('IN', '2026-09-21', '2026-09-27', summary='18일 전 내용')
+        self.add('VN', '2026-10-05', '2026-10-11', summary='최신 내용')
+        with patch('export_json.date') as mock_date:
+            mock_date.today.return_value = date(2026, 10, 15)
+            mock_date.fromisoformat = date.fromisoformat
+            briefs = {b['cc']: b for b in export_json._weekly_briefs(self.db)}
+        self.assertIn('이번 주 자료가 부족', briefs['IN']['summary'])
+        self.assertEqual(briefs['IN']['week_start'], '2026-10-05')  # 낡은 주가 아니라 이번 주로 표기
+        self.assertEqual(briefs['VN']['summary'], '최신 내용')
+
+    def test_fresh_country_within_14_days_shows_real_content(self):
+        self.add('JP', '2026-10-05', '2026-10-11', summary='최신 내용')
+        with patch('export_json.date') as mock_date:
+            mock_date.today.return_value = date(2026, 10, 15)   # lag = 4일
+            mock_date.fromisoformat = date.fromisoformat
+            briefs = {b['cc']: b for b in export_json._weekly_briefs(self.db)}
+        self.assertEqual(briefs['JP']['summary'], '최신 내용')
 
 
 def _load_display_audit():

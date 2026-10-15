@@ -80,7 +80,7 @@ def run_translate(conn, provider: LLMProvider | None = None,
     import export_json
     # 국가 화면은 항상 전일+당일(days=1) 기준이므로, AI 처리창(--days 2)과 무관하게
     # 실제 export에 선택되는 관심 기사만 번역한다.
-    watch_ids = set(export_json.country_watch_candidate_ids(conn, 1).values())
+    watch_ids = {aid for ids in export_json.country_watch_candidate_ids(conn, 1).values() for aid in ids}
     watch_in = ",".join("?" * len(watch_ids)) or "NULL"
 
     rows = conn.execute(

@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
 import config
 import db
@@ -733,8 +733,9 @@ _SOCIETY_ACTIVE_FLOOR = config.SOCIETY_ACTIVE_FLOOR   # 사회뉴스 전용 노�
 _SOCIETY_MAX_PER = 3         # 국가당 되살릴 사회기사 최대 수
 
 
-def country_watch_candidate_ids(conn, days: int = 1) -> dict[str, int]:
-    """ACTIVE가 0건인 진출국별 50~54점 관심 기사 한 건을 고른다."""
+def country_watch_candidate_ids(conn, days: int = 1) -> dict[str, list[int]]:
+    """ACTIVE가 COUNTRY_WATCH_TRIGGER 미만(0건은 물론 1건뿐인 '얇은' 국가도 포함)인
+    진출국별로 45~54점 관심 기사를 COUNTRY_WATCH_MAX까지 채울 후보를 고른다."""
     cols = {r[1] for r in conn.execute("PRAGMA table_info(articles_raw)")}
     media_cols = {r[1] for r in conn.execute("PRAGMA table_info(media_sources)")}
     title_en = "a.title_en" if "title_en" in cols else "NULL"
@@ -743,14 +744,17 @@ def country_watch_candidate_ids(conn, days: int = 1) -> dict[str, int]:
     tier = "m.tier" if "tier" in media_cols else "1"
     link_excl = _ARCHIVE_LINK_EXCL if "link" in cols else ""
     dc, params = _date_clause(days)
-    active_ccs = {r[0] for r in conn.execute(
-        f"""SELECT DISTINCT {db.effective_country_expr()}
+    active_counts: dict[str, int] = {}
+    for r in conn.execute(
+        f"""SELECT {db.effective_country_expr()} AS cc, COUNT(*) AS n
             FROM articles_raw a JOIN media_sources m ON m.source_id=a.source_id
             WHERE a.duplicate_of IS NULL
               AND ((a.ai_score >= ?{dc})
-                   OR (a.topics LIKE '%SOCIETY%' AND a.ai_score >= ?{dc}))""",
+                   OR (a.topics LIKE '%SOCIETY%' AND a.ai_score >= ?{dc}))
+            GROUP BY cc""",
         (config.AI_SCORE_ACTIVE_THRESHOLD, *params,
-         config.SOCIETY_ACTIVE_FLOOR, *params))}
+         config.SOCIETY_ACTIVE_FLOOR, *params)):
+        active_counts[r["cc"]] = r["n"]
     rows = conn.execute(
         f"""SELECT a.article_id, {db.effective_country_expr()} AS cc,
                    a.title, a.title_ko, {title_en} AS title_en, a.published_at,
@@ -765,17 +769,20 @@ def country_watch_candidate_ids(conn, days: int = 1) -> dict[str, int]:
             ORDER BY a.ai_score DESC, tier ASC, a.published_at DESC""",
         (config.COUNTRY_WATCH_FLOOR, config.AI_SCORE_ACTIVE_THRESHOLD, *params),
     ).fetchall()
-    out = {}
+    out: dict[str, list[int]] = {}
     as_of = _snapshot_date(conn)
     for r in rows:
         cc = r["cc"]
-        if cc not in _FLAGS or cc in active_ccs or cc in out:
+        if cc not in _FLAGS or active_counts.get(cc, 0) >= config.COUNTRY_WATCH_TRIGGER:
+            continue
+        slot = out.setdefault(cc, [])
+        if len(slot) >= config.COUNTRY_WATCH_MAX - active_counts.get(cc, 0):
             continue
         if llm_dedup.expired_preview_ids(
                 [(r["article_id"], r["published_at"],
                   r["title_ko"], r["title_en"], r["title"])], as_of):
             continue
-        out[cc] = r["article_id"]
+        slot.append(r["article_id"])
     return out
 
 
@@ -847,10 +854,13 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                      if a["article_id"] not in have and "SOCIETY" in (a["topics"] or "")][:_SOCIETY_MAX_PER]
             rows = rows + extra
 
-            # 정상 ACTIVE가 한 건도 없는 국가만 50~54점 후보 중 1건을 '관심 뉴스'로 노출한다.
-            # 빈 화면을 채우려고 전체 임계를 낮추지 않고, 본문 확보 또는 Tier 1 출처라는
-            # 최소 근거가 있으며 출처 충돌·번역 누락이 없는 기사만 허용한다.
-            if not rows and cc in watch_candidates:
+            # ACTIVE가 COUNTRY_WATCH_TRIGGER 미만(0건뿐 아니라 1건뿐인 얇은 국가도)인 국가는
+            # 45~54점 후보로 COUNTRY_WATCH_MAX까지 채운다. 빈 화면을 채우려고 전체 임계를
+            # 낮추지 않고, 본문 확보 또는 Tier 1 출처라는 최소 근거가 있으며 출처 충돌·번역
+            # 누락이 없는 기사만 허용한다(country_watch_candidate_ids 쿼리에서 이미 필터됨).
+            ids = watch_candidates.get(cc) or []
+            if len(rows) < config.COUNTRY_WATCH_TRIGGER and ids:
+                placeholders = ",".join("?" for _ in ids)
                 watch_rows = conn.execute(
                     f"""
                     SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language,
@@ -860,12 +870,13 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                            {db.publisher_expr()} AS media_name, m.primary_country_code cc
                     FROM articles_raw a
                     JOIN media_sources m ON m.source_id = a.source_id
-                    WHERE a.article_id = ?
+                    WHERE a.article_id IN ({placeholders})
+                    ORDER BY a.ai_score DESC
                     """,
-                    (watch_candidates[cc],),
+                    ids,
                 ).fetchall()
-                rows = watch_rows[:config.COUNTRY_WATCH_MAX]
-                watch_ids = {a["article_id"] for a in rows}
+                rows = rows + watch_rows[:config.COUNTRY_WATCH_MAX - len(rows)]
+                watch_ids = {a["article_id"] for a in watch_rows}
 
         articles = []
         for i, a in enumerate(rows):
@@ -1387,8 +1398,16 @@ def export_pulse(conn, days: int | None = None) -> dict:
 _WEEKLY_TEMPLATE = config.ROOT / "web" / "weekly.html"
 
 
+_WEEKLY_STALE_DAYS = 14   # eval/display_audit.py STALE_WEEKLY와 같은 기준
+
+
 def _weekly_briefs(conn) -> list[dict]:
-    """country_briefings(weekly) 최신본을 국가별 1건으로 반환(한/영)."""
+    """country_briefings(weekly) 최신본을 국가별 1건으로 반환(한/영).
+
+    최신본이 14일 넘게 지났으면(주간 생성이 며칠 누락된 경우) 낡은 내용을 최신인 것처럼
+    보여주지 않고 '이번 주 자료 부족' 상태로 내보낸다(2026-10-15 — IN·HK 등이 18일 전
+    브리핑을 그대로 보여주던 문제. STALE_WEEKLY로 감사에서는 잡혔지만 화면은 안 바뀌었음)."""
+    import briefing as briefing_mod
     try:
         cols = [c[1] for c in conn.execute("PRAGMA table_info(country_briefings)")]
     except Exception:
@@ -1410,6 +1429,9 @@ def _weekly_briefs(conn) -> list[dict]:
         except Exception:
             return []
 
+    today = date.today()
+    cur_week_start, cur_week_end = briefing_mod._last_completed_week(today)
+
     seen, out = set(), []
     for r in rows:
         cc = r["cc"]
@@ -1418,6 +1440,23 @@ def _weekly_briefs(conn) -> list[dict]:
         seen.add(cc)
         k = r.keys()
         g = lambda c: (r[c] if c in k else "") or ""
+        week_end = g("week_end")
+        stale = False
+        if week_end:
+            try:
+                stale = (today - date.fromisoformat(week_end)).days > _WEEKLY_STALE_DAYS
+            except ValueError:
+                pass
+        if stale:
+            out.append(dict(
+                cc=cc, flag=_FLAGS_ALL.get(cc, ""),
+                summary="이번 주 자료가 부족해 브리핑을 만들지 못했습니다.",
+                summary_en="Not enough material this week to generate a briefing.",
+                issues=[], issues_en=[], outlook="", outlook_en="",
+                keywords=[], keywords_en=[], key_stat="", key_stat_en="",
+                week_start=cur_week_start, week_end=cur_week_end,
+            ))
+            continue
         out.append(dict(
             cc=cc, flag=_FLAGS_ALL.get(cc, ""),
             summary=g("summary"), summary_en=g("summary_en"),
