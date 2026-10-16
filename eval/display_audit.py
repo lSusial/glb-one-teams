@@ -51,6 +51,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import config  # noqa: E402
+import db  # noqa: E402
 import export_json  # noqa: E402
 import llm_dedup as L  # noqa: E402
 import numeric_guard  # noqa: E402
@@ -302,19 +303,40 @@ def main() -> int:
 
     # 9 HIDDEN_NEWER_REP (더 새 기사뿐 아니라 더 높은 점수의 기사나 ACTIVE 자식이
     # 비노출 대표 밑에 숨은 경우도 포함한다. 대표>=55 조건을 걸면 가장 심각한 후자를 놓친다.)
+    # 동점(child_score == rep_score)일 때는 llm_dedup.pick_rep()이 "게시 최신"보다 "현지언론
+    # 우선"을 먼저 본다 — 대표 매체가 주제국가 소속이고 자식 매체는 아니면, 자식이 하루
+    # 늦게 나왔어도 대표 유지가 의도된 결과다(2026-10-16, NYT·US보도 vs NHK World 등).
+    # 그 경우만 거짓양성이므로 제외한다. 점수가 다르면(자식이 더 높음) 여전히 그대로 잡는다.
+    # media_sources·source_id가 없는 구형/최소 스키마에서도 동작하도록 있을 때만 조인한다.
+    article_cols = {c[1] for c in conn.execute("PRAGMA table_info(articles_raw)")}
+    has_media_join = "source_id" in article_cols and conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='table' AND name='media_sources'").fetchone()
+    if has_media_join:
+        media_select = (", mc.primary_country_code c_media_cc, mr.primary_country_code r_media_cc, "
+                        f"{db.effective_country_expr(article_alias='r', media_alias='mr')} AS subject")
+        media_join = ("JOIN media_sources mc ON mc.source_id = c.source_id "
+                      "JOIN media_sources mr ON mr.source_id = r.source_id")
+    else:
+        media_select, media_join = ", NULL c_media_cc, NULL r_media_cc, NULL subject", ""
     for r in conn.execute(
-            """SELECT c.article_id cid, c.title craw, COALESCE(c.title_en,c.title) ct,
+            f"""SELECT c.article_id cid, c.title craw, COALESCE(c.title_en,c.title) ct,
                       c.published_at cp, c.ai_score cs,
                       r.article_id rid, COALESCE(r.title_en,r.title) rt,
                       r.published_at rp, r.ai_score rs
+                      {media_select}
                FROM articles_raw c JOIN articles_raw r ON r.article_id = c.duplicate_of
+               {media_join}
                WHERE c.dup_by_ai = 1 AND r.duplicate_of IS NULL
                  AND r.published_at >= date(?, '-6 day')""",
             (today.isoformat(),)):
         child_score, rep_score = r["cs"] or 0, r["rs"] or 0
         child_is_preview = L.is_preview(r["craw"], r["ct"])
+        tie_is_local_media_pick = (
+            child_score == rep_score and r["subject"]
+            and r["r_media_cc"] == r["subject"] and r["c_media_cc"] != r["subject"])
         newer_not_worse = ((r["cp"] or "")[:10] > (r["rp"] or "")[:10]
-                           and child_score >= rep_score and not child_is_preview)
+                           and child_score >= rep_score and not child_is_preview
+                           and not tie_is_local_media_pick)
         active_hidden = (child_score >= config.AI_SCORE_ACTIVE_THRESHOLD
                          and rep_score < config.AI_SCORE_ACTIVE_THRESHOLD
                          and not child_is_preview)
