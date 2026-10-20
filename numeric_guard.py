@@ -16,6 +16,33 @@ _KO_UNITS = {"조": 1e12, "억": 1e8, "천만": 1e7, "백만": 1e6, "만": 1e4}
 # 뒤 lookahead는 되추적으로 숫자 일부만 잡는 것을 막는다("$186.5억"이 186으로 읽히던 문제).
 _NUM = r"\d+(?:[,.]\d+)*(?![,.]?\d)"
 _KO_PART = rf"({_NUM})\s*(조|억|천만|백만|만)"
+# 규모어 뒤 꼬리 숫자까지 한 금액으로("1만 8,051루피아" = 18,051 — 2026-10-20 ID 환율 번역 오탐)
+_KO_AMOUNT = rf"((?:{_KO_PART}\s*)+)({_NUM})?\s*"
+# 규모어 바로 뒤 꼬리 숫자는 단독 금액이 아니다(위 _KO_AMOUNT가 이미 셈)
+_NOT_KO_TAIL = r"(?<![\d,.조억만])(?<![조억만]\s)"
+# 영문 범위의 앞 숫자에 뒤 단위·통화기호를 붙인다("US$8 to 8.5 billion" → "US$8 billion to
+# US$8.5 billion", "RM100-120 billion"). 안 그러면 앞 숫자가 8달러·100링깃으로 읽혀 정상 번역을
+# 거부한다(2026-10-20 ID BI 개입·말레이 MBSB 기사).
+_CUR_PRE = r"US\$|HK\$|S\$|\$|RM|Rp\.?\s?|Rs\.?\s?|₹|¥|£|€"
+_RANGE_RE = re.compile(
+    rf"({_CUR_PRE})?(\d+(?:[,.]\d+)*)\s*(-|–|to)\s*({_CUR_PRE})?(\d+(?:[,.]\d+)*)\s*-?\s*"
+    r"(lakh crore|trillion|billion|million|crore|lakh|bn|mn|tn)\b", re.I)
+
+
+def _expand_ranges(text: str) -> str:
+    def sub(m):
+        pre, a, sep, pre2, b, unit = m.groups()
+        # "September 2026 to $44.4 billion"처럼 연도 뒤 to는 범위가 아니다 — "to"는 앞 숫자에
+        # 통화기호가 있을 때만, 뒤 숫자에만 통화기호가 있으면 범위로 보지 않는다.
+        if not pre and (sep.lower() == "to" or pre2):
+            return m[0]
+        return f"{pre or ''}{a} {unit} to {pre or ''}{b} {unit}"
+    return _RANGE_RE.sub(sub, text)
+
+
+def _ko_total(m) -> float:
+    return (sum(_to_float(n) * _KO_UNITS[u] for n, u in re.findall(_KO_PART, m.group(1)))
+            + (_to_float(m.group(4)) if m.group(4) else 0))   # 4 = _KO_AMOUNT 꼬리 숫자
 
 
 def _to_float(s: str) -> float:
@@ -32,7 +59,7 @@ def _to_float(s: str) -> float:
 def usd_values(text: str) -> list[float]:
     """텍스트에서 달러 금액을 전부 뽑아 절대값(USD) 리스트로 반환. 영어(달러기호·USD·billion 등
     단위어)와 한국어(조/억/만 달러, "1억9천만 달러" 같은 복합) 표기를 모두 인식한다."""
-    text = text or ""
+    text = _expand_ranges(text or "")
     values: list[float] = []
     # HK$·S$ 같은 다른 달러는 제외(US$는 포함) — 홍콩달러 금액이 USD로 잡혀 오판하지 않게
     # 단위어 앞 하이픈("$1-billion")도 허용 — 2026-10-20 필리핀 기사에서 "$1-billion"이
@@ -44,9 +71,8 @@ def usd_values(text: str) -> list[float]:
             rf"({_NUM})\s*[- ]?(trillion|billion|million|bn|m)\s*[- ]?(?:USD|US dollars?)\b",
             text, re.I):
         values.append(_to_float(m.group(1)) * _UNITS[m.group(2).lower()])
-    for m in re.finditer(rf"((?:{_KO_PART}\s*)+)달러", text):
-        values.append(sum(_to_float(n) * _KO_UNITS[u]
-                          for n, u in re.findall(_KO_PART, m.group(1))))
+    for m in re.finditer(rf"{_KO_AMOUNT}달러", text):
+        values.append(_ko_total(m))
     for m in re.finditer(rf"\$\s*({_NUM})\s*(조|억)", text):
         values.append(_to_float(m.group(1)) * _KO_UNITS[m.group(2)])
     return values
@@ -60,7 +86,7 @@ _INR_UNIT_RE = r"(lakh crore|lakh|crore|cr|trillion|billion|million|bn|mn|m)"
 def inr_values(text: str) -> list[float]:
     """텍스트에서 인도 루피 금액을 뽑아 절대값(INR) 리스트로 반환. 영어(Rs/₹/INR + crore·lakh 등)와
     한국어(루피, "2조 2,568억 루피" 같은 복합) 표기를 인식한다. 인도네시아 루피아(Rp·루피아)는 제외."""
-    text = text or ""
+    text = _expand_ranges(text or "")
     values: list[float] = []
     # Rs 10,000 crore / ₹2,000 / Rs 22,568-crore
     for m in re.finditer(rf"(?:\bRs\.?|₹|\bINR)\s*({_NUM})(?:\s*-?\s*{_INR_UNIT_RE}\b)?", text, re.I):
@@ -69,10 +95,9 @@ def inr_values(text: str) -> list[float]:
     for m in re.finditer(rf"(?<![\w₹.,])({_NUM})\s*-?\s*(crore|lakh)\b", text, re.I):
         if not re.search(r"(?:Rs\.?|₹|INR)\s*$", text[:m.start()], re.I):
             values.append(_to_float(m.group(1)) * _INR_UNITS[m.group(2).lower()])
-    for m in re.finditer(rf"((?:{_KO_PART}\s*)+)루피(?!아)", text):
-        values.append(sum(_to_float(n) * _KO_UNITS[u]
-                          for n, u in re.findall(_KO_PART, m.group(1))))
-    for m in re.finditer(rf"(?<![\d,.조억만])({_NUM})\s*루피(?!아)", text):
+    for m in re.finditer(rf"{_KO_AMOUNT}루피(?!아)", text):
+        values.append(_ko_total(m))
+    for m in re.finditer(rf"{_NOT_KO_TAIL}({_NUM})\s*루피(?!아)", text):
         values.append(_to_float(m.group(1)))
     return values
 
@@ -102,18 +127,17 @@ _EN_UNITS = {**_UNITS, "mn": 1e6, "tn": 1e12, "b": 1e9,
 def fx_values(text: str) -> dict[str, list[float]]:
     """USD·INR 외 거점 통화 금액을 {통화코드: [값]}으로 반환. 영어(HK$500 billion, 10 billion yuan)와
     한국어(5,000억 홍콩달러, 1.2조 엔) 표기를 인식한다. 금액이 없는 통화는 키가 없다."""
-    text = text or ""
+    text = _expand_ranges(text or "")
     out: dict[str, list[float]] = {}
     for code, (pre, post, ko) in _FX.items():
         vals: list[float] = []
         for m in re.finditer(rf"(?:{pre})\s*({_NUM})(?:\s*-?\s*{_EN_UNIT_RE}\b)?", text, re.I):
             vals.append(_to_float(m.group(1)) * _EN_UNITS[(m.group(2) or "").lower()])
-        for m in re.finditer(rf"({_NUM})\s*-?\s*(?:{_EN_UNIT_RE}\s+)?(?:{post})\b", text, re.I):
+        for m in re.finditer(rf"({_NUM})\s*-?\s*(?:{_EN_UNIT_RE}[\s-]+)?(?:{post})\b", text, re.I):
             vals.append(_to_float(m.group(1)) * _EN_UNITS[(m.group(2) or "").lower()])
-        for m in re.finditer(rf"((?:{_KO_PART}\s*)+)(?:{ko})", text):
-            vals.append(sum(_to_float(n) * _KO_UNITS[u]
-                            for n, u in re.findall(_KO_PART, m.group(1))))
-        for m in re.finditer(rf"(?<![\d,.조억만])({_NUM})\s*(?:{ko})", text):
+        for m in re.finditer(rf"{_KO_AMOUNT}(?:{ko})", text):
+            vals.append(_ko_total(m))
+        for m in re.finditer(rf"{_NOT_KO_TAIL}({_NUM})\s*(?:{ko})", text):
             # "엔·달러 환율은 ... 158엔" 같은 환율 시세는 금액이 아니다 — 단위 없는
             # 숫자가 조·억·만 같은 규모어 없이 나오면 거의 항상 환율/주가 같은 시세이고,
             # "환율" 근처(같은 문장)·"달러당 17,938루피아" 같은 "~당" 단위환율 표현에

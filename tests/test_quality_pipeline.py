@@ -1190,6 +1190,26 @@ class NumericGuardTests(unittest.TestCase):
         self.assertEqual(numeric_guard.usd_values('1조 2,000억 달러'), [1.2e12])
         self.assertEqual(numeric_guard.usd_values('$30억의 투자'), [3e9])
 
+    def test_ranges_hyphen_units_and_mixed_korean_are_not_false_positives(self):
+        # 2026-10-20 라이브 번역 거부 4건 — 번역은 맞았고 원문/번역문 금액 인식이 틀렸다
+        self.assertFalse(numeric_guard.amount_mismatch(
+            'drew roughly US$8 to 8.5 billion in inflows', '약 80억~85억 달러의 자본 유입'))
+        self.assertFalse(numeric_guard.amount_mismatch(
+            'targets RM100-120 billion over the longer term', '장기 목표는 1,000억~1,200억 링깃'))
+        self.assertFalse(numeric_guard.amount_mismatch(
+            '100 billion yuan from an 800-billion-yuan financing tool',
+            '8,000억 위안 규모 금융도구에서 1,000억 위안을 투입'))
+        self.assertFalse(numeric_guard.amount_mismatch(
+            'opened weaker at Rp 18,051 per dollar', '달러당 1만 8,051루피아로 약세 출발'))
+        # 연도 뒤 "to"는 범위가 아니다(원문 $44.4 billion을 놓치면 정상 번역을 거부한다)
+        self.assertFalse(numeric_guard.amount_mismatch(
+            'exports rose in September 2026 to $44.4 billion', '수출은 444억 달러로 증가'))
+        # 범위를 넓게 읽어도 10배 오류는 계속 잡는다
+        self.assertTrue(numeric_guard.amount_mismatch(
+            'drew roughly US$8 to 8.5 billion in inflows', '약 8억~8.5억 달러의 자본 유입'))
+        self.assertTrue(numeric_guard.amount_mismatch(
+            '100 billion yuan from an 800-billion-yuan financing tool', '800억 위안 규모 금융도구'))
+
     def test_mistranslated_amounts_are_flagged(self):
         self.assertTrue(numeric_guard.usd_mismatch('The firm raised USD 190 million', '베트남 190억 달러'))
         self.assertTrue(numeric_guard.usd_mismatch('a $19 million deal', '19만 달러 거래'))
