@@ -287,19 +287,24 @@ def main() -> int:
             if len(head_tk) >= 3 and len(self_tk) >= 3 and L.overlap(head_tk, self_tk) < 0.15:
                 add("SELF_TITLE_MISMATCH",
                     f"[{f}:{w}] 카드 제목 '{short(a, 40)}' ↔ 관련링크 자기참조 '{(rl0.get('t') or '')[:40]}'")
-    for w, cc, a in tabs:
+    checked_links = set()
+    for f, w, cc, a in cards:
         rl = a.get("rl") or []
         base = L._tokens(a.get("q_en") or a.get("t_en") or "")
         rep = db_row(a["u"]) or {"title": a.get("t_en") or "", "title_en": a.get("t_en"),
                                  "summary_en": a.get("q_en")}
         for x in rl[1:]:
+            pair = (a.get("u"), x.get("u"))
+            if pair in checked_links:
+                continue
+            checked_links.add(pair)
             r = db_row(x["u"])
             if not r:
                 continue
             ov = L.overlap(base, L._tokens((r["title"] or "") + " " + (r["summary_en"] or "")))
             # export와 같은 기준(겹침 + 제목의 같은 기관·기업·정책 앵커) — 공통 주제어만 겹친 연결을 잡는다
             if not export_json._same_story_for_link(rep, r):
-                add("UNRELATED_LINKS", f"[{w}] {short(a, 34)} ↔ 관련: {(x.get('t') or '')[:40]} (겹침 {ov:.2f})")
+                add("UNRELATED_LINKS", f"[{f}:{w}] {short(a, 34)} ↔ 관련: {(x.get('t') or '')[:40]} (겹침 {ov:.2f})")
 
     # 9 HIDDEN_NEWER_REP (더 새 기사뿐 아니라 더 높은 점수의 기사나 ACTIVE 자식이
     # 비노출 대표 밑에 숨은 경우도 포함한다. 대표>=55 조건을 걸면 가장 심각한 후자를 놓친다.)

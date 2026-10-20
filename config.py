@@ -70,6 +70,9 @@ LLM_BATCH_MAX_WAIT_SEC = 24 * 3600   # 배치 최대 대기(초, API SLA=24h)
 PREFILTER_LIMIT = 2400       # 한 번 실행에 처리할 최대 기사 수(prefilter) — 10/14 1600→2400(Haiku 5.5 전환으로 비용 여력 생겨 백로그 흡수 확대)
 PREFILTER_SUMMARY_MAXLEN = 900  # prefilter 프롬프트에 넣는 RSS 요약 최대 길이(자) — 10/14 600→900(비용 여력 재투자, llm_prefilter.py에서 사용)
 RANK_LIMIT      = 900        # 한 번 실행에 처리할 최대 기사 수(ranker) — 10/14 700→900(Haiku 5.5 비용 여력으로 상향, 백로그 흡수)
+AI_BACKLOG_MAX_DAYS = 7      # 수집 공백 뒤 미처리 passed/keep를 자동 복구할 최대 과거 일수
+SPARSE_RESCUE_PER_COUNTRY = 2 # 최근 창에서 keep=0인 진출국의 drop 후보를 rank까지 재검토할 수
+SPARSE_RESCUE_MIN_FILTER_SCORE = 5
 
 # ── 본문 추출(fulltext.py) ───────────────────────────────────────
 # prefilter 통과분만 원문 본문 추출(무료). 스니펫(~141B) 대신 본문으로 rank 품질↑.

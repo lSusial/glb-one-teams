@@ -504,9 +504,23 @@ def _same_story_for_link(rep, child) -> bool:
     # 정책명(고유 앵커)이 있어야 같은 사건으로 본다. 본문이 거의 같으면(재탕) 앵커 없이도 허용.
     # 2026-10-08 미 연준 감독체계 개편 기사에 FDIC 감독·합병 개혁 기사가 관련뉴스로 붙음.
     rep_title = llm_dedup._tokens(" ".join(value(rep, k) for k in ("title", "title_en")))
-    child_title = llm_dedup._tokens(" ".join(value(child, k) for k in ("title", "title_en")))
+    child_title_text = value(child, "title_en") or value(child, "title")
+    child_title = llm_dedup._tokens(child_title_text)
     anchors = (rep_title & child_title) - llm_dedup._EVENT_GENERIC - _LINK_THEME_WORDS
-    return bool(anchors) or ov >= _RELATED_SAME_TEXT
+    # 헤드라인의 본 사건은 전혀 다르고, ``as/amid/while`` 뒤 배경 설명에만 대표
+    # 사건이 등장하는 기사도 중복 그룹에 잘못 들어올 수 있다. 관련 링크는 근거
+    # 기사처럼 보이므로 이런 문맥상 언급은 제외한다. 링크가 하나 줄어드는 편이
+    # 서로 다른 사건을 같은 출처로 제시하는 것보다 안전하다.
+    primary_clause = re.split(r"\b(?:as|amid|while)\b", child_title_text, maxsplit=1,
+                              flags=re.I)[0]
+    if primary_clause != child_title_text:
+        primary_anchors = ((rep_title & llm_dedup._tokens(primary_clause))
+                           - llm_dedup._EVENT_GENERIC - _LINK_THEME_WORDS)
+        if not primary_anchors and ov < _RELATED_SAME_TEXT:
+            return False
+    # 고유명 하나만 같은 별개 사업은 관련 기사로 묶지 않는다.
+    # 실전 예: Fairfax의 IDBI은행 인수 ↔ Fairfax의 캐나다 비료 대인도 수출.
+    return len(anchors) >= 2 or ov >= _RELATED_SAME_TEXT
 
 
 def _story_links_map(conn) -> dict[int, list[dict]]:
@@ -1370,13 +1384,27 @@ def export_pulse(conn, days: int | None = None) -> dict:
     """pulse.json + brief.html(온도계 화면) 생성."""
     if days is None: days = 1          # 첫 화면 = 전일+당일 ('오늘의 ...')
     config.EXPORT_DIR.mkdir(parents=True, exist_ok=True)
+    top_news = _compute_top_news(conn, days=days, limit=10)
+    daily_highlights = _daily_highlights(conn)
+    content_dates = [a.get("d") for h in daily_highlights for a in h.get("source_articles", [])
+                     if a.get("d")]
+    if not content_dates:
+        content_dates = [a.get("d") for a in top_news if a.get("d")]
+    snapshot_date = _snapshot_date(conn)
+    today_active = conn.execute(
+        """SELECT COUNT(*) FROM articles_raw
+           WHERE duplicate_of IS NULL AND ai_score >= ? AND substr(published_at,1,10)=?""",
+        (config.AI_SCORE_ACTIVE_THRESHOLD, snapshot_date),
+    ).fetchone()[0]
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
-        "snapshot_date": _snapshot_date(conn),
+        "snapshot_date": snapshot_date,
+        "content_date": max(content_dates, default=snapshot_date),
+        "today_active_count": today_active,
         "days": days,
         "categories": _compute_pulse(conn, days=days),
-        "top_news": _compute_top_news(conn, days=days, limit=10),
-        "daily_highlights": _daily_highlights(conn),
+        "top_news": top_news,
+        "daily_highlights": daily_highlights,
         "daily_quiz": _daily_quiz(conn),
         "country_section": _compute_country_section(conn, days=days),
         "country_signals": _compute_country_signals(conn, days=days),

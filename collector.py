@@ -48,6 +48,8 @@ _CA_BUNDLE = certifi.where()
 
 log = logging.getLogger("collector")
 
+_PUBLISHER_CREDIT_RE = _re_mod.compile(r"^(?:©|photo\s+by\b|image\s+by\b)", _re_mod.I)
+
 # RSS 피드가 실제 기사 대신 워드프레스 캐시 인덱스·카테고리 아카이브·페이지네이션을
 # 내놓는 경우(2026-10-06: 소스 보강 중 발견 — 미얀마·캄보디아 매체 다수가 이 패턴).
 # eval/display_audit.py의 JUNK_RE(표시 단계)와 같은 철학이지만 더 이르게, 수집
@@ -79,7 +81,8 @@ def _publisher_name(entry, feed_url: str, title: str) -> str | None:
         name = str(source or "").strip()
     if not name and _is_google_news(feed_url) and " - " in (title or ""):
         name = title.rsplit(" - ", 1)[-1].strip()
-    if not name or len(name) > 120 or name.lower() in {"google news", "google"}:
+    if (not name or len(name) > 120 or name.lower() in {"google news", "google"}
+            or _PUBLISHER_CREDIT_RE.search(name)):
         return None
     return name
 

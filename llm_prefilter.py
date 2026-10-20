@@ -15,12 +15,20 @@ LLM 1차 관문 (llm_prefilter.py)
 from __future__ import annotations
 
 import logging
+import re
 
 import config
 import db
+import kb_network
 from llm_provider import LLMProvider, get_provider
 
 log = logging.getLogger("llm_prefilter")
+
+_SPARSE_RESCUE_HARD_REJECT = re.compile(
+    r"홍보|광고|스포츠|연예|범죄|생활정보|지역\s*(?:행사|축제)|"
+    r"promot(?:ion|ional)|advert|sponsored|sports?|entertainment|crime|local event|press release",
+    re.I,
+)
 
 _SYSTEM = (
     "당신은 KB금융그룹 글로벌 거점 뉴스 인텔리전스의 1차 선별 담당이다.\n"
@@ -110,3 +118,45 @@ def run_prefilter(conn, provider: LLMProvider | None = None,
 
     log.info("프리필터 완료 — 전체=%d  keep=%d  drop=%d", stats["total"], stats["keep"], stats["drop"])
     return stats
+
+
+def rescue_sparse_countries(conn, days: int | None = None) -> dict:
+    """최근 창에서 keep가 하나도 없는 진출국의 drop 상위 후보를 rank까지 보낸다.
+
+    전체 점수 임계는 낮추지 않는다. 키워드 필터를 통과했고 실제로 해당 국가를
+    언급하는 기사만 소수 재검토해, 라오스·미얀마처럼 prefilter 단계에서 0건이 되는
+    경우에도 rank가 최종 판단할 기회를 준다.
+    """
+    ensure_columns(conn)
+    date_clause, params = db.days_clause_now(days)
+    rows = conn.execute(
+        f"""SELECT a.article_id, a.title, a.summary, a.filter_score,
+                   {db.effective_country_expr()} AS cc, a.llm_prefilter, a.llm_reject_reason
+            FROM articles_raw a JOIN media_sources m ON m.source_id=a.source_id
+            WHERE a.filter_decision='passed' AND a.duplicate_of IS NULL{date_clause}
+              AND {db.effective_country_expr()} IN ({','.join('?' * len(kb_network.KB_NETWORK))})
+            ORDER BY a.filter_score DESC, a.published_at DESC""",
+        (*params, *kb_network.KB_NETWORK.keys()),
+    ).fetchall()
+    keep_cc = {r["cc"] for r in rows if r["llm_prefilter"] == "keep"}
+    picked: dict[str, list[int]] = {}
+    for r in rows:
+        cc = r["cc"]
+        if (cc in keep_cc or r["llm_prefilter"] != "drop"
+                or (r["filter_score"] or 0) < config.SPARSE_RESCUE_MIN_FILTER_SCORE):
+            continue
+        if _SPARSE_RESCUE_HARD_REJECT.search(r["llm_reject_reason"] or ""):
+            continue
+        text = f"{r['title']} {r['summary'] or ''}"
+        if not kb_network.mentions_country(cc, text):
+            continue
+        slot = picked.setdefault(cc, [])
+        if len(slot) < config.SPARSE_RESCUE_PER_COUNTRY:
+            slot.append(int(r["article_id"]))
+    ids = [aid for values in picked.values() for aid in values]
+    if ids:
+        conn.executemany(
+            "UPDATE articles_raw SET llm_prefilter='keep', llm_reject_reason='sparse-country rescue' "
+            "WHERE article_id=?", [(aid,) for aid in ids])
+        conn.commit()
+    return {"countries": len(picked), "rescued": len(ids), "article_ids": ids}

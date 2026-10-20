@@ -93,10 +93,12 @@ def effective_country_expr(article_alias: str = "a", media_alias: str = "m") -> 
 
 
 def publisher_expr(article_alias: str = "a", media_alias: str = "m") -> str:
-    """기사별 원발행사를 우선하고 없으면 수집 피드의 매체명으로 폴백하는 SQL 식."""
+    """기사별 원발행사를 우선하되 사진 크레딧이면 피드 매체명으로 폴백한다."""
+    p = f"TRIM(COALESCE({article_alias}.publisher_name, ''))"
     return (
-        f"COALESCE(NULLIF({article_alias}.publisher_name, ''), "
-        f"{media_alias}.media_name)"
+        f"CASE WHEN {p} = '' OR {p} LIKE '©%' "
+        f"OR LOWER({p}) LIKE 'photo by %' OR LOWER({p}) LIKE 'image by %' "
+        f"THEN {media_alias}.media_name ELSE {article_alias}.publisher_name END"
     )
 
 

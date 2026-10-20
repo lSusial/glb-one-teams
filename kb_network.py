@@ -76,9 +76,16 @@ def mentions_country(cc: str | None, text: str | None) -> bool:
 
 
 def route_country(cc: str | None, text: str | None) -> str | None:
-    """표시용 국가 = cc, 단 진출국인데 text가 그 나라를 언급하지 않으면 GLOBAL.
+    """표시용 국가 = 기사 내용상 유일하게 확인되는 진출국, 그 외에는 cc.
+
+    AI가 GLOBAL로 둔 기사라도 인도 은행처럼 진출국 앵커가 하나만 명확하면 그 국가로
+    복구한다. 여러 진출국이 함께 나오면 국제 이슈이므로 GLOBAL을 유지한다.
     주제국가가 비어 매체 국가로 폴백된 GLOBAL 사건(Reuters UK의 이탈리아 은행 M&A, Straits Times의
     호르무즈 기사)이 매체 국가 이름으로 홈·국가 블록에 뜨지 않게 한다. text가 None이면 판단하지 않는다."""
+    if text is not None and (cc or "").upper() in {"", "GLOBAL"}:
+        mentioned = [code for code in KB_NETWORK if mentions_country(code, text)]
+        if len(mentioned) == 1:
+            return mentioned[0]
     if text is None or mentions_country(cc, text):
         return cc
     return "GLOBAL"

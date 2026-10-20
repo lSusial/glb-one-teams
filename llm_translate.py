@@ -61,6 +61,37 @@ def _user(summary, title=""):
     return "\n".join(lines)
 
 
+def _long_window_visible_ids(conn) -> set[int]:
+    """7~30일 화면에서 실제 선택된 카드의 ID만 반환한다.
+
+    event_type/personnel/korean_fi 태그 전체를 번역하면 화면별 상한과 중복 제거 전에
+    수백 건이 잡힌다. export와 같은 선택 함수를 거친 URL만 ID로 되돌려 비용을
+    화면에 실제 노출되는 기사로 제한한다.
+    """
+    import export_json
+
+    urls: set[str] = set()
+
+    def collect(value):
+        if isinstance(value, dict):
+            if value.get("u"):
+                urls.add(value["u"])
+            for child in value.values():
+                collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    collect(export_json._compute_topics(conn, days=7))
+    collect(export_json._compute_korean_fi(conn, days=30))
+    collect(export_json._compute_personnel(conn, days=30))
+    if not urls:
+        return set()
+    placeholders = ",".join("?" for _ in urls)
+    return {int(r[0]) for r in conn.execute(
+        f"SELECT article_id FROM articles_raw WHERE link IN ({placeholders})", tuple(urls))}
+
+
 def run_translate(conn, provider: LLMProvider | None = None,
                   limit: int | None = None, days: int | None = None,
                   use_batch: bool | None = None,
@@ -72,9 +103,6 @@ def run_translate(conn, provider: LLMProvider | None = None,
     ensure_columns(conn)
     provider = provider or get_provider("fast", use_batch=use_batch)   # 저비용(Haiku)
     limit = limit or 400   # 미진출국까지 대상에 들어와 한 번에 처리할 물량이 늘었다
-
-    date_clause, params = db.days_clause_now(days, alias="a")   # JOIN 추가로 별칭 명시
-
     # 노출 대상 = ACTIVE(진출국 기준) 또는 미진출국의 채점 완료분(임계 없이 노출됨).
     np_in = ",".join("?" * len(config.NON_PRESENCE_CODES))
     import export_json
@@ -82,6 +110,8 @@ def run_translate(conn, provider: LLMProvider | None = None,
     # 실제 export에 선택되는 관심 기사만 번역한다.
     watch_ids = {aid for ids in export_json.country_watch_candidate_ids(conn, 1).values() for aid in ids}
     watch_in = ",".join("?" * len(watch_ids)) or "NULL"
+    long_ids = _long_window_visible_ids(conn)
+    long_in = ",".join("?" * len(long_ids)) or "NULL"
 
     rows = conn.execute(
         f"""
@@ -90,22 +120,24 @@ def run_translate(conn, provider: LLMProvider | None = None,
         FROM articles_raw a
         JOIN media_sources m ON m.source_id = a.source_id
         WHERE a.duplicate_of IS NULL
-          AND ( a.ai_score >= ?
-             OR (m.primary_country_code IN ({np_in}) AND a.ai_score IS NOT NULL)
-             -- 55점 미만이어도 화면에 나가는 경로: 국가탭 사회 예외·인사동향·한국계 금융기관(export_json)
-             OR (a.topics LIKE '%SOCIETY%' AND a.ai_score >= ?)
-             OR (a.ai_score IS NOT NULL AND (a.personnel_move = 1 OR COALESCE(a.korean_fi, '') <> ''))
-             OR a.article_id IN ({watch_in}) )
+          AND (
+            ( (a.ai_score >= ?
+               OR (m.primary_country_code IN ({np_in}) AND a.ai_score IS NOT NULL)
+               OR (a.topics LIKE '%SOCIETY%' AND a.ai_score >= ?)
+               OR a.article_id IN ({watch_in}))
+              AND substr(a.published_at,1,10) >= date(
+                    (SELECT MAX(substr(published_at,1,10)) FROM articles_raw), '-1 day') )
+            -- 긴 기간 화면은 상한·중복 제거 뒤 실제 선택된 카드만 번역한다.
+            OR a.article_id IN ({long_in})
+          )
           AND ( (COALESCE(a.summary_en,'')  <> '' AND COALESCE(a.summary_ko,'') = '')
              OR (COALESCE(a.summary_ko,'')  <> '' AND COALESCE(a.summary_en,'') = '')
              OR (COALESCE(a.summary_ko,'')  <> '' AND COALESCE(a.title_ko,'')   = '') )
-          {date_clause}
         ORDER BY a.ai_score DESC
         LIMIT ?
         """,
         (config.AI_SCORE_ACTIVE_THRESHOLD, *config.NON_PRESENCE_CODES, config.SOCIETY_ACTIVE_FLOOR,
-         *watch_ids,
-         *params, limit),
+         *watch_ids, *long_ids, limit),
     ).fetchall()
     if article_ids:
         allowed = {int(x) for x in article_ids}

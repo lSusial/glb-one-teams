@@ -391,6 +391,27 @@ def cmd_dedup_repair(args):
         print(f"[dedup-repair] 반영하려면: python3 main.py dedup-repair --apply{suffix}  (백업 후 적용)")
 
 
+def _expanded_ai_days(conn, requested_days: int | None) -> int | None:
+    """고정 처리창 밖에 막 진입한 미처리 후보가 있으면 제한적으로 창을 넓힌다."""
+    if not requested_days:
+        return requested_days
+    row = conn.execute(
+        """SELECT MAX(substr(published_at,1,10)) newest,
+                  MIN(CASE WHEN filter_decision='passed' AND duplicate_of IS NULL
+                                AND (llm_prefilter IS NULL OR (llm_prefilter='keep' AND ai_score IS NULL))
+                           THEN substr(published_at,1,10) END) oldest_pending
+           FROM articles_raw"""
+    ).fetchone()
+    if not row or not row["newest"] or not row["oldest_pending"]:
+        return requested_days
+    try:
+        from datetime import date
+        age = (date.fromisoformat(row["newest"]) - date.fromisoformat(row["oldest_pending"])).days
+    except (TypeError, ValueError):
+        return requested_days
+    return max(requested_days, min(max(age, 0), config.AI_BACKLOG_MAX_DAYS))
+
+
 def cmd_ai(args):
     """prefilter → fulltext/rank → 상위 후보 재분석 → dedup → 후속 생성 순서 실행."""
     import briefing
@@ -402,11 +423,16 @@ def cmd_ai(args):
     import llm_dedup
     import fulltext
     conn = db.open_conn()
-    days = getattr(args, "days", None)
+    days = _expanded_ai_days(conn, getattr(args, "days", None))
+    requested_days = getattr(args, "days", None)
+    if requested_days and days != requested_days:
+        print(f"▶ 미처리 백로그 감지: AI 처리창 {requested_days}일 → {days}일 자동 확대")
     ub = _batch_flag(args)
     print("▶ [1/8] LLM 프리필터...")
     s1 = _ai_guard(lambda: llm_prefilter.run_prefilter(conn, days=days, use_batch=ub), "ai")
     print(f"   keep={s1['keep']} drop={s1['drop']}")
+    rescue = llm_prefilter.rescue_sparse_countries(conn, days=days)
+    print(f"   얇은 국가 재검토={rescue['rescued']}건 ({rescue['countries']}개국)")
     print("▶ [2/8] 본문 추출(keep 원문)...")
     sf = _ai_guard(lambda: fulltext.run_fulltext(conn, days=days), "ai")
     print(f"   본문={sf['extracted']} URL해소={sf['resolved']} 실패={sf['failed']}")

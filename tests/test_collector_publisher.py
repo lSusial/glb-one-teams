@@ -21,6 +21,11 @@ class PublisherIdentityTests(unittest.TestCase):
         self.assertIsNone(collector._publisher_name(
             FeedParserDict(), 'https://example.com/rss', 'Policy outlook - analysis'))
 
+    def test_photo_credit_is_not_used_as_publisher(self):
+        entry = FeedParserDict(source=FeedParserDict(title='© Ukrainian Presidential Press Service, AFP'))
+        self.assertIsNone(collector._publisher_name(
+            entry, 'https://example.com/rss', 'Trump defends sanctions relief'))
+
 
 class JunkTitleFilterTests(unittest.TestCase):
     """2026-10-06 소스 보강 중 발견: 미얀마·캄보디아·라오스 매체 다수가 워드프레스

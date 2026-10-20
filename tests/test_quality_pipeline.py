@@ -262,6 +262,25 @@ class PreDeployValidationTests(unittest.TestCase):
         rbi_b = {'title': StoryRepresentativeRegressionTests.RBI_ET[0], 'summary_en': StoryRepresentativeRegressionTests.RBI_ET[1]}
         self.assertTrue(export_json._same_story_for_link(rbi_a, rbi_b))
 
+    def test_related_links_reject_same_investor_different_business_event(self):
+        bank = {'title_en': 'Fairfax wins approval to acquire 60.7% of IDBI Bank',
+                'summary_en': 'India approved Fairfax acquisition of a controlling stake in IDBI Bank.'}
+        fertilizer = {'title_en': 'Canada eyes fertilizer exports to India as Fairfax signals investment',
+                      'summary_en': 'Canadian fertilizer producers expect exports to India and new investment.'}
+        self.assertFalse(export_json._same_story_for_link(bank, fertilizer))
+
+    def test_related_links_reject_event_mentioned_only_as_background(self):
+        bank = {
+            'title': "Challenges ahead for Fairfax's management of IDBI Bank post stake deal approval",
+            'title_en': 'Cabinet clears 60.7% IDBI Bank stake sale to Fairfax unit',
+            'summary_en': 'India approved Fairfax acquisition of a controlling stake in IDBI Bank.',
+        }
+        fertilizer = {
+            'title_en': 'Canada eyes fertiliser and potash exports to India as Fairfax moves on IDBI Bank stake',
+            'summary_en': "Canada sees room to expand fertiliser supplies, citing Fairfax's proposed bank acquisition.",
+        }
+        self.assertFalse(export_json._same_story_for_link(bank, fertilizer))
+
     def test_geopolitics_without_geo_facts_is_flagged_as_governance(self):
         reason = self.audit.category_mismatch(self.KB_COOP)
         self.assertIn('지배구조', reason)
@@ -507,6 +526,10 @@ class CountryRoutingRegressionTests(unittest.TestCase):
         self.assertEqual(kb_network.route_country('LA', ' '.join(self.LAOS)), 'LA')
         self.assertEqual(kb_network.route_country('TH', ' '.join(self.LAOS)), 'GLOBAL')
         self.assertEqual(kb_network.route_country('SG', None), 'SG')   # 영문 요약 없으면 판단 보류
+        self.assertEqual(kb_network.route_country(
+            'GLOBAL', 'IDBI Bank reported lower profit in India as RBI policy changed.'), 'IN')
+        self.assertEqual(kb_network.route_country(
+            'GLOBAL', 'India and China discussed cross-border trade policy.'), 'GLOBAL')
 
 
 class RankRerunTests(unittest.TestCase):
@@ -594,6 +617,10 @@ class RankRerunTests(unittest.TestCase):
 
 class QualityTests(unittest.TestCase):
     def setUp(self):
+        # 최소 스키마 픽스처에선 export 선택 함수를 돌릴 수 없다 — 7~30일 노출 카드 조회는 스텁
+        p = patch.object(llm_translate, '_long_window_visible_ids', return_value=set())
+        p.start()
+        self.addCleanup(p.stop)
         self.db = sqlite3.connect(':memory:')
         self.db.row_factory = sqlite3.Row
         self.db.executescript('''
@@ -990,7 +1017,9 @@ class QualityTests(unittest.TestCase):
         self.db.execute("UPDATE articles_raw SET korean_fi='SHINHAN' WHERE article_id=3")
         self.db.execute("UPDATE articles_raw SET topics='ECONOMY' WHERE article_id=4")   # 노출 안 됨
         self.db.commit()
-        llm_translate.run_translate(self.db, Provider({'title_ko': '제목', 'summary': '요약'}))
+        # 인사동향·한국계 금융기관 카드는 긴 기간 화면에 실제 선택된 경우만 번역한다
+        with patch.object(llm_translate, '_long_window_visible_ids', return_value={2, 3}):
+            llm_translate.run_translate(self.db, Provider({'title_ko': '제목', 'summary': '요약'}))
         done = {r[0] for r in self.db.execute('SELECT article_id FROM articles_raw WHERE summary_ko IS NOT NULL')}
         self.assertEqual(done, {1, 2, 3})
 
@@ -1239,7 +1268,8 @@ class NumericGuardTests(unittest.TestCase):
         ], rows, 10)
         self.assertEqual([h['country_codes'] for h in out], [['CN'], ['CN'], ['GLOBAL']])
 
-    def test_translation_rejects_wrong_rupee_amount(self):
+    @patch.object(llm_translate, '_long_window_visible_ids', return_value=set())
+    def test_translation_rejects_wrong_rupee_amount(self, _):
         db = sqlite3.connect(':memory:')
         db.row_factory = sqlite3.Row
         self.addCleanup(db.close)
