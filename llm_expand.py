@@ -62,6 +62,8 @@ _SYS = (
     "Do NOT add a KB-implication section — that is handled elsewhere.\n"
     "Stay strictly within the facts given in the source(s); never invent numbers, quotes, or "
     "events not present in the source text.\n"
+    "Preserve trading-session qualifiers in both languages: first-session close means 오전장 마감, "
+    "not the full-day close. Label figures from different sessions separately.\n"
     "Tone: dry newspaper-desk, facts first. Ban AI-ish filler and clichés (\"in a significant "
     "move\", \"marks a pivotal moment\", \"underscores\", \"delve\", \"realm\", \"tapestry\", "
     "\"game-changer\", \"in today's fast-paced/evolving landscape\", \"in conclusion\"), no "
@@ -74,6 +76,8 @@ _SYS = (
 # 위 _SYS의 "7~8문단 목표"를 그대로 두면 모델이 같은 얘기를 문단마다 다르게 돌려 말해
 # 억지로 채운다(실측 확인) — 분량 목표 자체를 없애고 "쓸 수 있는 만큼만" 쓰게 한다.
 _SYS_THIN = (
+    "Preserve trading-session qualifiers: first-session close = 오전장 마감, intraday = 장중, "
+    "full-day close = 종가. Never drop a session qualifier. "
     "You are a news desk editor at KB Financial Group writing a briefing for a modal popup. "
     "The source material below is very thin (just a headline and a short snippet, likely because "
     "the full article is paywalled).\n\n"
@@ -120,6 +124,7 @@ def run_expand(conn, provider: LLMProvider | None = None,
                 redo_days: int | None = None) -> dict:
     """노출 기사(ACTIVE: ai_score>=임계, 중복 아님)에만 모달용 긴 요약을 생성.
     기본은 증분 — expanded_summary IS NULL 인 것만 대상(이미 있으면 스킵).
+    전일+당일 기사를 먼저 처리하고, 남은 한도로 오래된 기사를 채운다.
 
     redo_days=N 이면 최근 N일 게시 기사는 이미 요약이 있어도 다시 생성한다.
     프롬프트(길이·구성)를 바꾼 뒤 기존분에 소급 적용할 때만 사용 — 재생성분만큼
@@ -143,7 +148,10 @@ def run_expand(conn, provider: LLMProvider | None = None,
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE a.ai_score >= ? AND a.duplicate_of IS NULL
               {have_clause}{date_clause}
-            ORDER BY a.ai_score DESC
+            ORDER BY CASE WHEN substr(a.published_at,1,10) >= date(
+                (SELECT MAX(substr(published_at,1,10)) FROM articles_raw), '-1 day')
+                THEN 0 ELSE 1 END,
+                a.ai_score DESC, a.published_at DESC, a.article_id ASC
             LIMIT ?""",
         (config.AI_SCORE_ACTIVE_THRESHOLD, *date_params, limit),
     ).fetchall()

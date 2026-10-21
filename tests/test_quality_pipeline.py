@@ -1233,6 +1233,28 @@ class NumericGuardTests(unittest.TestCase):
         self.assertFalse(numeric_guard.usd_mismatch('$18.65 billion', '$186.5억'))
         self.assertTrue(numeric_guard.usd_mismatch('$18.65 billion', '$18.65억'))
 
+    def test_expand_prioritizes_recent_articles_over_old_high_scores(self):
+        conn = sqlite3.connect(':memory:')
+        conn.row_factory = sqlite3.Row
+        self.addCleanup(conn.close)
+        conn.executescript("""
+            CREATE TABLE media_sources(source_id INTEGER PRIMARY KEY, primary_country_code TEXT,
+                media_name TEXT, tier INTEGER);
+            INSERT INTO media_sources VALUES(1,'IN','News',1);
+            CREATE TABLE articles_raw(article_id INTEGER PRIMARY KEY, source_id INTEGER, title TEXT,
+                summary TEXT, full_text TEXT, link TEXT, ai_score INTEGER, duplicate_of INTEGER,
+                published_at TEXT);
+            INSERT INTO articles_raw VALUES
+                (1,1,'Old high score','Old summary','','https://x/1',99,NULL,'2026-10-14'),
+                (2,1,'Recent news','Recent summary','','https://x/2',60,NULL,'2026-10-20'),
+                (3,1,'Newest news','Newest summary','','https://x/3',55,NULL,'2026-10-21');
+        """)
+        with patch.object(llm_expand, '_cluster_sources', return_value=[]):
+            llm_expand.run_expand(conn, Provider({
+                'expanded_summary_en': 'Recent news.', 'expanded_summary_ko': '최근 소식이다.'}), limit=1)
+        rows = conn.execute('SELECT article_id FROM articles_raw WHERE expanded_summary IS NOT NULL').fetchall()
+        self.assertEqual([r[0] for r in rows], [2])
+
     def test_expanded_korean_summary_with_wrong_amount_is_not_stored(self):
         db = sqlite3.connect(':memory:')
         db.row_factory = sqlite3.Row

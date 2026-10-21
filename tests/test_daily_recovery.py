@@ -1,5 +1,10 @@
 import sqlite3
 import unittest
+from unittest.mock import patch
+from contextlib import ExitStack, redirect_stdout
+from collections import defaultdict
+from types import SimpleNamespace
+import io
 
 import db
 import llm_prefilter
@@ -34,6 +39,24 @@ class DailyRecoveryTests(unittest.TestCase):
             (aid, source, title, title, f'https://example.com/{aid}', f'h{aid}', day,
              filter_score, prefilter, 'initial drop' if prefilter == 'drop' else None, score))
         self.db.commit()
+
+    def test_backlog_window_does_not_expand_daily_briefing(self):
+        targets = [
+            'llm_prefilter.run_prefilter', 'llm_prefilter.rescue_sparse_countries',
+            'fulltext.run_fulltext', 'llm_ranker.run_rank', 'llm_dedup.run_dedup',
+            'fulltext.resolve_display_links', 'llm_expand.run_expand',
+            'category_guard.fix_ungrounded_geo', 'llm_translate.run_translate',
+            'briefing.run_briefing', 'briefing.generate_daily_highlights',
+            'briefing.generate_daily_quiz',
+        ]
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(main.db, 'open_conn', return_value=self.db))
+            stack.enter_context(patch.object(main, '_expanded_ai_days', return_value=7))
+            calls = {t: stack.enter_context(patch(t, return_value=defaultdict(int))) for t in targets}
+            with redirect_stdout(io.StringIO()):
+                main.cmd_ai(SimpleNamespace(days=2, sync=True))
+            self.assertEqual(calls['llm_ranker.run_rank'].call_args.kwargs['days'], 7)
+            self.assertEqual(calls['briefing.run_briefing'].call_args.kwargs['days'], 1)
 
     def test_ai_window_expands_to_recent_unprocessed_backlog(self):
         self.add(1, 2, 'Fed policy update in the US', '2026-10-19', 'keep', 60)

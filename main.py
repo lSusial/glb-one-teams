@@ -470,7 +470,8 @@ def cmd_ai(args):
     st = _ai_guard(lambda: llm_translate.run_translate(conn, days=days, use_batch=ub), "ai")
     print(f"   KO채움={st['ko']} EN채움={st['en']}")
     print("▶ [6/8] 국가 일일 브리핑(현지언론 상단, 전일+당일)...")
-    s3 = _ai_guard(lambda: briefing.run_briefing(conn, briefing_type="daily", days=days, use_batch=ub), "ai")
+    # 백로그 복구창과 화면의 일일 브리핑 기간(전일+당일)은 독립적이다.
+    s3 = _ai_guard(lambda: briefing.run_briefing(conn, briefing_type="daily", days=1, use_batch=ub), "ai")
     print(f"   written={s3['written']}")
     print("▶ [7/8] 오늘의 글로벌 핵심...")
     s4 = _ai_guard(lambda: briefing.generate_daily_highlights(conn), "ai")

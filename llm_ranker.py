@@ -210,6 +210,9 @@ def ensure_columns(conn) -> None:
 _STYLE_AND_SYNTH_BLOCK = (
     "\n\nWriting style for summary_en — dry newspaper-desk tone, plain facts first:\n"
     "- Write 2-4 sentences. Lead with the concrete fact (who/what/how much/when), not scene-setting.\n"
+    "- Preserve market observation times: first-session/morning close, intraday and full-day close "
+    "are different. Never turn a first-session close into a day's closing figure. "
+    "When sources quote different sessions, label each figure with its session and date.\n"
     "- Ban AI-ish filler and clichés: no \"in a significant move\", \"marks a pivotal moment\", "
     "\"underscores\", \"in today's fast-paced/evolving landscape\", \"stands as a testament\", "
     "\"navigate\", \"bolster\", \"delve\", \"realm\", \"tapestry\", \"game-changer\", \"in conclusion\", "

@@ -34,6 +34,8 @@ _SYS = {
            "② summary — 2문장 이내, 단문, '~다' 체. "
            "   중요: title_ko 내용을 절대 반복하지 말 것. title_ko가 다루지 않은 배경·수치·영향만 서술. "
            "Keep KB branch names (예: 뉴욕지점, 프라삭은행). "
+           "Preserve trading-session qualifiers: first-session close = 오전장 마감, "
+           "intraday = 장중, full-day close = 종가. Never drop the session qualifier. "
            'Output ONLY JSON: {"title_ko": "...", "summary": "..."}'),
     "en": ("Translate the 'summary' below into natural English "
            "(financial/business register). Keep KB branch/entity names. "

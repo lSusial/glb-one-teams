@@ -293,7 +293,7 @@
     }
     $('#detail').innerHTML = dhead + `
       <div class="bignums">${bns}</div>
-      ${briefTxt ? `<div class="dsec-t"><span class="bar"></span>${EN?'Daily Briefing':'국가 일일 브리핑'}</div><p class="dbrief">${esc(briefTxt)}</p>` : ''}
+      ${briefTxt ? `<div class="dsec-t"><span class="bar"></span>${EN?'Daily Briefing':'국가 일일 브리핑'}${brief.date?` · ${esc(md(brief.date))}`:''}</div><p class="dbrief">${esc(briefTxt)}</p>` : ''}
       <div class="dsec-t"><span class="bar"></span>${EN?'Local Press':'현지언론 피드'}</div>
       ${feed}`;
     $('#detail')._rows = rows;
