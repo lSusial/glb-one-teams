@@ -94,6 +94,16 @@ _SYS_THIN = (
     "SAME content (not a separate re-summary) — '~다' 체, 신문 기사 톤."
 )
 
+# 긴 요약 한국어 금액 재요청 — 검증 통과한 영문만 주고 번역만 다시 받는다. 같은 소스로
+# 전체를 재생성하면 매번 같은 crore 10배 오환산이 반복됐다(2026-10-21 21건 매일 거부).
+_SYS_KO_RETRY = (
+    "Translate the English briefing below into natural Korean ('~다' 체, 신문 기사 톤), keeping "
+    "every paragraph and fact. A previous Korean version converted money amounts with the wrong "
+    "unit scale (e.g. crore/billion → 억/조 off by 10x). For every amount, copy the exact Korean "
+    "form from the provided hint list instead of converting units yourself. "
+    'Output ONLY this JSON: {"expanded_summary_ko": "..."}'
+)
+
 _THIN_SOURCE_MAXLEN = 300  # 이 길이(자) 이하면 _SYS_THIN 사용
 
 
@@ -161,6 +171,7 @@ def run_expand(conn, provider: LLMProvider | None = None,
     results = provider.complete_json_batch(requests) if requests else {}
 
     cur = conn.cursor()
+    retry: dict[str, tuple] = {}
     for cid, r in row_by_id.items():
         data = results.get(cid) or {}
         en = str(data.get("expanded_summary_en") or "").strip()[:7000]
@@ -169,13 +180,26 @@ def run_expand(conn, provider: LLMProvider | None = None,
             continue
         if en and ko and numeric_guard.amount_mismatch(en, ko):
             # 한국어 금액 단위 오변환($18.65 billion → "$18.65억") — 영문만 저장, 한국어는 다음 실행에서 재생성
-            log.warning("긴 요약 금액 불일치 — 한국어 저장 안 함(article_id=%s)", r["article_id"])
+            log.warning("긴 요약 금액 불일치 — 한국어 재요청(article_id=%s)", r["article_id"])
+            retry[cid] = (r, en)
             ko = ""
         cur.execute(
             "UPDATE articles_raw SET expanded_summary = ?, expanded_summary_en = ? WHERE article_id = ?",
             (ko or None, en or None, r["article_id"]),
         )
         stats["written"] += 1
+
+    if retry:
+        hints = {cid: numeric_guard.korean_amount_hints(en) for cid, (_, en) in retry.items()}
+        again = provider.complete_json_batch(
+            [(cid, _SYS_KO_RETRY, f"{en}\n\n{hints[cid]}", 4000) for cid, (_, en) in retry.items()])
+        for cid, (r, en) in retry.items():
+            ko = str((again.get(cid) or {}).get("expanded_summary_ko") or "").strip()[:7000]
+            if not ko or numeric_guard.amount_mismatch(en, ko):
+                log.warning("긴 요약 금액 불일치 — 한국어 저장 안 함(article_id=%s)", r["article_id"])
+                continue
+            cur.execute("UPDATE articles_raw SET expanded_summary = ? WHERE article_id = ?",
+                        (ko, r["article_id"]))
     conn.commit()
 
     log.info(

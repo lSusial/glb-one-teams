@@ -1254,6 +1254,39 @@ class NumericGuardTests(unittest.TestCase):
         self.assertIsNone(row['expanded_summary'])
         self.assertEqual(row['expanded_summary_en'], 'The RBI purchased a net $18.65 billion in July.')
 
+    def test_expanded_korean_summary_is_retranslated_once_with_amount_hints(self):
+        # 2026-10-21 라이브: 긴 요약 21건이 crore 10배 오환산으로 매일 같은 기사에서 거부됨
+        db = sqlite3.connect(':memory:')
+        db.row_factory = sqlite3.Row
+        self.addCleanup(db.close)
+        db.executescript("""
+            CREATE TABLE media_sources(source_id INTEGER PRIMARY KEY, primary_country_code TEXT,
+                media_name TEXT, tier INTEGER);
+            INSERT INTO media_sources VALUES(1,'IN','Mint',1);
+            CREATE TABLE articles_raw(article_id INTEGER PRIMARY KEY, source_id INTEGER, title TEXT,
+                summary TEXT, full_text TEXT, link TEXT, ai_score INTEGER, duplicate_of INTEGER,
+                published_at TEXT);
+            INSERT INTO articles_raw VALUES(1,1,'Jio IPO','Jio IPO of Rs 30,213 crore.','',
+                'https://x/1', 70, NULL, '2026-10-20');
+        """)
+        en = 'The IPO would raise about Rs 30,213 crore.'
+
+        class Seq(Provider):
+            def complete_json_batch(self, requests):
+                self.requests.extend(requests)
+                if len(self.requests) == 1:   # 1차: 10배 오환산
+                    return {r[0]: {'expanded_summary_en': en,
+                                   'expanded_summary_ko': '공모 규모는 3조 213억 루피다.'} for r in requests}
+                return {r[0]: {'expanded_summary_ko': '공모 규모는 3,021억 루피다.'} for r in requests}
+
+        p = Seq()
+        llm_expand.run_expand(db, p)
+        row = db.execute('SELECT expanded_summary, expanded_summary_en FROM articles_raw').fetchone()
+        self.assertEqual(row['expanded_summary'], '공모 규모는 3,021억 루피다.')
+        self.assertEqual(row['expanded_summary_en'], en)
+        self.assertEqual(len(p.requests), 2)
+        self.assertIn('3,021억 루피', p.requests[1][2])   # 재요청에 코드 환산 힌트 포함
+
     def test_inr_crore_and_korean_rupee_units_are_parsed(self):
         self.assertEqual(numeric_guard.inr_values('Rs 10,000 crore IPO'), [1e11])
         self.assertEqual(numeric_guard.inr_values('a Rs 22,568-crore IPO at Rs 1,785 per share'),
