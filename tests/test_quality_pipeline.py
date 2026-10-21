@@ -828,13 +828,15 @@ class QualityTests(unittest.TestCase):
         self.add(2, cc='JP', score=90)
         self.add(3, score=8)
         self.add(4, score=65, duplicate=1)
+        self.db.execute("UPDATE articles_raw SET summary_en=? WHERE article_id=1", ('Evidence ' * 60,))
+        self.db.commit()
         p = Provider({'summary_ko': '검증된 브리핑', 'summary_en': 'Verified briefing'})
         briefing.run_briefing(self.db, p, briefing_type='daily', countries=['US'])
         user = p.requests[0][2]
         self.assertIn('headline 1', user)
         for aid in [2, 3, 4]:
             self.assertNotIn(f'headline {aid}', user)
-        self.assertIn('요약 근거 ' * 60, user)
+        self.assertIn('Evidence ' * 60, user)
         row = self.db.execute('SELECT article_count,source_articles FROM country_briefings').fetchone()
         self.assertEqual(row[0], 1)
         self.assertEqual(json.loads(row[1]), ['https://example.com/1'])
@@ -875,6 +877,23 @@ class QualityTests(unittest.TestCase):
         self.assertIn('금액', p.requests[1][2])               # 재요청엔 금액 그대로 쓰라는 지시가 붙는다
         row = self.db.execute('SELECT summary FROM country_briefings').fetchone()
         self.assertEqual(row[0], '연준이 300억 달러 규모 기구를 발표했다.')
+
+    def test_briefing_input_uses_english_canonical_with_korean_amount_hints(self):
+        # 2026-10-21: 한국어 요약('3,021억 루피')을 입력으로 받아 영어를 '₹3,021 crore'로 되옮기며
+        # 10배 틀려 재요청까지 실패, IN 일일 브리핑이 저장되지 않았다
+        self.add(1, cc='IN', score=65)
+        self.db.execute("UPDATE articles_raw SET summary_ko=?, summary_en=? WHERE article_id=1",
+                        ('지오가 3,021억 루피 IPO를 연다.', 'Jio opens a ₹30,213 crore IPO.'))
+        self.db.commit()
+        p = Provider({'summary_ko': '지오가 3,021억 루피 IPO를 연다.',
+                      'summary_en': 'Jio opens a ₹30,213 crore IPO.'})
+        briefing.run_briefing(self.db, p, briefing_type='daily', countries=['IN'])
+        user = p.requests[0][2]
+        self.assertIn('₹30,213 crore', user)
+        hint = user.splitlines()[-1]                          # 코드가 환산한 금액 힌트가 마지막 줄
+        self.assertTrue(hint.startswith('금액 한국어 표기'))
+        self.assertIn('3,021억 루피', hint)
+        self.assertIsNotNone(self.db.execute('SELECT 1 FROM country_briefings').fetchone())
 
     def test_stale_daily_briefing_is_not_exported(self):
         # 2026-10-07: IN 탭에 10/1자 '준비 중' 브리핑이 6일째 노출
@@ -1190,6 +1209,15 @@ class NumericGuardTests(unittest.TestCase):
         self.assertEqual(numeric_guard.usd_values('1조 2,000억 달러'), [1.2e12])
         self.assertEqual(numeric_guard.usd_values('$30억의 투자'), [3e9])
 
+    def test_english_unit_followed_by_korean_particle_keeps_unit(self):
+        # 2026-10-21 IN 브리핑: '₹8,110 crore에'의 crore를 놓쳐 8,110루피로 읽고 오탐 거부
+        self.assertEqual(numeric_guard.inr_values('배정분 ₹8,110 crore에 참여'), [8.11e10])
+        self.assertEqual(numeric_guard.inr_values('물량은 10,500 crore입니다'), [1.05e11])
+        self.assertEqual(numeric_guard.usd_values('$5 billion을 투자'), [5e9])
+        self.assertEqual(numeric_guard.fx_values('RM2 billion에'), {'MYR': [2e9]})
+        self.assertFalse(numeric_guard.amount_mismatch(
+            'anchor ₹8,110 crore allocated', '앵커 배정분 ₹8,110 crore에 LIC 참여'))
+
     def test_ranges_hyphen_units_and_mixed_korean_are_not_false_positives(self):
         # 2026-10-20 라이브 번역 거부 4건 — 번역은 맞았고 원문/번역문 금액 인식이 틀렸다
         self.assertFalse(numeric_guard.amount_mismatch(
@@ -1308,6 +1336,40 @@ class NumericGuardTests(unittest.TestCase):
         self.assertEqual(row['expanded_summary_en'], en)
         self.assertEqual(len(p.requests), 2)
         self.assertIn('3,021억 루피', p.requests[1][2])   # 재요청에 코드 환산 힌트 포함
+
+    def test_expanded_korean_falls_back_to_source_amount_notation_after_hint_retry_fails(self):
+        # 2026-10-21: Haiku가 힌트를 무시하고 매번 10배 오환산 → 3건이 매일 한국어 없이 노출
+        db = sqlite3.connect(':memory:')
+        db.row_factory = sqlite3.Row
+        self.addCleanup(db.close)
+        db.executescript("""
+            CREATE TABLE media_sources(source_id INTEGER PRIMARY KEY, primary_country_code TEXT,
+                media_name TEXT, tier INTEGER);
+            INSERT INTO media_sources VALUES(1,'IN','Mint',1);
+            CREATE TABLE articles_raw(article_id INTEGER PRIMARY KEY, source_id INTEGER, title TEXT,
+                summary TEXT, full_text TEXT, link TEXT, ai_score INTEGER, duplicate_of INTEGER,
+                published_at TEXT);
+            INSERT INTO articles_raw VALUES(1,1,'Jio IPO','Jio IPO of Rs 30,213 crore.','',
+                'https://x/1', 70, NULL, '2026-10-20');
+        """)
+        en = 'The IPO would raise about Rs 30,213 crore.'
+
+        class Seq(Provider):
+            def complete_json_batch(self, requests):
+                self.requests.extend(requests)
+                if len(self.requests) == 1:
+                    return {r[0]: {'expanded_summary_en': en,
+                                   'expanded_summary_ko': '공모 규모는 3조 213억 루피다.'} for r in requests}
+                if len(self.requests) == 2:   # 힌트 재요청도 오환산
+                    return {r[0]: {'expanded_summary_ko': '공모 규모는 3조 213억 루피다.'} for r in requests}
+                return {r[0]: {'expanded_summary_ko': '공모 규모는 Rs 30,213 crore다.'} for r in requests}
+
+        p = Seq()
+        llm_expand.run_expand(db, p)
+        row = db.execute('SELECT expanded_summary FROM articles_raw').fetchone()
+        self.assertEqual(row['expanded_summary'], '공모 규모는 Rs 30,213 crore다.')
+        self.assertEqual(len(p.requests), 3)
+        self.assertEqual(p.requests[2][1], llm_expand._SYS_KO_KEEP)   # 마지막은 원문 금액 표기 유지 지시
 
     def test_inr_crore_and_korean_rupee_units_are_parsed(self):
         self.assertEqual(numeric_guard.inr_values('Rs 10,000 crore IPO'), [1e11])
@@ -1479,6 +1541,19 @@ class StoryDedupTests(unittest.TestCase):
         reps, sizes, _ = export_json._dedup_country_feed(rows, {})
         self.assertEqual([r['article_id'] for r in reps], [1, 3])
         self.assertEqual(sizes[1], 2)
+
+    def test_country_tab_keeps_only_latest_index_move(self):
+        # 2026-10-20 ID 탭: 지수 폭락·반등 카드가 제목이 달라 근접중복에 안 걸리고 여러 장 노출
+        def r(aid, title, at):
+            d = self.row(aid, title, 'summary', cc='ID'); d['published_at'] = at
+            return d
+        rows = [r(1, 'Indonesian stocks suffer worst two-day drop on MSCI downgrade warning', '2026-10-20 03:00'),
+                r(2, 'OJK says it is going all-out on Indonesia capital market reforms', '2026-10-20 05:00'),
+                r(3, "Indonesia's IHSG rebounds 4% on buybacks and policy steps, analyst says", '2026-10-20 09:00'),
+                r(4, 'BoB shares fall 3.5% after suit against bank', '2026-10-20 01:00'),              # 개별 종목
+                r(5, "Indonesia's three richest tycoons lose $5.9B as stocks slump", '2026-10-20 02:00')]  # 부속절
+        kept = export_json._keep_latest_index_move(rows)
+        self.assertEqual([x['article_id'] for x in kept], [2, 3, 4, 5])   # 순서 유지, 최신 지수 기사만
 
     def test_different_stories_from_same_institution_are_not_merged(self):
         reps, _, _ = export_json._dedup_country_feed([self.row(1, *self.NRI), self.row(2, *self.RBI_FX)], {})

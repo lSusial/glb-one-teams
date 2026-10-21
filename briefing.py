@@ -225,12 +225,17 @@ def run_briefing(
         meta[cc] = arts
         if not arts:
             continue
+        # 영어 기준본을 입력으로 쓰고 금액 한국어 힌트를 붙인다. 한국어 요약을 넣으면 영어 출력에서
+        # '3,021억 루피'를 '₹3,021 crore'로 되옮기며 10배 틀렸다(2026-10-21 IN 브리핑 미저장).
         bullets = "\n".join(
-            f"- [{a['published_at']}] ({a['ai_score']}) {a['title']} :: {((a['summary_ko'] or a['summary_en']) or '')}"
+            f"- [{a['published_at']}] ({a['ai_score']}) {a['title']} :: {((a['summary_en'] or a['summary_ko']) or '')}"
             for a in arts
         )
         bullets_by_cc[cc] = bullets
         user = f"국가: {cc} ({kb_network.context_for(cc)})\n기사 목록:\n{bullets}"
+        hint = numeric_guard.korean_amount_hints(bullets)
+        if hint:
+            user += f"\n{hint}"
         # weekly는 한/영 요약+이슈 3~4개+전망+키워드까지 daily보다 필드가 훨씬 많아
         # 900으로는 잘려서 JSON 파싱이 깨진다(생성 도중 max_tokens 도달) — 여유를 둔다.
         requests.append((cc, system, user, 900 if daily else 2200))

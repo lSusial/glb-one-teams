@@ -26,7 +26,7 @@ _NOT_KO_TAIL = r"(?<![\d,.조억만])(?<![조억만]\s)"
 _CUR_PRE = r"US\$|HK\$|S\$|\$|RM|Rp\.?\s?|Rs\.?\s?|₹|¥|£|€"
 _RANGE_RE = re.compile(
     rf"({_CUR_PRE})?(\d+(?:[,.]\d+)*)\s*(-|–|to)\s*({_CUR_PRE})?(\d+(?:[,.]\d+)*)\s*-?\s*"
-    r"(lakh crore|trillion|billion|million|crore|lakh|bil|bn|mn|tn)\b", re.I)
+    r"(lakh crore|trillion|billion|million|crore|lakh|bil|bn|mn|tn)(?![A-Za-z])", re.I)
 
 
 def _expand_ranges(text: str) -> str:
@@ -66,7 +66,7 @@ def usd_values(text: str) -> list[float]:
     # 단위 없이 $1로만 읽혀 10억 달러와 비교돼 오탐난 사례로 발견.
     # "USD 5-year sukuk"(5년물)처럼 기간이 붙은 숫자는 금액이 아니다(2026-10-21 아라다 수쿠크 오탐)
     for m in re.finditer(rf"(?:\bUS\$|(?<![A-Za-z])\$|\bUSD)\s*({_NUM})(?![-\s]*(?:years?|yr|months?|days?|weeks?)\b)"
-                         rf"\s*-?\s*(trillion|billion|million|bil|bn|m)?\b",
+                         rf"(?:\s*-?\s*(trillion|billion|million|bil|bn|m)(?![A-Za-z])|\b)",
                          text, re.I):
         values.append(_to_float(m.group(1)) * _UNITS[(m.group(2) or "").lower()])
     for m in re.finditer(
@@ -91,10 +91,10 @@ def inr_values(text: str) -> list[float]:
     text = _expand_ranges(text or "")
     values: list[float] = []
     # Rs 10,000 crore / ₹2,000 / Rs 22,568-crore
-    for m in re.finditer(rf"(?:\bRs\.?|₹|\bINR)\s*({_NUM})(?:\s*-?\s*{_INR_UNIT_RE}\b)?", text, re.I):
+    for m in re.finditer(rf"(?:\bRs\.?|₹|\bINR)\s*({_NUM})(?:\s*-?\s*{_INR_UNIT_RE}(?![A-Za-z]))?", text, re.I):
         values.append(_to_float(m.group(1)) * _INR_UNITS[(m.group(2) or "").lower()])
     # 통화기호 없이 쓰는 인도식 단위(10,000 crore rupees, 38.5 lakh) — 인도 기사에서 사실상 루피
-    for m in re.finditer(rf"(?<![\w₹.,])({_NUM})\s*-?\s*(lakh crore|crore|lakh)\b", text, re.I):
+    for m in re.finditer(rf"(?<![\w₹.,])({_NUM})\s*-?\s*(lakh crore|crore|lakh)(?![A-Za-z])", text, re.I):
         if not re.search(r"(?:Rs\.?|₹|INR)\s*$", text[:m.start()], re.I):
             values.append(_to_float(m.group(1)) * _INR_UNITS[m.group(2).lower()])
     for m in re.finditer(rf"{_KO_AMOUNT}루피(?!아)", text):
@@ -133,7 +133,7 @@ def fx_values(text: str) -> dict[str, list[float]]:
     out: dict[str, list[float]] = {}
     for code, (pre, post, ko) in _FX.items():
         vals: list[float] = []
-        for m in re.finditer(rf"(?:{pre})\s*({_NUM})(?:\s*-?\s*{_EN_UNIT_RE}\b)?", text, re.I):
+        for m in re.finditer(rf"(?:{pre})\s*({_NUM})(?:\s*-?\s*{_EN_UNIT_RE}(?![A-Za-z]))?", text, re.I):
             vals.append(_to_float(m.group(1)) * _EN_UNITS[(m.group(2) or "").lower()])
         for m in re.finditer(rf"({_NUM})\s*-?\s*(?:{_EN_UNIT_RE}[\s-]+)?(?:{post})\b", text, re.I):
             vals.append(_to_float(m.group(1)) * _EN_UNITS[(m.group(2) or "").lower()])

@@ -438,6 +438,32 @@ def _dedup_country_feed(rows, cm):
     return reps, sizes, members
 
 
+# 지수 일일 등락 기사(제목이 지수명·'국가 stocks/shares'로 시작). 제목·요약 표현이 매번 달라
+# 근접중복에 안 걸리고 한 탭에 여러 장 뜬다(2026-10-20 ID 탭 폭락·반등 카드). 개별 종목·업종 주가,
+# 부속절('… as stocks slump')은 제외되도록 제목 첫머리만 본다.
+_INDEX_NAMES = (r"IHSG|JCI|IDX Composite|Jakarta Composite|Sensex|Nifty(?: 50)?|Nikkei(?: 225)?|Topix|"
+                r"Hang Seng|Straits Times Index|STI|VN-?Index|SET index|FTSE(?: 100)?|S&P 500|Dow(?: Jones)?|"
+                r"Nasdaq(?: 100)?|Shanghai Composite|CSI 300|Wall Street")
+_MARKET_STOCKS = (r"(?:Indian|India|Indonesian?|Japanese|Japan|Tokyo|Chinese|China|Hong Kong|Singapore|"
+                  r"Vietnamese|Vietnam|Thai|Thailand|UK|British|London|US|U\.S\.|Asian|European|Korean?|"
+                  r"South Korea|Malaysian?|Australian?|Cambodian?|Philippine|Gulf)(?:'s)? "
+                  r"(?:stocks|shares|equities|stock markets?|bourse)")
+_INDEX_MOVE_RE = re.compile(
+    rf"^(?:\w+'s\s+)?(?:{_INDEX_NAMES}|{_MARKET_STOCKS})(?:,\s*(?:{_INDEX_NAMES}))?\s+(?:\w+\s+){{0,2}}?"
+    r"(?:rise|rose|fall|fell|drop|rebound|gain|slump|close|end|open|trade|rall|tumble|surge|plunge|slide|"
+    r"slid|sink|sank|climb|jump|decline|retreat|extend|edge|recover|snap|hit|suffer|dip|post|set)\w*\b", re.I)
+
+
+def _keep_latest_index_move(rows):
+    """국가 탭에서 지수 일일 등락 기사는 가장 최신 1건만 남긴다(나머지 순서 유지)."""
+    moves = [r for r in rows if _INDEX_MOVE_RE.search(r["title_en"] or r["title"] or "")]
+    if len(moves) < 2:
+        return rows
+    latest = max(moves, key=lambda r: r["published_at"] or "")
+    drop = {id(r) for r in moves if r is not latest}
+    return [r for r in rows if id(r) not in drop]
+
+
 def _rep_key(mem):
     """같은 사건 묶음의 대표 선정 키: 결과 기사(예고 아님) → ai_score → 최신 → 출처 tier → 입력(rank) 순.
     ai_score가 같은 여러 매체 보도(10/8 RBI 인상 3건 모두 77)에서 예고 기사가 대표가 되지 않게 한다."""
@@ -861,6 +887,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
             ordered = _drop_superseded(conn, ordered)
             # 근접중복 스토리 축소(같은 사건 여러 각도 → 대표 1건). UPI·Fed 류 홍수 방지.
             ordered, dedup_n, story_mem = _dedup_country_feed(ordered, cm)
+            ordered = _keep_latest_index_move(ordered)
             rows = ordered[:config.COUNTRY_MAX_ARTICLES]        # 국가당 노출 상한
             # 상한에서 밀린 사회기사 몇 건 되살림(위 where로 이미 후보에 포함됨).
             have = {a["article_id"] for a in rows}

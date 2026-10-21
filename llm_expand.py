@@ -108,6 +108,17 @@ _SYS_KO_RETRY = (
     'Output ONLY this JSON: {"expanded_summary_ko": "..."}'
 )
 
+# 힌트 재요청도 오환산하면(Haiku가 힌트를 무시, 2026-10-21 Jio·Pubali 등 매일 반복) 금액만 원문 표기
+# 그대로 두게 한다. 단위 환산을 하지 않으니 금액 검증을 통과한다.
+_SYS_KO_KEEP = (
+    "Translate the English briefing below into natural Korean ('~다' 체, 신문 기사 톤), keeping "
+    "every paragraph and fact. Do NOT convert any money amount: copy each amount exactly as "
+    "written in the English, with its currency symbol and unit (e.g. 'Rs 30,213 crore', "
+    "'$10.8 billion', 'Tk 800 crore') and do not add any Korean conversion of it "
+    "(no '억'/'조' amounts, not even in parentheses). "
+    'Output ONLY this JSON: {"expanded_summary_ko": "..."}'
+)
+
 _THIN_SOURCE_MAXLEN = 300  # 이 길이(자) 이하면 _SYS_THIN 사용
 
 
@@ -197,17 +208,26 @@ def run_expand(conn, provider: LLMProvider | None = None,
         )
         stats["written"] += 1
 
-    if retry:
-        hints = {cid: numeric_guard.korean_amount_hints(en) for cid, (_, en) in retry.items()}
+    # 1차: 코드 환산 힌트를 주고 재번역 → 2차: 금액은 원문 표기 그대로 두고 재번역
+    for sys_prompt in (_SYS_KO_RETRY, _SYS_KO_KEEP):
+        if not retry:
+            break
+        def user(en):
+            hint = numeric_guard.korean_amount_hints(en) if sys_prompt is _SYS_KO_RETRY else ""
+            return f"{en}\n\n{hint}" if hint else en
         again = provider.complete_json_batch(
-            [(cid, _SYS_KO_RETRY, f"{en}\n\n{hints[cid]}", 4000) for cid, (_, en) in retry.items()])
+            [(cid, sys_prompt, user(en), 4000) for cid, (_, en) in retry.items()])
+        failed = {}
         for cid, (r, en) in retry.items():
             ko = str((again.get(cid) or {}).get("expanded_summary_ko") or "").strip()[:7000]
             if not ko or numeric_guard.amount_mismatch(en, ko):
-                log.warning("긴 요약 금액 불일치 — 한국어 저장 안 함(article_id=%s)", r["article_id"])
+                failed[cid] = (r, en)
                 continue
             cur.execute("UPDATE articles_raw SET expanded_summary = ? WHERE article_id = ?",
                         (ko, r["article_id"]))
+        retry = failed
+    for r, _ in retry.values():
+        log.warning("긴 요약 금액 불일치 — 한국어 저장 안 함(article_id=%s)", r["article_id"])
     conn.commit()
 
     log.info(
