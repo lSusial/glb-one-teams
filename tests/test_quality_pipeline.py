@@ -1204,6 +1204,17 @@ class NumericGuardTests(unittest.TestCase):
         # 연도 뒤 "to"는 범위가 아니다(원문 $44.4 billion을 놓치면 정상 번역을 거부한다)
         self.assertFalse(numeric_guard.amount_mismatch(
             'exports rose in September 2026 to $44.4 billion', '수출은 444억 달러로 증가'))
+        # 2026-10-21 LA 브리핑 "US$10–15bil", 아라다 "USD 5-year sukuk"(5년물 ≠ 5달러)
+        self.assertFalse(numeric_guard.amount_mismatch(
+            'plans to invest US$10–15bil in Laos', '라오스에 100억~150억 달러(US$10–15bil)를 투자'))
+        self.assertEqual(numeric_guard.usd_values('mandates USD 5-year sukuk'), [])
+        # 2026-10-21 긴 요약: 통화기호 없는 "lakh crore", 필리핀 "P90.8 billion"
+        self.assertFalse(numeric_guard.amount_mismatch(
+            'Investors lost roughly 3.6 lakh crore rupees', '투자자들이 잃은 시가총액은 약 3조 6,000억 루피'))
+        self.assertFalse(numeric_guard.amount_mismatch(
+            'JPY236.64 billion, or roughly P90.8 billion', '2,366억 엔, 약 908억 페소'))
+        self.assertTrue(numeric_guard.amount_mismatch(
+            'net profit to 7,704.67 crore rupees', '순이익 77억 470만 루피'))
         # 범위를 넓게 읽어도 10배 오류는 계속 잡는다
         self.assertTrue(numeric_guard.amount_mismatch(
             'drew roughly US$8 to 8.5 billion in inflows', '약 8억~8.5억 달러의 자본 유입'))

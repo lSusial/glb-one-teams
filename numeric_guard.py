@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-_UNITS = {"": 1, "m": 1e6, "million": 1e6, "bn": 1e9,
+_UNITS = {"": 1, "m": 1e6, "million": 1e6, "bn": 1e9, "bil": 1e9,
           "billion": 1e9, "trillion": 1e12}
 _KO_UNITS = {"조": 1e12, "억": 1e8, "천만": 1e7, "백만": 1e6, "만": 1e4}
 # 숫자는 반드시 숫자로 시작·끝나야 한다("US$, " 같은 문장부호만 잡혀 float 변환이 터지는 것 방지).
@@ -26,7 +26,7 @@ _NOT_KO_TAIL = r"(?<![\d,.조억만])(?<![조억만]\s)"
 _CUR_PRE = r"US\$|HK\$|S\$|\$|RM|Rp\.?\s?|Rs\.?\s?|₹|¥|£|€"
 _RANGE_RE = re.compile(
     rf"({_CUR_PRE})?(\d+(?:[,.]\d+)*)\s*(-|–|to)\s*({_CUR_PRE})?(\d+(?:[,.]\d+)*)\s*-?\s*"
-    r"(lakh crore|trillion|billion|million|crore|lakh|bn|mn|tn)\b", re.I)
+    r"(lakh crore|trillion|billion|million|crore|lakh|bil|bn|mn|tn)\b", re.I)
 
 
 def _expand_ranges(text: str) -> str:
@@ -64,7 +64,9 @@ def usd_values(text: str) -> list[float]:
     # HK$·S$ 같은 다른 달러는 제외(US$는 포함) — 홍콩달러 금액이 USD로 잡혀 오판하지 않게
     # 단위어 앞 하이픈("$1-billion")도 허용 — 2026-10-20 필리핀 기사에서 "$1-billion"이
     # 단위 없이 $1로만 읽혀 10억 달러와 비교돼 오탐난 사례로 발견.
-    for m in re.finditer(rf"(?:\bUS\$|(?<![A-Za-z])\$|\bUSD)\s*({_NUM})\s*-?\s*(trillion|billion|million|bn|m)?\b",
+    # "USD 5-year sukuk"(5년물)처럼 기간이 붙은 숫자는 금액이 아니다(2026-10-21 아라다 수쿠크 오탐)
+    for m in re.finditer(rf"(?:\bUS\$|(?<![A-Za-z])\$|\bUSD)\s*({_NUM})(?![-\s]*(?:years?|yr|months?|days?|weeks?)\b)"
+                         rf"\s*-?\s*(trillion|billion|million|bil|bn|m)?\b",
                          text, re.I):
         values.append(_to_float(m.group(1)) * _UNITS[(m.group(2) or "").lower()])
     for m in re.finditer(
@@ -92,7 +94,7 @@ def inr_values(text: str) -> list[float]:
     for m in re.finditer(rf"(?:\bRs\.?|₹|\bINR)\s*({_NUM})(?:\s*-?\s*{_INR_UNIT_RE}\b)?", text, re.I):
         values.append(_to_float(m.group(1)) * _INR_UNITS[(m.group(2) or "").lower()])
     # 통화기호 없이 쓰는 인도식 단위(10,000 crore rupees, 38.5 lakh) — 인도 기사에서 사실상 루피
-    for m in re.finditer(rf"(?<![\w₹.,])({_NUM})\s*-?\s*(crore|lakh)\b", text, re.I):
+    for m in re.finditer(rf"(?<![\w₹.,])({_NUM})\s*-?\s*(lakh crore|crore|lakh)\b", text, re.I):
         if not re.search(r"(?:Rs\.?|₹|INR)\s*$", text[:m.start()], re.I):
             values.append(_to_float(m.group(1)) * _INR_UNITS[m.group(2).lower()])
     for m in re.finditer(rf"{_KO_AMOUNT}루피(?!아)", text):
@@ -114,7 +116,7 @@ _FX = {
     "THB": (r"฿|\bTHB", r"baht", r"바트"),
     "GBP": (r"£|\bGBP", r"pounds?(?: sterling)?", r"파운드"),
     "EUR": (r"€|\bEUR", r"euros?", r"유로"),
-    "PHP": (r"₱|\bPHP", r"pesos?", r"페소"),
+    "PHP": (r"₱|\bPHP|\bP(?=\d)", r"pesos?", r"페소"),   # 필리핀 매체 "P90.8 billion"
     "MYR": (r"\bRM|\bMYR", r"ringgit", r"링깃"),
     "BDT": (r"৳|\bBDT|\bTk\.?", r"taka", r"타카"),
 }
