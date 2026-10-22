@@ -78,7 +78,8 @@ if [ "$(date +%u)" = "1" ]; then
     run_step "주간 브리핑(main.py brief --type weekly)" .venv/bin/python main.py brief --type weekly
 fi
 
-run_step "배포(deploy_web.sh)" ./deploy_web.sh
+# ~/Documents 안의 스크립트를 직접 실행하면 그 안의 Python이 macOS 권한에 막힌다(2026-10-22) — bash 인자로 실행
+run_step "배포(deploy_web.sh)" /bin/bash ./deploy_web.sh
 
 echo "✓ $(date '+%Y-%m-%d %H:%M:%S') 전체 완료" | tee -a "$LOG"
 

@@ -303,6 +303,12 @@ class PreDeployValidationTests(unittest.TestCase):
         self.assertIsNone(self.audit._ROUNDING_RE.search("China's trade surplus hits US$1 trillion record"))
         self.assertTrue(self.audit._ROUNDING_RE.search("Spending is on track to exceed $1 trillion"))
 
+    def test_title_amount_that_sums_summary_amounts_is_not_mismatch(self):
+        # 2026-10-22 '$3.5 trillion SpaceX-Tesla merger' = 요약의 $2조 + $1.5조 — 합산 표기
+        q = 'SpaceX is valued above $2 trillion and Tesla at about $1.5 trillion.'
+        self.assertTrue(self.audit._title_sums_summary('Musk endorses $3.5 trillion SpaceX-Tesla merger', q))
+        self.assertFalse(self.audit._title_sums_summary('Musk endorses $35 trillion SpaceX-Tesla merger', q))
+
     def test_strict_blocks_wrong_facts_but_only_warns_heuristics(self):
         import contextlib
         import io
@@ -895,6 +901,31 @@ class QualityTests(unittest.TestCase):
         self.assertIn('3,021억 루피', hint)
         self.assertIsNotNone(self.db.execute('SELECT 1 FROM country_briefings').fetchone())
 
+    def test_briefing_korean_amount_absent_from_english_is_retried(self):
+        # 2026-10-22 US 브리핑: 한국어에만 '3조 5,000억 달러'가 있어 화면 감사(한↔영)에서 배포 차단
+        self.add(1, cc='US', score=65)
+        self.db.execute("UPDATE articles_raw SET summary_en=? WHERE article_id=1",
+                        ('A $3.5 trillion merger: SpaceX above $2 trillion, Tesla $1.5 trillion.',))
+        self.db.commit()
+
+        class SeqProvider(Provider):
+            def __init__(self, responses):
+                super().__init__()
+                self.responses = list(responses)
+
+            def complete_json_batch(self, requests):
+                self.requests.extend(requests)
+                resp = self.responses.pop(0)
+                return {r[0]: resp for r in requests}
+
+        p = SeqProvider([
+            {'summary_ko': '3조 5,000억 달러 합병, 스페이스X 2조 달러', 'summary_en': 'SpaceX above $2 trillion.'},
+            {'summary_ko': '스페이스X 2조 달러', 'summary_en': 'SpaceX above $2 trillion.'},
+        ])
+        briefing.run_briefing(self.db, p, briefing_type='daily', countries=['US'])
+        self.assertEqual(len(p.requests), 2)
+        self.assertEqual(self.db.execute('SELECT summary FROM country_briefings').fetchone()[0], '스페이스X 2조 달러')
+
     def test_stale_daily_briefing_is_not_exported(self):
         # 2026-10-07: IN 탭에 10/1자 '준비 중' 브리핑이 6일째 노출
         briefing.ensure_table(self.db)
@@ -1219,6 +1250,12 @@ class NumericGuardTests(unittest.TestCase):
             'Rp2.1 trillion in fines; the rupiah traded around 18,000 per dollar',
             '2조 1,000억 루피아 과태료, 루피아는 달러당 약 1.80만 루피아 수준'))
         self.assertTrue(numeric_guard.amount_mismatch('Rs 1,065–1,119 per share', '주당 10,650~11,190루피'))
+
+    def test_bln_unit_is_parsed(self):
+        # 2026-10-22 안타라 '$9.9 bln'을 9.9달러로 읽어 '99억 달러' 제목이 배포 차단
+        self.assertEqual(numeric_guard.usd_values("hedging incentives draw $9.9 bln in foreign capital"), [9.9e9])
+        self.assertEqual(numeric_guard.fx_values('fines of Rp2.1 bln'), {'IDR': [2.1e9]})
+        self.assertFalse(numeric_guard.amount_mismatch('draw $9.9 bln in foreign capital', '99억 달러 유입'))
 
     def test_english_unit_followed_by_korean_particle_keeps_unit(self):
         # 2026-10-21 IN 브리핑: '₹8,110 crore에'의 crore를 놓쳐 8,110루피로 읽고 오탐 거부

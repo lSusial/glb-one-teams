@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import re
 
-_UNITS = {"": 1, "m": 1e6, "million": 1e6, "bn": 1e9, "bil": 1e9,
+_UNITS = {"": 1, "m": 1e6, "million": 1e6, "bn": 1e9, "bil": 1e9, "bln": 1e9,
           "billion": 1e9, "trillion": 1e12}
 _KO_UNITS = {"조": 1e12, "억": 1e8, "천만": 1e7, "백만": 1e6, "만": 1e4}
 # 숫자는 반드시 숫자로 시작·끝나야 한다("US$, " 같은 문장부호만 잡혀 float 변환이 터지는 것 방지).
@@ -26,7 +26,7 @@ _NOT_KO_TAIL = r"(?<![\d,.조억만])(?<![조억만]\s)"
 _CUR_PRE = r"US\$|HK\$|S\$|\$|RM|Rp\.?\s?|Rs\.?\s?|₹|¥|£|€"
 _RANGE_RE = re.compile(
     rf"({_CUR_PRE})?(\d+(?:[,.]\d+)*)\s*(-|–|to)\s*({_CUR_PRE})?(\d+(?:[,.]\d+)*)\s*-?\s*"
-    r"(lakh crore|trillion|billion|million|crore|lakh|bil|bn|mn|tn)(?![A-Za-z])", re.I)
+    r"(lakh crore|trillion|billion|million|crore|lakh|bln|bil|bn|mn|tn)(?![A-Za-z])", re.I)
 
 
 _PRICE_RANGE_RE = re.compile(rf"({_CUR_PRE})\s?(\d+(?:[,.]\d+)*)\s*[-–]\s*(\d+(?:[,.]\d+)*)(?![\d,.])")
@@ -72,7 +72,7 @@ def usd_values(text: str) -> list[float]:
     # 단위 없이 $1로만 읽혀 10억 달러와 비교돼 오탐난 사례로 발견.
     # "USD 5-year sukuk"(5년물)처럼 기간이 붙은 숫자는 금액이 아니다(2026-10-21 아라다 수쿠크 오탐)
     for m in re.finditer(rf"(?:\bUS\$|(?<![A-Za-z])\$|\bUSD)\s*({_NUM})(?![-\s]*(?:years?|yr|months?|days?|weeks?)\b)"
-                         rf"(?:\s*-?\s*(trillion|billion|million|bil|bn|m)(?![A-Za-z])|\b)",
+                         rf"(?:\s*-?\s*(trillion|billion|million|bln|bil|bn|m)(?![A-Za-z])|\b)",
                          text, re.I):
         values.append(_to_float(m.group(1)) * _UNITS[(m.group(2) or "").lower()])
     for m in re.finditer(
@@ -127,7 +127,7 @@ _FX = {
     "BDT": (r"৳|\bBDT|\bTk\.?", r"taka", r"타카"),
 }
 # 방글라데시 타카도 인도처럼 crore·lakh로 쓴다(Tk 20,000 crore = 2,000억 타카).
-_EN_UNIT_RE = r"(lakh crore|trillion|billion|million|crore|lakh|bil|bn|mn|tn|cr|b|m)"
+_EN_UNIT_RE = r"(lakh crore|trillion|billion|million|crore|lakh|bln|bil|bn|mn|tn|cr|b|m)"
 _EN_UNITS = {**_UNITS, "mn": 1e6, "tn": 1e12, "b": 1e9,
              "crore": 1e7, "cr": 1e7, "lakh": 1e5, "lakh crore": 1e12}
 

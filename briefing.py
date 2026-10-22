@@ -275,7 +275,9 @@ def run_briefing(
             if arts:
                 generated = " ".join((summary, summary_en, issues, issues_en,
                                       outlook, outlook_en, key_stat, key_stat_en))
-                if numeric_guard.amount_mismatch(bullets_by_cc.get(cc, ""), generated):
+                # 원문 대조 + 한↔영 대조(화면 감사가 두 언어를 서로 비교 — 2026-10-22 US 브리핑 한국어에만 금액)
+                if (numeric_guard.amount_mismatch(bullets_by_cc.get(cc, ""), generated)
+                        or numeric_guard.amount_mismatch(summary_en, summary)):
                     if attempt == 1:
                         log.warning("브리핑 금액 불일치 — 재요청(국가=%s, %s): %s",
                                     cc, briefing_type, summary[:80])

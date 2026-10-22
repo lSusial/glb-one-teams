@@ -19,6 +19,13 @@
         <string>__LAUNCHER__</string>
     </array>
 
+    <!-- launchd 기본 PATH엔 /opt/homebrew/bin이 없어 deploy_web.sh의 wrangler를 못 찾는다(2026-10-22) -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
     <key>WorkingDirectory</key>
     <string>__REPO_DIR__</string>
 

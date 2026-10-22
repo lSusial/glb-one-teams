@@ -109,6 +109,16 @@ _ROUNDING_RE = re.compile(
     r"on track to)\b", re.I)
 
 
+
+def _title_sums_summary(t_en: str, q_en: str) -> bool:
+    """제목 금액이 요약 금액 두 개의 합이면 True — 'SpaceX $2조 + Tesla $1.5조 = $3.5 trillion merger'
+    같은 합산 표기(2026-10-22). (q_en, t_en) 비교에서만 쓴다."""
+    q = numeric_guard.usd_values(q_en)
+    sums = [a + b for i, a in enumerate(q) for b in q[i + 1:]]
+    t = [v for v in numeric_guard.usd_values(t_en)
+         if not any(abs(v - s) <= abs(s) * 0.02 for s in q)]
+    return bool(t) and all(any(abs(v - s) <= s * 0.02 for s in sums) for v in t)
+
 def category_mismatch(card) -> str | None:
     """지정학(geopolitics) 주·보조 분류인데 영문 본문에 지정학 신호가 하나도 없으면 사유 문자열.
     실측(9/23~10/8 카드 43건 중 10건 표시): 은행 파산·소비자 부채·제인스트리트 소송·KB 협동조합 등.
@@ -365,7 +375,8 @@ def main() -> int:
         # (q_en, t_en): 영문 제목 금액이 영문 요약과 다름(Rp 9.1조 → "$9.1 trillion" 같은 통화 바꿔치기)
         for en, ko in (("t_en", "t"), ("q_en", "q"), ("expanded_summary_en", "expanded_summary"),
                        ("q_en", "t_en")):
-            if en == "q_en" and ko == "t_en" and _ROUNDING_RE.search(a.get("t_en") or ""):
+            if en == "q_en" and ko == "t_en" and (_ROUNDING_RE.search(a.get("t_en") or "")
+                                                   or _title_sums_summary(a.get("t_en") or "", a.get("q_en") or "")):
                 continue
             if a.get(en) and a.get(ko) and numeric_guard.amount_mismatch(a[en], a[ko]):
                 add("AMOUNT_MISMATCH", f"{w} {ko}: {short(a)} · {a.get('u', '')[:70]}")

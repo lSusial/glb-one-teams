@@ -3,7 +3,7 @@
 #   사용법: ./deploy_web.sh [PORT]      (기본 8080)
 # 화면은 자기완결 HTML(데이터 임베드)이라 서버는 파일만 서빙하면 된다.
 # 주의: 접속하려면 오라클 보안목록(Ingress)과 인스턴스 방화벽에 해당 포트가 열려 있어야 함.
-set -e
+set -eo pipefail   # wrangler 실패가 `| tail` 뒤에 가려져 "완료"로 끝나던 문제(2026-10-22 launchd PATH 누락)
 
 SSH_KEY="$HOME/workspace/ssh-key-2026-06-25-4.key"
 REMOTE="ubuntu@168.107.56.139"
