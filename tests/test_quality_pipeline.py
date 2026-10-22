@@ -1209,6 +1209,17 @@ class NumericGuardTests(unittest.TestCase):
         self.assertEqual(numeric_guard.usd_values('1조 2,000억 달러'), [1.2e12])
         self.assertEqual(numeric_guard.usd_values('$30억의 투자'), [3e9])
 
+    def test_unitless_price_ranges_bil_and_approx_exchange_rate_are_not_false_positives(self):
+        # 2026-10-22 배포 전 감사: IN 브리핑 공모가 범위, MY 'RM2.8bil', ID '달러당 약 1.80만 루피아'
+        self.assertEqual(numeric_guard.inr_values('price band of Rs 1,065–1,119 per share'), [1065, 1119])
+        self.assertFalse(numeric_guard.amount_mismatch('Rs 1,065–1,119 per share', '주당 1,065~1,119루피'))
+        self.assertEqual(numeric_guard.fx_values('channel RM2.8bil into'), {'MYR': [2.8e9]})
+        self.assertEqual(numeric_guard.fx_values('루피아는 달러당 약 1.80만 루피아 수준'), {})
+        self.assertFalse(numeric_guard.amount_mismatch(
+            'Rp2.1 trillion in fines; the rupiah traded around 18,000 per dollar',
+            '2조 1,000억 루피아 과태료, 루피아는 달러당 약 1.80만 루피아 수준'))
+        self.assertTrue(numeric_guard.amount_mismatch('Rs 1,065–1,119 per share', '주당 10,650~11,190루피'))
+
     def test_english_unit_followed_by_korean_particle_keeps_unit(self):
         # 2026-10-21 IN 브리핑: '₹8,110 crore에'의 crore를 놓쳐 8,110루피로 읽고 오탐 거부
         self.assertEqual(numeric_guard.inr_values('배정분 ₹8,110 crore에 참여'), [8.11e10])

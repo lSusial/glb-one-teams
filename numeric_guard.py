@@ -29,6 +29,9 @@ _RANGE_RE = re.compile(
     r"(lakh crore|trillion|billion|million|crore|lakh|bil|bn|mn|tn)(?![A-Za-z])", re.I)
 
 
+_PRICE_RANGE_RE = re.compile(rf"({_CUR_PRE})\s?(\d+(?:[,.]\d+)*)\s*[-–]\s*(\d+(?:[,.]\d+)*)(?![\d,.])")
+
+
 def _expand_ranges(text: str) -> str:
     def sub(m):
         pre, a, sep, pre2, b, unit = m.groups()
@@ -37,7 +40,10 @@ def _expand_ranges(text: str) -> str:
         if not pre and (sep.lower() == "to" or pre2):
             return m[0]
         return f"{pre or ''}{a} {unit} to {pre or ''}{b} {unit}"
-    return _RANGE_RE.sub(sub, text)
+    text = _RANGE_RE.sub(sub, text)
+    # 단위 없는 가격 범위(주당 공모가 'Rs 1,065–1,119')는 양 끝을 모두 금액으로 — 한국어
+    # '1,065~1,119루피'는 끝 값만 읽히지만 원문 쪽에 둘 다 있으면 대조가 맞는다.
+    return _PRICE_RANGE_RE.sub(lambda m: f"{m[1]}{m[2]} to {m[1]}{m[3]}", text)
 
 
 def _ko_total(m) -> float:
@@ -121,7 +127,7 @@ _FX = {
     "BDT": (r"৳|\bBDT|\bTk\.?", r"taka", r"타카"),
 }
 # 방글라데시 타카도 인도처럼 crore·lakh로 쓴다(Tk 20,000 crore = 2,000억 타카).
-_EN_UNIT_RE = r"(lakh crore|trillion|billion|million|crore|lakh|bn|mn|tn|cr|b|m)"
+_EN_UNIT_RE = r"(lakh crore|trillion|billion|million|crore|lakh|bil|bn|mn|tn|cr|b|m)"
 _EN_UNITS = {**_UNITS, "mn": 1e6, "tn": 1e12, "b": 1e9,
              "crore": 1e7, "cr": 1e7, "lakh": 1e5, "lakh crore": 1e12}
 
@@ -138,6 +144,8 @@ def fx_values(text: str) -> dict[str, list[float]]:
         for m in re.finditer(rf"({_NUM})\s*-?\s*(?:{_EN_UNIT_RE}[\s-]+)?(?:{post})\b", text, re.I):
             vals.append(_to_float(m.group(1)) * _EN_UNITS[(m.group(2) or "").lower()])
         for m in re.finditer(rf"{_KO_AMOUNT}(?:{ko})", text):
+            if re.search(r"[가-힣]+당\s*(?:약\s*)?$", text[max(0, m.start() - 40):m.start()]):
+                continue   # '달러당 약 1.80만 루피아' 같은 환율 시세(2026-10-22 ID 브리핑)
             vals.append(_ko_total(m))
         for m in re.finditer(rf"{_NOT_KO_TAIL}({_NUM})\s*(?:{ko})", text):
             # "엔·달러 환율은 ... 158엔" 같은 환율 시세는 금액이 아니다 — 단위 없는
@@ -146,7 +154,7 @@ def fx_values(text: str) -> dict[str, list[float]]:
             # 등장하면 특히 그렇다. 2026-10-15 JP "158엔", 2026-10-19 ID "달러당
             # 17,938루피아"가 각각 1조 엔·88조 루피아와 비교돼 오탐난 사례로 발견.
             prefix = text[max(0, m.start() - 40):m.start()]
-            if "환율" in prefix or re.search(r"[가-힣]+당\s*$", prefix):
+            if "환율" in prefix or re.search(r"[가-힣]+당\s*(?:약\s*)?$", prefix):
                 continue
             vals.append(_to_float(m.group(1)))
         if vals:
