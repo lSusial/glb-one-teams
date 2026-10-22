@@ -546,7 +546,26 @@ def _same_story_for_link(rep, child) -> bool:
             return False
     # 고유명 하나만 같은 별개 사업은 관련 기사로 묶지 않는다.
     # 실전 예: Fairfax의 IDBI은행 인수 ↔ Fairfax의 캐나다 비료 대인도 수출.
-    return len(anchors) >= 2 or ov >= _RELATED_SAME_TEXT
+    # 같은 회사의 같은 분기 실적·주가 반응은 'Q3' / 'third-quarter', 'earnings' / 'profit'처럼
+    # 표현이 달라 고유 앵커가 회사명 하나만 남기도 한다. 기간과 실적 사건을 함께 확인한다.
+    def earnings_periods(text):
+        periods = set(re.findall(r"\bq([1-4])\b", text, re.I))
+        for word, quarter in (("first", "1"), ("second", "2"), ("third", "3"), ("fourth", "4")):
+            if re.search(rf"\b{word}[- ]quarter\b", text, re.I):
+                periods.add(quarter)
+        return periods
+
+    earnings = re.compile(r"\b(?:earnings|profits?)\b", re.I)
+    rep_head = value(rep, "title_en") or value(rep, "title")
+    rep_periods = earnings_periods(rep_head) or earnings_periods(rep_text)
+    child_periods = earnings_periods(child_title_text) or earnings_periods(child_text)
+    both_earnings = bool(earnings.search(rep_head) and earnings.search(child_title_text))
+    if both_earnings and rep_periods and child_periods and not rep_periods & child_periods:
+        return False
+    if len(anchors) >= 2 or ov >= _RELATED_SAME_TEXT:
+        return True
+    entity_anchors = anchors - {"profit", "profits", "earnings", "quarter", "third", "growth", "slows"}
+    return bool(entity_anchors and both_earnings and rep_periods & child_periods)
 
 
 def _story_links_map(conn) -> dict[int, list[dict]]:
@@ -576,7 +595,7 @@ def _story_links_map(conn) -> dict[int, list[dict]]:
     return out
 
 
-def _related_links(a, synth_links, siblings, members) -> list[dict]:
+def _related_links(a, synth_links, siblings, members, conn=None) -> list[dict]:
     """본 기사 + 같은 사건 기사만. 우선순위: 다출처 종합 소스 → duplicate_of 형제 →
     피드 스토리 묶음 멤버. 없으면 본 기사 링크 1건(모달은 이 경우 '원문' 1개만 표시).
     표시 제목은 카드 헤드라인(t = title_ko or title)과 반드시 일치시킨다 — 원문
@@ -594,6 +613,11 @@ def _related_links(a, synth_links, siblings, members) -> list[dict]:
             rl.append({"t": (t or "")[:100], "u": u, "src": src})
 
     for x in (synth_links or []):
+        if not conn or not x.get("u"):
+            continue
+        source = db.article_by_url(conn, x["u"])
+        if source is None or not _same_story_for_link(a, source):
+            continue
         add(x.get("t"), x.get("u"), x.get("src"))
     for x in siblings:
         add(x["t"], x["u"], x["src"])
@@ -826,7 +850,36 @@ def country_watch_candidate_ids(conn, days: int = 1) -> dict[str, list[int]]:
     return out
 
 
-def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
+def visible_article_ids(conn) -> set[int]:
+    """실제 화면 선택 로직으로 긴 요약 생성 대상을 고른다. 관련 링크는 별도 카드가 아니다."""
+    urls, ids = set(), set()
+
+    def collect(value):
+        if isinstance(value, dict):
+            if value.get("t") and value.get("u"):
+                if value.get("article_id") is not None:
+                    ids.add(int(value["article_id"]))
+                else:
+                    urls.add(value["u"])
+            for key, child in value.items():
+                if key != "rl":
+                    collect(child)
+        elif isinstance(value, list):
+            for child in value:
+                collect(child)
+
+    collect(export_countries(conn, write=False))
+    collect(_compute_topics(conn, days=7))
+    collect(_compute_top_news(conn))
+    collect(_daily_highlights(conn))
+    for url in urls:
+        row = db.article_by_url(conn, url)
+        if row:
+            ids.add(int(row["article_id"]))
+    return ids
+
+
+def export_countries(conn, active_only: bool = True, days: int = 1, write: bool = True) -> dict:
     _ensure_ai_columns(conn)
     dc, dparams = _date_clause(days)   # 현지언론 = 전일+당일 (max-1일 이후)
     briefs = _daily_briefs(conn, _snapshot_date(conn))
@@ -933,8 +986,9 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
                     synth_links = None
             rl = _related_links(a, synth_links,
                                 siblings_map.get(a["article_id"], []),
-                                story_mem.get(a["article_id"], []))
+                                story_mem.get(a["article_id"], []), conn=conn)
             articles.append({
+                "article_id": a["article_id"],
                 # 55점 미만으로 뜨는 건 오직 SOCIETY 예외 경로뿐 → 사회 탭에만 노출(정책 등 오염 방지)
                 **({"c": "society", "c2": ""}
                    if (active_only and not is_watch and a["ai_score"] is not None
@@ -984,6 +1038,8 @@ def export_countries(conn, active_only: bool = True, days: int = 1) -> dict:
         "korean_fi": {"count": len(korean_fi), "articles": korean_fi},
         "personnel": {"count": len(personnel), "articles": personnel},
     }
+    if not write:
+        return payload
     _write_json("countries", payload)
     path = config.EXPORT_DIR / "countries.json"
 

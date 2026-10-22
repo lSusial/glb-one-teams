@@ -48,6 +48,7 @@ class DailyRecoveryTests(unittest.TestCase):
             'category_guard.fix_ungrounded_geo', 'llm_translate.run_translate',
             'briefing.run_briefing', 'briefing.generate_daily_highlights',
             'briefing.generate_daily_quiz',
+            'llm_dedup.refresh_representatives', 'export_json.visible_article_ids',
         ]
         with ExitStack() as stack:
             stack.enter_context(patch.object(main.db, 'open_conn', return_value=self.db))

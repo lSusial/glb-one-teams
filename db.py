@@ -107,6 +107,15 @@ def table_columns(conn: sqlite3.Connection, table: str = "articles_raw") -> set[
     return {row["name"] if isinstance(row, sqlite3.Row) else row[1] for row in rows}
 
 
+def article_by_url(conn: sqlite3.Connection, link: str):
+    """URL 해소 뒤 여러 행이 같은 원문을 가리키면 현재 대표를 우선한다."""
+    return conn.execute(
+        "SELECT * FROM articles_raw WHERE link=? "
+        "ORDER BY (duplicate_of IS NULL) DESC, ai_score DESC, published_at DESC, article_id DESC LIMIT 1",
+        (link,),
+    ).fetchone()
+
+
 def ensure_columns(
     conn: sqlite3.Connection,
     table: str,

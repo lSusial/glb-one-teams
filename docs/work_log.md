@@ -7,6 +7,7 @@
 
 | 날짜 | 마일스톤 |
 |---|---|
+| 2026-10-22 | 품질 감사 후속 수정: BI 금리 예고·결과의 주체/예고 표현 정규화, 영문 기준 예고 판정 및 대표 재선정·감사 기준 통일, 실제 export 카드 기반 긴 요약 대상(사회·관심 포함), 다출처 링크 검증, 동일 URL의 현재 대표 우선 조회, 고위급 외교 활동의 GEO 신호 보강. launchd 실행·DB 읽기 사전 점검과 백업 실패 시 중단 추가. OS 전체 디스크 접근 권한은 사용자 설정 필요. DB 사본에서 검증하며 외부 API 재생성은 자동 승인 심사에 차단되어 미실행. |
 | 2026-06-25~27 | 레포 생성(GitHub `lSusial/glb-one-teams`), Oracle Cloud 서버 세팅. **Google News가 클라우드 IP를 503 차단** → 맥북 수집 + rsync 방식 확정. 홍콩(SCMP를 CN에서 분리)·싱가포르 추가. AI 레이어 이식(taxonomy·llm_provider·prefilter·ranker·briefing·export), `config.py`/`db.py` 리팩터, 필터의 GB·HK·SG 키워드 누락 보강 |
 | 2026-07-16 | 사내 확정안 반영. 평가셋 70건 구축, 필터 개선(복수형 매칭·금융어 보강)으로 F1 57→77. 관리자 페이지(`admin_export.py`) 신설 |
 | 2026-07-23 | 모델 Haiku 전환 + **Message Batches API(50%↓)**, 규제·정책을 TopicWatch로 흡수(4탭), ACTIVE 임계 60→55, 국가 일일 브리핑(한·영), KO/EN 폴백, **본문 추출 `fulltext.py`**(76/118 피드가 GNews 스니펫뿐이던 문제) |

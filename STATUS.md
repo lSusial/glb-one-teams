@@ -1,5 +1,7 @@
 # 현황 — glb-one-teams
 
+> **2026-10-22 코드 검증 보충** — 일일 브리핑 기간 분리 이후 예고·결과 중복, 대표 선정, 실제 노출 카드의 긴 요약 대상, 관련링크/분류 검사 오탐을 보완했다. 아래 10/1 현황은 과거 기록이며 최신 변경은 `docs/work_log.md`와 Git 이력을 참조한다. 운영 DB 재생성·배포는 이번 코드 검증에 포함하지 않았다. launchd의 macOS 파일 접근 권한 오류는 사전 점검으로 명시하며, 권한 부여는 사용자 시스템 설정이 필요하다.
+
 > **최종 갱신 2026-10-01** — 9/29~30 수집분 감사 완료. AI 중복 오묶음 17건을 해제하고 오래된 예고 기사·무관 관련링크를 제거했다. ACTIVE 0건인 국가에는 검증된 50~54점 관심 뉴스 1건을 구분 노출하며, GB·HK·VN·TH 4건 번역 후 14:45 KST Cloudflare Pages 배포·운영 데이터 일치 검증 완료. **10/1 수집분은 아직 없으며, 최신 적재일은 9/30** | For Internal Use Only
 >
 > 기획은 [`PLAN.md`](PLAN.md), 전체 처리 로직은 [`docs/pipeline_process.md`](docs/pipeline_process.md), 설계는 [`docs/design.md`](docs/design.md), 운영은 [`docs/operations.md`](docs/operations.md), 이력은 [`docs/work_log.md`](docs/work_log.md), UI 사양은 [`mockups/HANDOFF.md`](mockups/HANDOFF.md).

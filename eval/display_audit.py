@@ -45,6 +45,7 @@ import re
 import sqlite3
 import sys
 from datetime import date, datetime
+from functools import lru_cache
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -186,10 +187,9 @@ def main() -> int:
     def add(key, msg):
         issues.setdefault(key, []).append(msg)
 
+    @lru_cache(maxsize=None)
     def db_row(link):
-        return conn.execute(
-            "SELECT article_id, primary_country, summary_en, title, title_en, published_at, ai_score "
-            "FROM articles_raw WHERE link=?", (link,)).fetchone()
+        return db.article_by_url(conn, link)
 
     # 12~13 홈 탑이슈 출처 무결성. 새 계약은 생성 시 검증된 article_id를 저장하고
     # export가 해당 기사 카드를 source_articles로 직접 포함해야 한다.
@@ -324,7 +324,7 @@ def main() -> int:
     else:
         media_select, media_join = ", NULL c_media_cc, NULL r_media_cc, NULL subject", ""
     for r in conn.execute(
-            f"""SELECT c.article_id cid, c.title craw, COALESCE(c.title_en,c.title) ct,
+            f"""SELECT c.article_id cid, COALESCE(c.title_en,c.title) ct,
                       c.published_at cp, c.ai_score cs,
                       r.article_id rid, COALESCE(r.title_en,r.title) rt,
                       r.published_at rp, r.ai_score rs
@@ -334,19 +334,11 @@ def main() -> int:
                WHERE c.dup_by_ai = 1 AND r.duplicate_of IS NULL
                  AND r.published_at >= date(?, '-6 day')""",
             (today.isoformat(),)):
-        child_score, rep_score = r["cs"] or 0, r["rs"] or 0
-        child_is_preview = L.is_preview(r["craw"], r["ct"])
-        tie_is_local_media_pick = (
-            child_score == rep_score and r["subject"]
-            and r["r_media_cc"] == r["subject"] and r["c_media_cc"] != r["subject"])
-        newer_not_worse = ((r["cp"] or "")[:10] > (r["rp"] or "")[:10]
-                           and child_score >= rep_score and not child_is_preview
-                           and not tie_is_local_media_pick)
-        active_hidden = (child_score >= config.AI_SCORE_ACTIVE_THRESHOLD
-                         and rep_score < config.AI_SCORE_ACTIVE_THRESHOLD
-                         and not child_is_preview)
-        if ((child_score > rep_score and not child_is_preview)
-                or newer_not_worse or active_hidden):
+        meta = {
+            r["cid"]: {"score": r["cs"], "pub": r["cp"], "titles": [r["ct"]], "media_cc": r["c_media_cc"]},
+            r["rid"]: {"score": r["rs"], "pub": r["rp"], "titles": [r["rt"]], "media_cc": r["r_media_cc"]},
+        }
+        if L.pick_rep([r["rid"], r["cid"]], meta, r["subject"]) == r["cid"]:
             add("HIDDEN_NEWER_REP",
                 f"대표 {r['rp'][:10]} {rep_score}점 '{(r['rt'] or '')[:38]}' 밑에 "
                 f"자식 {r['cp'][:10]} {child_score}점 '{(r['ct'] or '')[:38]}'")

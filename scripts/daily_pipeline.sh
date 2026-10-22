@@ -28,6 +28,16 @@ fi
 echo $$ >"$LOCK_PID_FILE"
 trap 'rm -f "$LOCK_PID_FILE"' EXIT
 
+# launchd의 macOS 파일 접근 권한 오류를 백업·수집 전에 구분한다.
+# Python 실행 파일의 전체 디스크 접근 권한은 코드에서 부여할 수 없다.
+if ! .venv/bin/python -c "import sqlite3; from pathlib import Path; Path('main.py').read_bytes(); sqlite3.connect('file:data/news.db?mode=ro', uri=True).execute('PRAGMA schema_version')" >>"$LOG" 2>&1; then
+    echo "✗ 실행 환경 사전 점검 실패 — Python 실행·프로젝트·DB 읽기 상태를 확인하세요." | tee -a "$LOG"
+    if grep -q 'Operation not permitted' "$LOG"; then
+        echo "macOS 권한 오류: 시스템 설정 → 개인정보 보호 및 보안 → 전체 디스크 접근 권한에서 .venv/bin/python이 가리키는 실제 Python 실행 파일을 허용한 뒤 launchd를 다시 실행하세요." | tee -a "$LOG"
+    fi
+    exit 1
+fi
+
 notify() {
     .venv/bin/python scripts/tg_notify.py "$1" >>"$LOG" 2>&1 || true
 }
@@ -47,7 +57,10 @@ $(tail -60 "$LOG")"
 }
 
 # 1) DB 백업(최근 5개만 보관 — 나머지는 자동 삭제)
-cp data/news.db "$BACKUP_DIR/news.db.daily-$STAMP" 2>>"$LOG"
+if ! cp data/news.db "$BACKUP_DIR/news.db.daily-$STAMP" 2>>"$LOG"; then
+    echo "✗ DB 백업 실패 — 파이프라인을 중단합니다." | tee -a "$LOG"
+    exit 1
+fi
 ls -1t "$BACKUP_DIR"/news.db.daily-* 2>/dev/null | tail -n +6 | xargs -r rm -f
 
 # 2) 파이프라인 본체

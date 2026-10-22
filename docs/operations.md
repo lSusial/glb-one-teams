@@ -76,6 +76,7 @@ wrangler pages deploy data/export --project-name kb-global-daily --commit-dirty=
 - 단계별 실패 시 즉시 중단하고 `scripts/tg_notify.py`로 Telegram 알림 시도(실패해도 파이프라인 자체는 계속 중단 상태로 로그만 남김)
 - 백업: 실행마다 `data/backups/news.db.daily-*` 생성, 최근 5개만 보관
 - 로그: `data/logs/pipeline-*.log`(파이프라인 전체 출력, 14일 보관), `data/logs/launchd.out/.err`(launchd 자체 로그)
+- **launchd 권한 실패(10/22 확인)**: `python: realpath: .venv/bin/: Operation not permitted`는 Python이 Documents 아래 프로젝트를 읽지 못한 오류다. `daily_pipeline.sh`는 백업·수집 전에 Python/프로젝트/DB 읽기를 사전 점검하고 원인을 로그에 남긴다. 시스템 설정 → 개인정보 보호 및 보안 → 전체 디스크 접근 권한에서 `.venv/bin/python`이 가리키는 실제 Python 실행 파일을 허용한 뒤 launchd를 다시 실행해야 한다. 이 OS 권한은 코드 수정만으로 부여되지 않는다. 백업이 실패해도 수집은 시작하지 않는다.
 - **알려진 제약(2026-10-06)**: 이 맥북 네트워크에서 Telegram API(`api.telegram.org`)가 TLS Client Hello 직후 연결 리셋 — SNI 기반 차단으로 추정(구글 등 일반 인터넷은 정상). `tg_notify.py`는 그대로 둬서 네트워크가 풀리면 바로 동작하지만, **지금은 실패 알림이 안 가므로 `data/logs/pipeline-*.log`를 직접 확인해야 한다.**
 
 | 결정 | 결론 | 담당 | 기한 |

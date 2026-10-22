@@ -303,11 +303,13 @@ def cmd_rank(args):
 
 
 def cmd_expand(args):
+    import export_json
     import llm_expand
     conn = db.open_conn()
     ub = _batch_flag(args)
     rd = getattr(args, "redo_days", None)
-    s = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub, redo_days=rd), "expand")
+    s = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub, redo_days=rd,
+        article_ids=export_json.visible_article_ids(conn)), "expand")
     print(f"[expand] 대상={s['total']}  작성={s['written']}  다출처={s['synthesized']}"
           + (f"  (재생성 {rd}일창)" if rd else ""))
 
@@ -415,6 +417,7 @@ def _expanded_ai_days(conn, requested_days: int | None) -> int | None:
 def cmd_ai(args):
     """prefilter → fulltext/rank → 상위 후보 재분석 → dedup → 후속 생성 순서 실행."""
     import briefing
+    import export_json
     import category_guard
     import llm_prefilter
     import llm_ranker
@@ -457,11 +460,14 @@ def cmd_ai(args):
     sd = _ai_guard(lambda: llm_dedup.run_dedup(conn, days=days, use_batch=ub), "ai")
     print(f"   중복마킹={sd['marked']}건 (국가 {sd['countries']}, "
           f"검사={sd['reviewed']}, 실패보존={sd['failed']}, 가드해제={sd.get('released', 0)})")
+    reps = llm_dedup.refresh_representatives(conn, days=days or 7, apply=True)
+    print(f"   기존 그룹 대표 교체={reps['rep_changed']}건")
     print("▶ 노출 기사 원문 링크 해소(Google News → 원문, 점수순·순차)...")
     sl = _ai_guard(lambda: fulltext.resolve_display_links(conn, days=days), "ai")
     print(f"   대상={sl['total']} 해소={sl['resolved']}")
     print("▶ [4/8] 모달 긴 요약(노출 기사만)...")
-    se = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub), "ai")
+    se = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub,
+        article_ids=export_json.visible_article_ids(conn)), "ai")
     print(f"   대상={se['total']} 작성={se['written']} 다출처={se['synthesized']}")
     print("▶ 지정학(GEO) 과다분류 보정...")
     sg = _ai_guard(lambda: category_guard.fix_ungrounded_geo(conn, days=days), "ai")

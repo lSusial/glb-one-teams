@@ -19,7 +19,7 @@ GEO_SIGNAL_RE = re.compile(
     r"bilateral|trade (?:war|tension\w*|deal|talks|dispute)|tensions?|attacks?|ceasefire|hostages?|riots?|"
     r"national security|sovereign\w*|iran\w*|israel\w*|russia\w*|ukrain\w*|gaza|hormuz|"
     r"cyberattacks?|espionage|crackdown|scams?|money.laundering|export (?:controls?|restrictions?|rules|bans?)|"
-    r"truce|extraterritorial)\b", re.I)
+    r"truce|extraterritorial|secretary of state|presidential special envoy)\b", re.I)
 GOVERNANCE_RE = re.compile(
     r"\b(?:takeover|stake|shareholding|shareholders?|ownership|controlling|acquisition|acquire|"
     r"governance|buyback|repurchase|retake)\b", re.I)

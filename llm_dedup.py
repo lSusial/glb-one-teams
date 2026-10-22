@@ -97,7 +97,8 @@ _EVENT_GENERIC.update({
 # "전망"은 단독으로는 실적 가이던스 등 확정 소식에도 흔해 오탐이 잦아 제외했다.
 _PREVIEW_RE = re.compile(
     r"\b(ahead of|expected to|what to expect|preview|poised (?:to|for)|girds?|braces?|brace for|"
-    r"awaits?|looms?|counting the votes|to decide|will decide|likely to)\b|임박|앞두고",
+    r"awaits?|looms?|counting the votes|to decide|will decide|likely to|"
+    r"(?:announcement|decision) due tomorrow|to be announced tomorrow)\b|임박|앞두고",
     re.I)
 
 
@@ -110,6 +111,8 @@ def _tokens(text: str | None) -> set:
     }
     for full, short in aliases.items():
         text = text.replace(full, short)
+    # BI는 2글자라 일반 토큰 필터에서 사라진다. 금리 예고와 결정의 공통 주체로 보존한다.
+    text = re.sub(r"\bbank indonesia\b|\bbi\b", "bankindonesia", text)
     forms = {"rates": "rate", "raises": "raise", "raised": "raise", "raising": "raise",
              "hikes": "hike", "hiked": "hike", "cuts": "cut", "cutting": "cut"}
     return {forms.get(w, w) for w in re.findall(r"[a-z0-9]+", text)
@@ -177,7 +180,10 @@ def superseded_ids(items, threshold: float = _SUPERSEDE_MIN_OVERLAP) -> set:
 
 
 def is_preview(*titles: str | None) -> bool:
-    return any(t and _PREVIEW_RE.search(t) for t in titles)
+    # 한국어 번역의 '임박'이 이미 발표된 사실을 다룬 영문 기준 제목을 덮어쓰지 않게 한다.
+    canonical = [t for t in titles if t and not re.search(r"[가-힣]", t)
+                 and re.search(r"[A-Za-z]{3,}", t)]
+    return any(t and _PREVIEW_RE.search(t) for t in (canonical or titles))
 
 
 def expired_preview_ids(items, as_of: str, max_age_days: int = 1) -> set:
@@ -557,6 +563,44 @@ def run_dedup(conn, provider: LLMProvider | None = None,
     if dry_run:
         out["groups"] = collected
     return out
+
+
+def refresh_representatives(conn, days: int = 7, apply: bool = False) -> dict:
+    """최근 기존 AI 그룹의 멤버십은 유지하고 대표만 공통 기준으로 다시 고른다(LLM 호출 없음)."""
+    dc, params = db.days_clause_data(days, alias="c")
+    roots = conn.execute(
+        f"""SELECT DISTINCT r.article_id FROM articles_raw c
+            JOIN articles_raw r ON r.article_id=c.duplicate_of
+            WHERE c.dup_by_ai=1 AND r.duplicate_of IS NULL{dc}""", params).fetchall()
+    stats = {"groups": len(roots), "rep_changed": 0, "apply": bool(apply)}
+    cols = db.table_columns(conn)
+    title_en = "a.title_en" if "title_en" in cols else "NULL"
+    for root in roots:
+        rid = int(root[0])
+        rows = conn.execute(
+            f"""SELECT a.article_id, a.ai_score, a.published_at, a.title, a.title_ko,
+                       {title_en} AS title_en, m.primary_country_code AS media_cc,
+                       {db.effective_country_expr()} AS cc
+                FROM articles_raw a JOIN media_sources m ON m.source_id=a.source_id
+                WHERE a.article_id=? OR (a.duplicate_of=? AND a.dup_by_ai=1)""", (rid, rid)).fetchall()
+        meta = {r["article_id"]: {"score": r["ai_score"], "pub": r["published_at"],
+                "media_cc": r["media_cc"], "titles": [r["title_en"] or r["title"]],
+                "cc": r["cc"]} for r in rows}
+        if rid not in meta:
+            continue
+        rep = pick_rep(list(meta), meta, meta[rid]["cc"])
+        if rep == rid:
+            continue
+        stats["rep_changed"] += 1
+        if not apply:
+            continue
+        with conn:
+            conn.execute("UPDATE articles_raw SET duplicate_of=NULL, dup_by_ai=0 WHERE article_id=?", (rep,))
+            conn.executemany("UPDATE articles_raw SET duplicate_of=?, dup_by_ai=1 WHERE article_id=?",
+                             [(rep, aid) for aid in meta if aid != rep])
+            conn.executemany("UPDATE articles_raw SET duplicate_of=? WHERE duplicate_of=? AND dup_by_ai=0",
+                             [(rep, aid) for aid in meta if aid != rep])
+    return stats
 
 
 def repair_existing(conn, threshold: float | None = None, apply: bool = False,

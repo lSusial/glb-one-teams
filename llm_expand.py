@@ -132,8 +132,10 @@ def ensure_columns(conn) -> None:
 
 def run_expand(conn, provider: LLMProvider | None = None,
                 limit: int | None = None, use_batch: bool | None = None,
-                redo_days: int | None = None) -> dict:
-    """노출 기사(ACTIVE: ai_score>=임계, 중복 아님)에만 모달용 긴 요약을 생성.
+                redo_days: int | None = None,
+                article_ids: list[int] | set[int] | None = None) -> dict:
+    """모달용 긴 요약 생성. article_ids 지정 시 실제 노출 카드(사회·관심 포함)만 처리한다.
+    미지정 호출은 기존 ACTIVE(ai_score>=임계, 중복 아님) 증분 처리를 유지한다.
     기본은 증분 — expanded_summary IS NULL 인 것만 대상(이미 있으면 스킵).
     전일+당일 기사를 먼저 처리하고, 남은 한도로 오래된 기사를 채운다.
 
@@ -144,6 +146,15 @@ def run_expand(conn, provider: LLMProvider | None = None,
     ensure_columns(conn)
     provider = provider or get_provider("fast", use_batch=use_batch)   # 저비용(Haiku)
     limit = limit or 200
+    # 명시된 ID는 export에서 실제 선택한 카드다. 사회·관심 기사 등 55점 미만도 포함한다.
+    if article_ids is None:
+        eligible, eligible_params = "a.ai_score >= ? AND a.duplicate_of IS NULL", [config.AI_SCORE_ACTIVE_THRESHOLD]
+    else:
+        ids = sorted({int(aid) for aid in article_ids})
+        if not ids:
+            return dict(total=0, written=0, synthesized=0)
+        eligible = "a.article_id IN (" + ",".join("?" for _ in ids) + ")"
+        eligible_params = ids
 
     if redo_days:
         # 재생성 모드: 창 안의 기사는 요약 유무와 무관하게 대상
@@ -157,14 +168,14 @@ def run_expand(conn, provider: LLMProvider | None = None,
         f"""SELECT a.article_id, a.title, a.summary, a.full_text, a.link, a.published_at,
                    m.primary_country_code AS cc, m.media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
-            WHERE a.ai_score >= ? AND a.duplicate_of IS NULL
+            WHERE {eligible}
               {have_clause}{date_clause}
             ORDER BY CASE WHEN substr(a.published_at,1,10) >= date(
                 (SELECT MAX(substr(published_at,1,10)) FROM articles_raw), '-1 day')
                 THEN 0 ELSE 1 END,
                 a.ai_score DESC, a.published_at DESC, a.article_id ASC
             LIMIT ?""",
-        (config.AI_SCORE_ACTIVE_THRESHOLD, *date_params, limit),
+        (*eligible_params, *date_params, limit),
     ).fetchall()
 
     stats = dict(total=len(rows), written=0, synthesized=0)
