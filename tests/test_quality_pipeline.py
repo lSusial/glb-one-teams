@@ -1257,6 +1257,7 @@ class QualityTests(unittest.TestCase):
         self.assertEqual([r['t_en'] for r in rl], ['Main story', 'Sibling story', 'Member story'])
         modal = (Path(__file__).parents[1] / 'web' / 'shared-modal.js').read_text(encoding='utf-8')
         self.assertIn('r.t_en', modal)
+        self.assertIn('t_en: a.t_en', modal)   # rl 없는 모니터링 카드의 원문 1건 폴백도 영어 제목
 
     def test_related_link_rejects_same_topic_but_different_event(self):
         rep = {'title': 'Minutes: BOJ discussed faster rate hikes at July meeting',

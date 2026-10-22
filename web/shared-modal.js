@@ -77,7 +77,7 @@
     const summary = EN ? (a.expanded_summary_en || a.expanded_summary || a.q_en || a.q)
                         : (a.expanded_summary || a.expanded_summary_en || a.q || a.q_en);
     const relRaw = (a.rl && a.rl.length) ? a.rl : ((a.source_links && a.source_links.length) ? a.source_links : null);
-    const rel = relRaw || (a.u ? [{ t: a.t, u: a.u, src: a.src }] : []);
+    const rel = relRaw || (a.u ? [{ t: a.t, t_en: a.t_en, u: a.u, src: a.src }] : []);
     const links = rel.map(r => `<a class="sh-lk" href="${esc(r.u)}" target="_blank" rel="noopener">
         ${r.src ? `<div class="sh-lks">${esc(r.src)}</div>` : ''}<div class="sh-lkt">${esc((EN && r.t_en) || r.t || r.title || r.u)}</div></a>`).join('');
     const catBadges = a.c ? tagBadges(a.c) + tagBadges(a.c2, true)
