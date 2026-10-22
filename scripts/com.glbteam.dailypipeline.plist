@@ -16,7 +16,7 @@
     <array>
         <string>/usr/bin/caffeinate</string>
         <string>-s</string>
-        <string>__REPO_DIR__/scripts/daily_pipeline.sh</string>
+        <string>__LAUNCHER__</string>
     </array>
 
     <key>WorkingDirectory</key>
