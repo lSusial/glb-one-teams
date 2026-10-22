@@ -309,6 +309,14 @@ class PreDeployValidationTests(unittest.TestCase):
         self.assertTrue(self.audit._title_sums_summary('Musk endorses $3.5 trillion SpaceX-Tesla merger', q))
         self.assertFalse(self.audit._title_sums_summary('Musk endorses $35 trillion SpaceX-Tesla merger', q))
 
+    def test_title_amount_copied_from_source_headline_is_not_mismatch(self):
+        # 2026-10-23 배포 차단: 원문 제목 'The Philippines and the $100 Oil Shock'의 $100을 영어 제목이
+        # 그대로 옮겼는데 요약엔 $95.74·$130만 있어 (q_en, t_en) 불일치로 판정
+        raw = 'The Philippines and the $100 Oil Shock: Can ASEAN Build a Common Economic Shield? - Mindanao Times'
+        self.assertTrue(self.audit._title_amount_from_source('Philippines Eyes ASEAN Shield as $100 Oil Shock Looms', raw))
+        self.assertFalse(self.audit._title_amount_from_source('Philippines Eyes ASEAN Shield as $1,000 Oil Shock Looms', raw))
+        self.assertFalse(self.audit._title_amount_from_source('Indonesia posts $9.1 trillion loss', 'Indonesia rugi Rp 9,1 triliun'))
+
     def test_strict_blocks_wrong_facts_but_only_warns_heuristics(self):
         import contextlib
         import io

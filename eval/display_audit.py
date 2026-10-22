@@ -119,6 +119,18 @@ def _title_sums_summary(t_en: str, q_en: str) -> bool:
          if not any(abs(v - s) <= abs(s) * 0.02 for s in q)]
     return bool(t) and all(any(abs(v - s) <= s * 0.02 for s in sums) for v in t)
 
+def _title_amount_from_source(t_en: str, raw_title: str) -> bool:
+    """영문 제목 금액이 전부 원문 제목에 같은 통화로 있으면 True — 'The Philippines and the $100 Oil Shock'처럼
+    원문 헤드라인의 금액을 옮긴 것은 번역 오류가 아니다(2026-10-23 배포 차단 오탐). (q_en, t_en) 비교에서만 쓴다."""
+    def amounts(text):
+        return {"USD": numeric_guard.usd_values(text), "INR": numeric_guard.inr_values(text),
+                **numeric_guard.fx_values(text)}
+    raw, title = amounts(raw_title or ""), amounts(t_en or "")
+    title = {code: vals for code, vals in title.items() if vals}
+    return bool(title) and all(
+        raw.get(code) and all(any(abs(v - r) <= max(1, abs(r)) * 0.02 for r in raw[code]) for v in vals)
+        for code, vals in title.items())
+
 def category_mismatch(card) -> str | None:
     """지정학(geopolitics) 주·보조 분류인데 영문 본문에 지정학 신호가 하나도 없으면 사유 문자열.
     실측(9/23~10/8 카드 43건 중 10건 표시): 은행 파산·소비자 부채·제인스트리트 소송·KB 협동조합 등.
@@ -380,7 +392,9 @@ def main() -> int:
         for en, ko in (("t_en", "t"), ("q_en", "q"), ("expanded_summary_en", "expanded_summary"),
                        ("q_en", "t_en")):
             if en == "q_en" and ko == "t_en" and (_ROUNDING_RE.search(a.get("t_en") or "")
-                                                   or _title_sums_summary(a.get("t_en") or "", a.get("q_en") or "")):
+                                                   or _title_sums_summary(a.get("t_en") or "", a.get("q_en") or "")
+                                                   or _title_amount_from_source(a.get("t_en") or "",
+                                                                                (db_row(a.get("u")) or {"title": ""})["title"])):
                 continue
             if a.get(en) and a.get(ko) and numeric_guard.amount_mismatch(a[en], a[ko]):
                 add("AMOUNT_MISMATCH", f"{w} {ko}: {short(a)} · {a.get('u', '')[:70]}")
