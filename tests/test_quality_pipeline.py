@@ -1791,5 +1791,20 @@ class CountryMentionTests(unittest.TestCase):
         self.assertFalse(export_json._on_country_tab(hormuz, 'SG'))
 
 
+class IndicatorLabelEnglishTests(unittest.TestCase):
+    def test_every_korean_indicator_label_has_english_on_each_page(self):
+        # 2026-10-22: 영어 화면 markets 탭에 'Policy Rate · BOE 기준금리'처럼 한국어 지표명 노출
+        labels = [r['label'] for r in config.POLICY_RATES.values()]
+        labels += [r['label'] for r in config.BOND10Y_MAP.values()]
+        labels += [i['label'] for v in config.INDICATOR_MAP.values() for i in v['indices']]
+        korean = [l for l in labels if re.search('[가-힣]', l)]
+        for page in ('markets.html', 'countries.html', 'brief.html'):
+            html = (Path(__file__).parents[1] / 'web' / page).read_text(encoding='utf-8')
+            with self.subTest(page):
+                self.assertIn('indLabel(ind.label)' if page != 'brief.html' else 'indLabel(m.label)', html)
+                for l in korean:
+                    self.assertIn(f"'{l}':", html)
+
+
 if __name__ == '__main__':
     unittest.main()
