@@ -470,7 +470,7 @@
     const primary = rel[0] || null;
     const links = [], seen = new Set();
     for (const a of rel) {
-      const candidates = (a.rl && a.rl.length) ? a.rl : [{t:a.t, u:a.u, src:a.src}];
+      const candidates = (a.rl && a.rl.length) ? a.rl : [{t:a.t, t_en:a.t_en, u:a.u, src:a.src}];
       for (const x of candidates) if (x.u && !seen.has(x.u)) { seen.add(x.u); links.push(x); }
     }
     openArticleModal({
@@ -480,7 +480,7 @@
       expanded_summary_en: primary ? (primary.expanded_summary_en||'') : '',
       q: primary ? (primary.q||'') : '',
       q_en: primary ? (primary.q_en||primary.q||'') : '',
-      rl: links.map(r => ({t:r.t, u:r.u, src:r.src})),
+      rl: links.map(r => ({t:r.t, t_en:r.t_en, u:r.u, src:r.src})),
     });
   };
   function renderIssues(){

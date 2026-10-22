@@ -79,7 +79,7 @@
     const relRaw = (a.rl && a.rl.length) ? a.rl : ((a.source_links && a.source_links.length) ? a.source_links : null);
     const rel = relRaw || (a.u ? [{ t: a.t, u: a.u, src: a.src }] : []);
     const links = rel.map(r => `<a class="sh-lk" href="${esc(r.u)}" target="_blank" rel="noopener">
-        ${r.src ? `<div class="sh-lks">${esc(r.src)}</div>` : ''}<div class="sh-lkt">${esc(r.t || r.title || r.u)}</div></a>`).join('');
+        ${r.src ? `<div class="sh-lks">${esc(r.src)}</div>` : ''}<div class="sh-lkt">${esc((EN && r.t_en) || r.t || r.title || r.u)}</div></a>`).join('');
     const catBadges = a.c ? tagBadges(a.c) + tagBadges(a.c2, true)
       : (a.category ? `<span class="sh-cat" style="background:${TAG_COLOR[a.category] || '#7a746c'}">${esc(a.category)}</span>` : '');
     const meta = [a.src, a.d].filter(Boolean).map(esc).join(' · ');

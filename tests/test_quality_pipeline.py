@@ -1246,6 +1246,18 @@ class QualityTests(unittest.TestCase):
         rl = export_json._related_links(a, None, sibs, [])
         self.assertEqual([r['u'] for r in rl], ['https://x/0', 'https://x/1', 'https://x/2', 'https://x/3'])
 
+    def test_related_links_carry_english_titles_for_english_view(self):
+        # 2026-10-22: 영어 화면 모달의 관련 기사 링크가 한국어 제목(t)으로만 노출
+        a = {'title_ko': '본 기사', 'title_en': 'Main story', 'title': 'raw', 'link': 'https://x/0', 'media_name': 'M0'}
+        sibs = [{'t': '형제 기사', 't_en': 'Sibling story', 'u': 'https://x/1', 'src': 'M1'}]
+        member = {'title_ko': '멤버 기사', 'title_en': 'Member story', 'title': 'raw m',
+                  'link': 'https://x/2', 'media_name': 'M2'}
+        with patch.object(export_json, '_same_story_for_link', return_value=True):
+            rl = export_json._related_links(a, None, sibs, [member])
+        self.assertEqual([r['t_en'] for r in rl], ['Main story', 'Sibling story', 'Member story'])
+        modal = (Path(__file__).parents[1] / 'web' / 'shared-modal.js').read_text(encoding='utf-8')
+        self.assertIn('r.t_en', modal)
+
     def test_related_link_rejects_same_topic_but_different_event(self):
         rep = {'title': 'Minutes: BOJ discussed faster rate hikes at July meeting',
                'title_en': 'BOJ July minutes reveal board discussion of faster rate-hike pace',
@@ -1669,6 +1681,15 @@ class OtherCurrencyGuardTests(unittest.TestCase):
         import llm_translate
         user = llm_translate._user('Businesses seek loans from a Tk20,000 crore fund.', 'Tk20,000cr fund')
         self.assertIn('2,000억 타카', user)
+
+    def test_vnd_quadrillion_market_cap_is_checked_and_hinted_as_gyeong(self):
+        # 2026-10-22 VN 브리핑: '10.3 quadrillion VND' 시가총액이 '10조 동'으로 1,000배 축소 —
+        # quadrillion·경 단위와 숫자 뒤 VND 표기를 몰라 검증을 통과했다
+        src = 'market capitalisation stood at 10.3 quadrillion VND (about 398.2 billion USD)'
+        self.assertTrue(numeric_guard.amount_mismatch(src, '시가총액은 10조 동(약 3,982억 달러)'))
+        self.assertFalse(numeric_guard.amount_mismatch(src, '시가총액은 1경 300조 동(약 3,982억 달러)'))
+        self.assertIn('1경 300조 동', numeric_guard.korean_amount_hints(src))
+        self.assertTrue(numeric_guard.amount_mismatch('a 10 trillion VND requirement', '1조 동 요건'))
 
     def test_korean_dong_word_is_not_an_amount(self):
         self.assertFalse(numeric_guard.amount_mismatch('VND 50 trillion', '금리를 3.5%로 동결했다'))

@@ -591,7 +591,7 @@ def _story_links_map(conn) -> dict[int, list[dict]]:
             continue
         disp = r["title_ko"] or r["title"]
         out.setdefault(int(r["rep"]), []).append(
-            {"t": (disp or "")[:100], "u": r["link"], "src": r["src"]})
+            {"t": (disp or "")[:100], "t_en": _t_en(r)[:100], "u": r["link"], "src": r["src"]})
     return out
 
 
@@ -604,13 +604,13 @@ def _related_links(a, synth_links, siblings, members, conn=None) -> list[dict]:
     링크 제목이 원문 영문 헤드라인이라 AI가 다듬은 카드 제목과 달라 보였음)."""
     keys = a.keys()
     self_title = (a["title_ko"] if "title_ko" in keys else None) or a["title"]
-    rl = [{"t": self_title[:100], "u": a["link"], "src": a["media_name"]}]
+    rl = [{"t": self_title[:100], "t_en": _t_en(a)[:100], "u": a["link"], "src": a["media_name"]}]
     seen = {a["link"]}
 
-    def add(t, u, src):
+    def add(t, u, src, t_en=None):
         if u and u not in seen:
             seen.add(u)
-            rl.append({"t": (t or "")[:100], "u": u, "src": src})
+            rl.append({"t": (t or "")[:100], "t_en": (t_en or t or "")[:100], "u": u, "src": src})
 
     for x in (synth_links or []):
         if not conn or not x.get("u"):
@@ -620,13 +620,13 @@ def _related_links(a, synth_links, siblings, members, conn=None) -> list[dict]:
             continue
         add(x.get("t"), x.get("u"), x.get("src"))
     for x in siblings:
-        add(x["t"], x["u"], x["src"])
+        add(x["t"], x["u"], x["src"], x.get("t_en"))
     for m in members:
         if not _same_story_for_link(a, m):
             continue
         m_keys = m.keys()
         m_title = (m["title_ko"] if "title_ko" in m_keys else None) or m["title"]
-        add(m_title, m["link"], m["media_name"])
+        add(m_title, m["link"], m["media_name"], _t_en(m))
     return rl[:_RL_MAX]
 
 

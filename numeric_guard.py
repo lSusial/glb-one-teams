@@ -10,16 +10,16 @@ from __future__ import annotations
 import re
 
 _UNITS = {"": 1, "m": 1e6, "million": 1e6, "bn": 1e9, "bil": 1e9, "bln": 1e9,
-          "billion": 1e9, "trillion": 1e12}
-_KO_UNITS = {"조": 1e12, "억": 1e8, "천만": 1e7, "백만": 1e6, "만": 1e4}
+          "billion": 1e9, "trillion": 1e12, "quadrillion": 1e15}
+_KO_UNITS = {"경": 1e16, "조": 1e12, "억": 1e8, "천만": 1e7, "백만": 1e6, "만": 1e4}
 # 숫자는 반드시 숫자로 시작·끝나야 한다("US$, " 같은 문장부호만 잡혀 float 변환이 터지는 것 방지).
 # 뒤 lookahead는 되추적으로 숫자 일부만 잡는 것을 막는다("$186.5억"이 186으로 읽히던 문제).
 _NUM = r"\d+(?:[,.]\d+)*(?![,.]?\d)"
-_KO_PART = rf"({_NUM})\s*(조|억|천만|백만|만)"
+_KO_PART = rf"({_NUM})\s*(경|조|억|천만|백만|만)"
 # 규모어 뒤 꼬리 숫자까지 한 금액으로("1만 8,051루피아" = 18,051 — 2026-10-20 ID 환율 번역 오탐)
 _KO_AMOUNT = rf"((?:{_KO_PART}\s*)+)({_NUM})?\s*"
 # 규모어 바로 뒤 꼬리 숫자는 단독 금액이 아니다(위 _KO_AMOUNT가 이미 셈)
-_NOT_KO_TAIL = r"(?<![\d,.조억만])(?<![조억만]\s)"
+_NOT_KO_TAIL = r"(?<![\d,.경조억만])(?<![경조억만]\s)"
 # 영문 범위의 앞 숫자에 뒤 단위·통화기호를 붙인다("US$8 to 8.5 billion" → "US$8 billion to
 # US$8.5 billion", "RM100-120 billion"). 안 그러면 앞 숫자가 8달러·100링깃으로 읽혀 정상 번역을
 # 거부한다(2026-10-20 ID BI 개입·말레이 MBSB 기사).
@@ -118,7 +118,7 @@ _FX = {
     "CNY": (r"\bRMB|\bCNY", r"yuan|renminbi", r"위안"),
     "JPY": (r"¥|\bJPY", r"yen", r"엔(?!화)"),
     "IDR": (r"\bRp\.?|\bIDR", r"rupiah", r"루피아"),
-    "VND": (r"\bVND", r"dong", r"동(?![가-힣])"),
+    "VND": (r"\bVND", r"dong|VND", r"동(?![가-힣])"),
     "THB": (r"฿|\bTHB", r"baht", r"바트"),
     "GBP": (r"£|\bGBP", r"pounds?(?: sterling)?", r"파운드"),
     "EUR": (r"€|\bEUR", r"euros?", r"유로"),
@@ -127,7 +127,7 @@ _FX = {
     "BDT": (r"৳|\bBDT|\bTk\.?", r"taka", r"타카"),
 }
 # 방글라데시 타카도 인도처럼 crore·lakh로 쓴다(Tk 20,000 crore = 2,000억 타카).
-_EN_UNIT_RE = r"(lakh crore|trillion|billion|million|crore|lakh|bln|bil|bn|mn|tn|cr|b|m)"
+_EN_UNIT_RE = r"(lakh crore|quadrillion|trillion|billion|million|crore|lakh|bln|bil|bn|mn|tn|cr|b|m)"
 _EN_UNITS = {**_UNITS, "mn": 1e6, "tn": 1e12, "b": 1e9,
              "crore": 1e7, "cr": 1e7, "lakh": 1e5, "lakh crore": 1e12}
 
@@ -190,6 +190,9 @@ _KO_CURRENCY = {"USD": "달러", "INR": "루피", "HKD": "홍콩달러", "SGD": 
 
 def _ko_amount(v: float) -> str:
     """금액을 한국어 표기로(2e11 → '2,000억', 1.6601e12 → '1조 6,601억', 4.05e8 → '4.05억')."""
+    if v >= 1e16:
+        gyeong, rest = int(v // 1e16), round((v % 1e16) / 1e12)
+        return f"{gyeong}경" + (f" {rest:,}조" if rest else "")
     if v >= 1e12:
         jo, rest = int(v // 1e12), round((v % 1e12) / 1e8)
         return f"{jo}조" + (f" {rest:,}억" if rest else "")
