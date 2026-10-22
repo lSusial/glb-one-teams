@@ -169,6 +169,13 @@ _SCRIPT_RETRY_NOTE = (
     "고유명사는 한글 표기 또는 영문 그대로 쓴다."
 )
 
+# 영어 브리핑에 한국어 금액 힌트가 '(100억 파운드)'로 섞이는 경우(2026-10-22 GB) 재요청 판정·지시
+_HANGUL_RE = re.compile(r"[가-힣]")
+_EN_HANGUL_RETRY_NOTE = (
+    "\n\n[재요청] 직전 응답의 영어 브리핑에 한글이 섞여 폐기됐다. 영어 필드에는 한글을 쓰지 말고 "
+    "금액도 기사 목록의 영어 표기만 쓴다."
+)
+
 _AMOUNT_RETRY_NOTE = (
     "\n\n[재요청] 직전 응답의 금액이 기사 목록과 달라 폐기됐다. 금액은 기사 목록에 적힌 숫자·단위·통화를 "
     "그대로 옮겨 쓰고 직접 단위를 환산하지 마라. 한국어 브리핑에서도 금액은 영어 표기 그대로 쓴다"
@@ -303,6 +310,8 @@ def run_briefing(
                     reason, note = "금액 불일치", _AMOUNT_RETRY_NOTE
                 elif _FOREIGN_SCRIPT_RE.search(summary):
                     reason, note = "한국어에 한자·가나", _SCRIPT_RETRY_NOTE
+                elif _HANGUL_RE.search(" ".join((summary_en, issues_en, outlook_en, key_stat_en))):
+                    reason, note = "영어에 한글", _EN_HANGUL_RETRY_NOTE
                 else:
                     reason = None
                 if reason:

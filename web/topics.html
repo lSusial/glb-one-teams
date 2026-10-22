@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<title>KB Global One Team — 모니터링</title>
+<title data-en="KB Global One Team — Monitoring">KB Global One Team — 모니터링</title>
 <meta name="description" content="KB 글로벌 원팀 뉴스 — 규제·거래투자·사건사고 이벤트, 한국계 금융기관, 인사동향 모니터링"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -41,7 +41,7 @@
     </div>
     <div class="hd-tools">
       <div id="datenav" class="datesel"></div>
-      <div class="langtoggle" role="group" aria-label="언어 선택">
+      <div class="langtoggle" role="group" aria-label="언어 선택" data-en-label="Language">
         <button type="button" data-lang="ko" aria-pressed="true">KR</button>
         <button type="button" data-lang="en" aria-pressed="false">EN</button>
       </div>
@@ -198,6 +198,7 @@
     b.addEventListener('click', () => { P.set('lang', b.dataset.lang); location.search = P.toString(); });
   });
   if (EN) document.querySelectorAll('[data-en]').forEach(el => { el.textContent = el.getAttribute('data-en'); });
+  if (EN) document.querySelectorAll('[data-en-label]').forEach(el => el.setAttribute('aria-label', el.getAttribute('data-en-label')));
 
   // 날짜/언어 보존한 채 다른 탭·하단 내비로 이동. 각 링크 고유 쿼리(예: ?tab=non)는
   // 유지하고 그 위에 현재 ?date/?lang만 덧붙인다.

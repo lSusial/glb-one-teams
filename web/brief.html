@@ -46,7 +46,7 @@
     </div>
     <div class="hd-tools">
       <div id="datenav" class="datesel"></div>
-      <div class="langtoggle" role="group" aria-label="언어 선택">
+      <div class="langtoggle" role="group" aria-label="언어 선택" data-en-label="Language">
         <button type="button" data-lang="ko" aria-pressed="true">KR</button>
         <button type="button" data-lang="en" aria-pressed="false">EN</button>
       </div>
@@ -92,7 +92,7 @@
   </div>
 
   <!-- ── 하단 브랜드 배너 ── -->
-  <a class="gbn" id="gbn" href="intro.html" aria-label="KB 글로벌 네트워크 보기">
+  <a class="gbn" id="gbn" href="intro.html" aria-label="KB 글로벌 네트워크 보기" data-en-label="View KB global network">
     <svg class="gbn-art" viewBox="0 0 400 110" preserveAspectRatio="xMidYMid slice" aria-hidden="true"></svg>
     <span class="gbn-in">
       <span class="gbn-l">
@@ -586,6 +586,7 @@
     b.addEventListener('click', () => { P.set('lang', b.dataset.lang); location.search = P.toString(); });
   });
   if (EN) document.querySelectorAll('[data-en]').forEach(el => { el.textContent = el.getAttribute('data-en'); });
+  if (EN) document.querySelectorAll('[data-en-label]').forEach(el => el.setAttribute('aria-label', el.getAttribute('data-en-label')));
 
   // ?date/?lang 보존하며 하단 내비 이동
   const carry = new URLSearchParams(location.search); carry.delete('tab');

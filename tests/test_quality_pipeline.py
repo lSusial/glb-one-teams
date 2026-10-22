@@ -1042,6 +1042,35 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(self.db.execute('SELECT summary FROM country_briefings').fetchone()[0],
                          '예금 퍼실리티 금리가 올랐습니다.')
 
+    def test_briefing_english_with_hangul_is_retried(self):
+        # 2026-10-22 GB: 영어 브리핑에 'A £10 billion (100억 파운드) acquisition' — 한국어 금액 힌트 혼입
+        self.add(1, cc='US', score=65)
+        self.db.execute("UPDATE articles_raw SET summary_en='The US announced a $10 billion deal.'")
+        self.db.commit()
+
+        class SeqProvider(Provider):
+            def __init__(self, responses):
+                super().__init__()
+                self.responses = list(responses)
+
+            def complete_json_batch(self, requests):
+                self.requests.extend(requests)
+                resp = self.responses.pop(0)
+                return {r[0]: resp for r in requests}
+
+        p = SeqProvider([
+            {'summary_en': 'A $10 billion (100억 달러) deal.', 'summary_ko': '100억 달러 규모 거래입니다.'},
+            {'summary_en': 'A $10 billion deal.', 'summary_ko': '100억 달러 규모 거래입니다.'},
+        ])
+        briefing.run_briefing(self.db, p, briefing_type='daily', countries=['US'])
+        self.assertEqual(len(p.requests), 2)
+        self.assertIn('영어 브리핑', p.requests[1][2])
+        self.assertEqual(self.db.execute('SELECT summary_en FROM country_briefings').fetchone()[0],
+                         'A $10 billion deal.')
+
+    def test_korean_amount_hint_is_marked_korean_only(self):
+        self.assertIn('영어 문장에는', numeric_guard.korean_amount_hints('a $10 billion deal'))
+
     def test_stale_daily_briefing_is_not_exported(self):
         # 2026-10-07: IN 탭에 10/1자 '준비 중' 브리핑이 6일째 노출
         briefing.ensure_table(self.db)
@@ -1480,6 +1509,28 @@ class NumericGuardTests(unittest.TestCase):
         row = db.execute('SELECT expanded_summary, expanded_summary_en FROM articles_raw').fetchone()
         self.assertIsNone(row['expanded_summary'])
         self.assertEqual(row['expanded_summary_en'], 'The RBI purchased a net $18.65 billion in July.')
+
+    def test_expanded_english_summary_with_hangul_is_not_stored(self):
+        # 2026-10-22: 영어 긴 요약에 '$452 million (4.52억 달러)'처럼 한국어 금액 병기
+        db = sqlite3.connect(':memory:')
+        db.row_factory = sqlite3.Row
+        self.addCleanup(db.close)
+        db.executescript("""
+            CREATE TABLE media_sources(source_id INTEGER PRIMARY KEY, primary_country_code TEXT,
+                media_name TEXT, tier INTEGER);
+            INSERT INTO media_sources VALUES(1,'US','News',1);
+            CREATE TABLE articles_raw(article_id INTEGER PRIMARY KEY, source_id INTEGER, title TEXT,
+                summary TEXT, full_text TEXT, link TEXT, ai_score INTEGER, duplicate_of INTEGER,
+                published_at TEXT);
+            INSERT INTO articles_raw VALUES(1,1,'Deal','A $452 million deal.','','https://x/1',70,NULL,'2026-10-21');
+        """)
+        with patch.object(llm_expand, '_cluster_sources', return_value=[]):
+            llm_expand.run_expand(db, Provider({
+                'expanded_summary_en': 'The deal is roughly $452 million (4.52억 달러).',
+                'expanded_summary_ko': '거래 규모는 약 4.52억 달러다.'}))
+        row = db.execute('SELECT expanded_summary, expanded_summary_en FROM articles_raw').fetchone()
+        self.assertIsNone(row['expanded_summary_en'])
+        self.assertIsNone(row['expanded_summary'])
 
     def test_expanded_korean_summary_is_retranslated_once_with_amount_hints(self):
         # 2026-10-21 라이브: 긴 요약 21건이 crore 10배 오환산으로 매일 같은 기사에서 거부됨

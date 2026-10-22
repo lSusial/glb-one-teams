@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import config
 import db
@@ -207,6 +208,10 @@ def run_expand(conn, provider: LLMProvider | None = None,
         en = str(data.get("expanded_summary_en") or "").strip()[:7000]
         ko = str(data.get("expanded_summary_ko") or "").strip()[:7000]
         if not (en or ko):
+            continue
+        if re.search(r"[가-힣]", en):
+            # 영어 요약에 한국어 금액 힌트가 '(4.52억 달러)'로 섞였다(2026-10-22) — 저장하지 않고 다음 실행에서 재생성
+            log.warning("긴 요약 영어에 한글 — 저장 안 함(article_id=%s)", r["article_id"])
             continue
         if en and ko and numeric_guard.amount_mismatch(en, ko):
             # 한국어 금액 단위 오변환($18.65 billion → "$18.65억") — 영문만 저장, 한국어는 다음 실행에서 재생성

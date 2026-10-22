@@ -25,6 +25,7 @@
   <noscript><div class="nojs"><a href="brief.html" style="color:#F1A33A">KB 글로벌 브리프 열기 ›</a></div></noscript>
   <script>
     var TARGET = 'brief.html' + (location.search || '');
+    var EN = new URLSearchParams(location.search).get('lang') === 'en';
     var done = false;
     function go(){ if (done) return; done = true; location.replace(TARGET); }
     var v = document.getElementById('v');
@@ -35,11 +36,12 @@
     setTimeout(go, 13000);
     // 소리 토글 — 사용자 제스처로 unmute(자동재생 정책 대응)
     var s = document.getElementById('sound');
+    if (EN) { s.textContent = '🔊 Sound on'; document.getElementById('skip').setAttribute('aria-label', 'Skip intro'); document.documentElement.lang = 'en'; }
     s.addEventListener('click', function (e) {
       e.stopPropagation();
       v.muted = !v.muted;
       if (!v.muted) { v.play().catch(function(){}); }
-      s.textContent = v.muted ? '🔊 소리 켜기' : '🔈 소리 끄기';
+      s.textContent = EN ? (v.muted ? '🔊 Sound on' : '🔈 Sound off') : (v.muted ? '🔊 소리 켜기' : '🔈 소리 끄기');
     });
     // 자동재생 시도(무음)
     var pr = v.play && v.play();

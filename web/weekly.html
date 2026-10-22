@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<title>KB Global One Team — 주간 리포트</title>
+<title data-en="KB Global One Team — Weekly Report">KB Global One Team — 주간 리포트</title>
 <meta name="description" content="KB 글로벌 원팀 뉴스 — 국가별 주간"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -40,7 +40,7 @@
     </div>
     <div class="hd-tools">
       <div id="datenav" class="datesel"></div>
-      <div class="langtoggle" role="group" aria-label="언어 선택">
+      <div class="langtoggle" role="group" aria-label="언어 선택" data-en-label="Language">
         <button type="button" data-lang="ko" aria-pressed="true">KR</button>
         <button type="button" data-lang="en" aria-pressed="false">EN</button>
       </div>
@@ -124,6 +124,7 @@
     b.addEventListener('click', () => { P.set('lang', b.dataset.lang); location.search = P.toString(); });
   });
   if (EN) document.querySelectorAll('[data-en]').forEach(el => { el.textContent = el.getAttribute('data-en'); });
+  if (EN) document.querySelectorAll('[data-en-label]').forEach(el => el.setAttribute('aria-label', el.getAttribute('data-en-label')));
 
   document.querySelectorAll('.botnav a').forEach(a => {
     const [path, ownQuery] = a.getAttribute('href').split('?');

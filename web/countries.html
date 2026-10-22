@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
-<title>KB Global One Team — 국가별 뉴스</title>
+<title data-en="KB Global One Team — News">KB Global One Team — 국가별 뉴스</title>
 <meta name="description" content="KB 글로벌 원팀 뉴스 — 진출·미진출국 현지언론"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
@@ -62,7 +62,7 @@
     </div>
     <div class="hd-tools">
       <div id="datenav" class="datesel"></div>
-      <div class="langtoggle" role="group" aria-label="언어 선택">
+      <div class="langtoggle" role="group" aria-label="언어 선택" data-en-label="Language">
         <button type="button" data-lang="ko" aria-pressed="true">KR</button>
         <button type="button" data-lang="en" aria-pressed="false">EN</button>
       </div>
@@ -228,8 +228,11 @@
     '미국 10년물 국채':'US 10Y Treasury',
   };
   const indLabel = (l) => EN ? (IND_LABEL_EN[l] || l) : l;
+  // 지표 note는 indicators.py가 한국어로 저장한다 — 영어 화면용 변환
+  const noteText = (n) => !EN ? n : n.replace(/^기준일 /, 'As of ')
+    .replace('미얀마 중앙은행 공식환율 — 시장환율과 괴리 있음', 'Central Bank of Myanmar official rate — may differ from market rate');
   function bignum(ind){
-    const noteEl = ind.note ? `<span title="${esc(ind.note)}" style="cursor:help;opacity:.6">ⓘ</span>` : '';
+    const noteEl = ind.note ? `<span title="${esc(noteText(ind.note))}" style="cursor:help;opacity:.6">ⓘ</span>` : '';
     if (ind.kind === 'policy_rate' || ind.kind === 'bond10y') {
       const sub = ind.kind === 'bond10y' ? ' bn-sub' : '';
       let cls='flat', txt=EN?'No change':'변동 없음';
@@ -381,6 +384,7 @@
     b.addEventListener('click', () => { P.set('lang', b.dataset.lang); location.search = P.toString(); });
   });
   if (EN) document.querySelectorAll('[data-en]').forEach(el => { el.textContent = el.getAttribute('data-en'); });
+  if (EN) document.querySelectorAll('[data-en-label]').forEach(el => el.setAttribute('aria-label', el.getAttribute('data-en-label')));
 
   // ?date/?lang 보존한 채 하단 내비 이동(자체 쿼리 있는 링크는 그 값 유지)
   const carry = new URLSearchParams(location.search); carry.delete('tab');
