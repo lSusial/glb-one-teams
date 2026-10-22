@@ -328,11 +328,13 @@ def main() -> int:
         "SELECT 1 FROM sqlite_master WHERE type='table' AND name='media_sources'").fetchone()
     if has_media_join:
         media_select = (", mc.primary_country_code c_media_cc, mr.primary_country_code r_media_cc, "
+                        "mc.tier c_tier, mr.tier r_tier, "
                         f"{db.effective_country_expr(article_alias='r', media_alias='mr')} AS subject")
         media_join = ("JOIN media_sources mc ON mc.source_id = c.source_id "
                       "JOIN media_sources mr ON mr.source_id = r.source_id")
     else:
-        media_select, media_join = ", NULL c_media_cc, NULL r_media_cc, NULL subject", ""
+        media_select, media_join = (", NULL c_media_cc, NULL r_media_cc, NULL c_tier, NULL r_tier, "
+                                    "NULL subject"), ""
     for r in conn.execute(
             f"""SELECT c.article_id cid, COALESCE(c.title_en,c.title) ct,
                       c.published_at cp, c.ai_score cs,
@@ -345,13 +347,15 @@ def main() -> int:
                  AND r.published_at >= date(?, '-6 day')""",
             (today.isoformat(),)):
         meta = {
-            r["cid"]: {"score": r["cs"], "pub": r["cp"], "titles": [r["ct"]], "media_cc": r["c_media_cc"]},
-            r["rid"]: {"score": r["rs"], "pub": r["rp"], "titles": [r["rt"]], "media_cc": r["r_media_cc"]},
+            r["cid"]: {"score": r["cs"], "pub": r["cp"], "titles": [r["ct"]], "media_cc": r["c_media_cc"],
+                       "tier": r["c_tier"]},
+            r["rid"]: {"score": r["rs"], "pub": r["rp"], "titles": [r["rt"]], "media_cc": r["r_media_cc"],
+                       "tier": r["r_tier"]},
         }
         if L.pick_rep([r["rid"], r["cid"]], meta, r["subject"]) == r["cid"]:
             add("HIDDEN_NEWER_REP",
-                f"대표 {r['rp'][:10]} {rep_score}점 '{(r['rt'] or '')[:38]}' 밑에 "
-                f"자식 {r['cp'][:10]} {child_score}점 '{(r['ct'] or '')[:38]}'")
+                f"대표 {r['rp'][:10]} {r['rs']}점 '{(r['rt'] or '')[:38]}' 밑에 "
+                f"자식 {r['cp'][:10]} {r['cs']}점 '{(r['ct'] or '')[:38]}'")
 
     # 10 THIN_TABS
     counts = {}

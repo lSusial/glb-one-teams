@@ -344,6 +344,42 @@ class PreDeployValidationTests(unittest.TestCase):
             self.assertIn('배포 차단 항목: AMOUNT_MISMATCH', out)
 
 
+    def test_hidden_newer_rep_uses_outlet_tier_and_reports_scores(self):
+        # 2026-10-22: 대표 선정에 tier를 넣자 감사가 같은 기준을 쓰지 않아 오탐 + 메시지 변수 NameError로 중단
+        import contextlib
+        import io
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            db_path = tmp / 'audit.db'
+            con = sqlite3.connect(db_path)
+            con.executescript(
+                'CREATE TABLE media_sources(source_id INTEGER, primary_country_code TEXT, tier INTEGER);'
+                "INSERT INTO media_sources VALUES(1,'JP',1),(2,'GLOBAL',2);"
+                'CREATE TABLE articles_raw(article_id INTEGER, source_id INTEGER, link TEXT, primary_country TEXT, '
+                'summary_en TEXT, title TEXT, title_en TEXT, published_at TEXT, ai_score INTEGER, '
+                'duplicate_of INTEGER, dup_by_ai INTEGER, source_conflict TEXT);')
+            rows = [(1, 1, 'Japan posts trade deficit', 57, None, 0),   # 대표: Kyodo tier 1
+                    (2, 2, 'Japan trade deficit widens', 62, 1, 1),     # 자식: Investing.com tier 2
+                    (3, 1, 'BOJ holds rates', 60, None, 0),             # 대표: 같은 tier, 낮은 점수
+                    (4, 1, 'BOJ keeps rates unchanged', 70, 3, 1)]      # 자식이 대표가 돼야 함
+            for aid, src, title, score, dup, ai in rows:
+                con.execute('INSERT INTO articles_raw VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+                            (aid, src, f'https://x/{aid}', 'JP', title, title, title, '2026-10-21',
+                             score, dup, ai, None))
+            con.commit()
+            con.close()
+            (tmp / 'countries.json').write_text(json.dumps(
+                {'snapshot_date': '2026-10-22', 'countries': []}), encoding='utf-8')
+            out = io.StringIO()
+            argv = ['display_audit.py', '--export-dir', str(tmp), '--db', str(db_path)]
+            with patch.object(sys, 'argv', argv), contextlib.redirect_stdout(out):
+                self.audit.main()
+            out = out.getvalue()
+            self.assertRegex(out, r'✖ HIDDEN_NEWER_REP\s+1건')
+            self.assertIn("대표 2026-10-21 60점 'BOJ holds rates'", out)
+            self.assertNotIn('Japan posts trade deficit', out)
+
 class StoryRepresentativeRegressionTests(unittest.TestCase):
     """같은 사건 여러 매체 보도 → 국가탭·홈 상단 대표 1건, 결과가 나온 예고 기사 숨김(실제 배포본).
     10/7 RBI '인상 추진'(예고)과 '25bp 인상'(결과) 동시 노출, 10/8 인도 탭 RBI 인상 3건(모두 77점),
@@ -847,6 +883,32 @@ class QualityTests(unittest.TestCase):
         self.assertEqual(row[0], 1)
         self.assertEqual(json.loads(row[1]), ['https://example.com/1'])
 
+    def test_daily_briefing_uses_same_articles_as_country_tab(self):
+        # 2026-10-22: 브리핑은 25건을 따로 골라 탭 카드와 어긋났다(US 브리핑 SpaceX ↔ 탭 연준 1건).
+        # 탭과 같은 근접중복 축소를 거쳐 같은 사건 재탕은 한 번만 들어가야 한다.
+        for aid in (1, 2, 3):
+            self.add(aid, cc='US', score=70 - aid)
+        same = 'Federal Reserve raises interest rates by a quarter point as inflation stays elevated'
+        self.db.execute("UPDATE articles_raw SET title=?, summary_en=? WHERE article_id IN (1,2)", (same, same))
+        self.db.execute("UPDATE articles_raw SET title=?, summary_en=? WHERE article_id=3",
+                        ('Wells Fargo settles US mortgage probe', 'Wells Fargo agreed to pay a fine in America.'))
+        self.db.commit()
+        p = Provider({'summary_ko': '검증된 브리핑입니다.', 'summary_en': 'Verified briefing.'})
+        briefing.run_briefing(self.db, p, briefing_type='daily', countries=['US'])
+        user = p.requests[0][2]
+        self.assertEqual(user.count(same), 2)          # 대표 1건(제목+요약) — 재탕 기사 제외
+        self.assertIn('Wells Fargo', user)
+        self.assertEqual(self.db.execute('SELECT article_count FROM country_briefings').fetchone()[0], 2)
+
+    def test_daily_briefing_prompt_writes_english_first_and_translates_in_formal_korean(self):
+        # 2026-10-22 GB: 한/영을 따로 써 한국어에만 '100억 파운드가 아닌 3조 파운드', 영어의 항만 매각은 누락.
+        # KH·TH는 '~했다'체, 나머지는 '~습니다'체로 섞였다.
+        sys_prompt = briefing._SYSTEM_DAILY
+        self.assertLess(sys_prompt.index('"summary_en"'), sys_prompt.index('"summary_ko"'))
+        self.assertIn('translation', sys_prompt)
+        self.assertIn('습니다', sys_prompt)
+        self.assertIn('Hangul only', sys_prompt)
+
     def test_briefing_rejects_summary_with_mismatched_amount(self):
         self.add(1, cc='US', score=65)
         self.db.execute("UPDATE articles_raw SET summary_ko=?, summary_en=? WHERE article_id=1",
@@ -905,7 +967,7 @@ class QualityTests(unittest.TestCase):
         # 2026-10-22 US 브리핑: 한국어에만 '3조 5,000억 달러'가 있어 화면 감사(한↔영)에서 배포 차단
         self.add(1, cc='US', score=65)
         self.db.execute("UPDATE articles_raw SET summary_en=? WHERE article_id=1",
-                        ('A $3.5 trillion merger: SpaceX above $2 trillion, Tesla $1.5 trillion.',))
+                        ('A $3.5 trillion US merger: SpaceX above $2 trillion, Tesla $1.5 trillion.',))
         self.db.commit()
 
         class SeqProvider(Provider):
@@ -925,6 +987,60 @@ class QualityTests(unittest.TestCase):
         briefing.run_briefing(self.db, p, briefing_type='daily', countries=['US'])
         self.assertEqual(len(p.requests), 2)
         self.assertEqual(self.db.execute('SELECT summary FROM country_briefings').fetchone()[0], '스페이스X 2조 달러')
+
+    def test_briefing_retry_keeps_source_amount_notation_in_korean(self):
+        # 2026-10-22 IN: '₹30,213 crore'를 '3조 302억'·'300억 2,130만 루피'로 두 번 틀려 저장 실패.
+        # 재요청은 한국어에도 원문 표기를 그대로 쓰게 하고, 그 결과는 금액 검증을 통과해야 한다.
+        self.add(1, cc='IN', score=65)
+        self.db.execute("UPDATE articles_raw SET summary_en=? WHERE article_id=1",
+                        ("Jio opens India's largest ₹30,213 crore IPO.",))
+        self.db.execute("UPDATE media_sources SET primary_country_code='IN' WHERE source_id=1")
+        self.db.commit()
+
+        class SeqProvider(Provider):
+            def __init__(self, responses):
+                super().__init__()
+                self.responses = list(responses)
+
+            def complete_json_batch(self, requests):
+                self.requests.extend(requests)
+                resp = self.responses.pop(0)
+                return {r[0]: resp for r in requests}
+
+        p = SeqProvider([
+            {'summary_en': 'Jio opened a ₹30,213 crore IPO.', 'summary_ko': '지오가 3조 302억 루피 IPO를 열었습니다.'},
+            {'summary_en': 'Jio opened a ₹30,213 crore IPO.', 'summary_ko': '지오가 ₹30,213 crore 규모 IPO를 열었습니다.'},
+        ])
+        briefing.run_briefing(self.db, p, briefing_type='daily', countries=['IN'])
+        self.assertIn('억/조', p.requests[1][2])        # 재요청: 억·조 환산 금지, 원문 표기 유지
+        self.assertEqual(self.db.execute('SELECT summary FROM country_briefings').fetchone()[0],
+                         '지오가 ₹30,213 crore 규모 IPO를 열었습니다.')
+
+    def test_briefing_korean_with_chinese_or_kana_is_retried(self):
+        # 2026-10-22: 한국어 번역에 '证监会'·'전略'·'ファ실리티'가 섞여 나왔다
+        self.add(1, cc='US', score=65)
+        self.db.execute("UPDATE articles_raw SET summary_en='The US Fed raised its deposit facility rate.'")
+        self.db.commit()
+
+        class SeqProvider(Provider):
+            def __init__(self, responses):
+                super().__init__()
+                self.responses = list(responses)
+
+            def complete_json_batch(self, requests):
+                self.requests.extend(requests)
+                resp = self.responses.pop(0)
+                return {r[0]: resp for r in requests}
+
+        p = SeqProvider([
+            {'summary_en': 'The deposit facility rate rose.', 'summary_ko': '예금 ファ실리티 금리가 올랐습니다.'},
+            {'summary_en': 'The deposit facility rate rose.', 'summary_ko': '예금 퍼실리티 금리가 올랐습니다.'},
+        ])
+        briefing.run_briefing(self.db, p, briefing_type='daily', countries=['US'])
+        self.assertEqual(len(p.requests), 2)
+        self.assertIn('한자', p.requests[1][2])
+        self.assertEqual(self.db.execute('SELECT summary FROM country_briefings').fetchone()[0],
+                         '예금 퍼실리티 금리가 올랐습니다.')
 
     def test_stale_daily_briefing_is_not_exported(self):
         # 2026-10-07: IN 탭에 10/1자 '준비 중' 브리핑이 6일째 노출
@@ -1638,6 +1754,19 @@ class CountryMentionTests(unittest.TestCase):
         self.assertTrue(kb_network.mentions_country('SG', "Singapore's MAS issues AI risk guidelines"))
         self.assertTrue(kb_network.mentions_country('US', 'HUD probes Wells Fargo over lending under Trump'))
         self.assertTrue(kb_network.mentions_country('MY', 'anything'))   # 앵커 없는 국가는 판단 안 함
+
+    def test_country_tab_keeps_ai_routed_article_without_country_name(self):
+        # 2026-10-22 US 탭: Times of India(IN 매체)의 'SpaceX·Tesla 합병'(70점, AI 주제국가 US)이
+        # 미국 국명 언급이 없다는 이유로 빠져 US 탭에 연준 기사 1건만 남았다
+        spacex = {'cc': 'IN', 'primary_country': 'US', 'title': 'SpaceX, Tesla boards weigh merger',
+                  'title_en': 'Musk endorses $3.5 trillion SpaceX-Tesla merger', 'summary_en': 'Elon Musk said...'}
+        self.assertTrue(export_json._on_country_tab(spacex, 'US'))
+        # 매체 국적 폴백(주제국가 = 매체 국가)인데 국명이 없으면 여전히 뺀다(SG 매체 호르무즈 기사)
+        hormuz = {'cc': 'SG', 'primary_country': 'SG', 'title': 'Hormuz tanker attacks hit weekly record',
+                  'title_en': None, 'summary_en': 'Tanker attacks rose.'}
+        self.assertFalse(export_json._on_country_tab(hormuz, 'SG'))
+        hormuz['primary_country'] = None
+        self.assertFalse(export_json._on_country_tab(hormuz, 'SG'))
 
 
 if __name__ == '__main__':

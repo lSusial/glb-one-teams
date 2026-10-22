@@ -207,12 +207,28 @@ def expired_preview_ids(items, as_of: str, max_age_days: int = 1) -> set:
     return gone
 
 
+_REP_TIER_GAP = 10   # 대표 선정에서 출처 tier가 점수를 이길 수 있는 최대 점수 차
+
+
 def pick_rep(group, meta, subject: str | None = None) -> int:
-    """대표 = 예고/프리뷰 아님 → ai_score 최고 → (동점이면) 현지언론 → 게시 최신 → id 작은 것.
-    meta[aid] = {"score", "pub", "titles", "media_cc"}. 시간순 사건에서 결정 기사가 대표가 되게 하고,
-    주제국가 라우팅을 쓰므로 현지언론 우선은 같은 점수일 때만 적용한다."""
+    """대표 = 예고/프리뷰 아님 → (최고점과 _REP_TIER_GAP 이내·노출 임계 이상이면) 출처 tier → ai_score 최고
+    → (동점이면) 현지언론 → 게시 최신 → id 작은 것.
+    meta[aid] = {"score", "pub", "titles", "media_cc", "tier"(선택)}. 시간순 사건에서 결정 기사가 대표가 되게 하고,
+    주제국가 라우팅을 쓰므로 현지언론 우선은 같은 점수일 때만 적용한다.
+    tier: 같은 사건이면 직접 수집 매체(CNBC·Kyodo)가 Google News 경유 집계 사이트(Investing.com·IndexBox)보다
+    대표가 된다(2026-10-22 JP·CN·IN 탭). 점수 차가 크거나 임계 미만이면 카드가 밀리거나 사라지므로 적용하지 않는다."""
+    best = max((meta[aid]["score"] or 0) for aid in group)
+
+    def tier_rank(aid):
+        score = meta[aid]["score"] or 0
+        if score < best - _REP_TIER_GAP or score < config.AI_SCORE_ACTIVE_THRESHOLD:
+            return -99
+        tier = meta[aid].get("tier")
+        return -(tier if tier is not None else 9)
+
     return max(group, key=lambda aid: (
         not is_preview(*meta[aid]["titles"]),
+        tier_rank(aid),
         meta[aid]["score"] or 0,
         bool(subject) and meta[aid].get("media_cc") == subject,
         meta[aid]["pub"] or "",
@@ -446,7 +462,7 @@ def run_dedup(conn, provider: LLMProvider | None = None,
                {title_en_sql} AS title_en,
                a.summary_en AS s_en, a.ai_score, a.published_at,
                a.duplicate_of,
-               m.primary_country_code AS media_cc,
+               m.primary_country_code AS media_cc, m.tier,
                {db.effective_country_expr()} AS cc
         FROM articles_raw a
         JOIN media_sources m ON m.source_id = a.source_id
@@ -471,7 +487,7 @@ def run_dedup(conn, provider: LLMProvider | None = None,
             continue
         meta = {a["article_id"]: {
             "score": a["ai_score"] or 0, "pub": a["published_at"] or "",
-            "titles": [a["t"], a["title_en"]], "media_cc": a["media_cc"],
+            "titles": [a["t"], a["title_en"]], "media_cc": a["media_cc"], "tier": a["tier"],
             "display_title": a["title_en"] or a["t"] or a["raw_title"] or "",
             "old_rep": a["duplicate_of"],
             # 기존 오병합 그룹은 같은 요약이 복제될 수 있다. 그 요약을 다시 후보·가드에
@@ -579,12 +595,12 @@ def refresh_representatives(conn, days: int = 7, apply: bool = False) -> dict:
         rid = int(root[0])
         rows = conn.execute(
             f"""SELECT a.article_id, a.ai_score, a.published_at, a.title, a.title_ko,
-                       {title_en} AS title_en, m.primary_country_code AS media_cc,
+                       {title_en} AS title_en, m.primary_country_code AS media_cc, m.tier,
                        {db.effective_country_expr()} AS cc
                 FROM articles_raw a JOIN media_sources m ON m.source_id=a.source_id
                 WHERE a.article_id=? OR (a.duplicate_of=? AND a.dup_by_ai=1)""", (rid, rid)).fetchall()
         meta = {r["article_id"]: {"score": r["ai_score"], "pub": r["published_at"],
-                "media_cc": r["media_cc"], "titles": [r["title_en"] or r["title"]],
+                "media_cc": r["media_cc"], "tier": r["tier"], "titles": [r["title_en"] or r["title"]],
                 "cc": r["cc"]} for r in rows}
         if rid not in meta:
             continue
@@ -652,7 +668,7 @@ def repair_existing(conn, threshold: float | None = None, apply: bool = False,
         for a in conn.execute(
                 f"SELECT a.article_id, a.title, a.title_ko, {title_en_sql} AS title_en, "
                 f"a.ai_score, a.published_at, "
-                f"m.primary_country_code AS media_cc, "
+                f"m.primary_country_code AS media_cc, m.tier, "
                 f"{db.effective_country_expr()} AS cc "
                 f"FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id "
                 f"WHERE a.article_id IN ({q})", chunk):
@@ -660,7 +676,7 @@ def repair_existing(conn, threshold: float | None = None, apply: bool = False,
             display_title = a["title_en"] or a["title"] or ""
             meta[aid] = {"score": a["ai_score"] or 0, "pub": a["published_at"] or "",
                          "titles": [a["title_ko"], a["title_en"]], "media_cc": a["media_cc"],
-                         "cc": a["cc"],
+                         "tier": a["tier"], "cc": a["cc"],
                          "title_tok": _tokens(display_title), "tok": _tokens(display_title)}
             titles[aid] = (a["title"] or "")[:90]
 

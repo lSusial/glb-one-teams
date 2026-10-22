@@ -77,6 +77,16 @@ class DedupGuardTests(unittest.TestCase):
         m = {1: self.meta(score=72, media_cc='GLOBAL'), 2: self.meta(score=28, media_cc='US')}
         self.assertEqual(L.pick_rep([1, 2], m, 'US'), 1)
 
+    def test_pick_rep_prefers_higher_tier_outlet_within_score_gap(self):
+        # 2026-10-22 JP 탭 무역적자 대표가 Investing.com(GN, tier 2·62점) — CNBC(tier 1·57점)가 같은 묶음에 있었다
+        m = {1: self.meta(score=62, tier=2), 2: self.meta(score=57, tier=1)}
+        self.assertEqual(L.pick_rep([1, 2], m), 2)
+
+    def test_pick_rep_tier_does_not_override_large_gap_or_hidden_score(self):
+        # 점수 차가 크거나(83 vs 60) 노출 임계 미만(67 vs 47)이면 점수 우선 유지 — 카드가 사라지거나 밀리지 않게
+        self.assertEqual(L.pick_rep([1, 2], {1: self.meta(score=83, tier=2), 2: self.meta(score=60, tier=1)}), 1)
+        self.assertEqual(L.pick_rep([1, 2], {1: self.meta(score=67, tier=2), 2: self.meta(score=47, tier=1)}), 1)
+
     def test_pick_rep_old_tiebreak_keeps_lower_id(self):
         m = {1: self.meta(), 2: self.meta()}
         self.assertEqual(L.pick_rep([1, 2], m), 1)

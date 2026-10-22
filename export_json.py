@@ -879,6 +879,30 @@ def visible_article_ids(conn) -> set[int]:
     return ids
 
 
+def _on_country_tab(r, cc: str) -> bool:
+    """이 나라를 한 번도 언급하지 않는 기사는 탭에서 뺀다(주제국가 미지정 → 매체 국적 폴백 오분류).
+    AI가 매체 국가와 다른 주제국가로 보낸 기사는 그대로 둔다 — Times of India의 'SpaceX·Tesla 합병'(AI 주제국가 US)이
+    미국 국명이 없어 US 탭에서 빠졌다(2026-10-22)."""
+    keys = r.keys()
+    pc = ((r["primary_country"] if "primary_country" in keys else None) or "").upper()
+    if pc == cc and pc != (r["cc"] or "").upper():
+        return True
+    title_en = r["title_en"] if "title_en" in keys else None
+    return kb_network.mentions_country(cc, f"{r['title']} {title_en or ''} {r['summary_en'] or ''}")
+
+
+def country_tab_order(conn, rows, cm):
+    """국가 탭 카드 순서: rank_score 정렬 → 예고 정리 → 근접중복 축소 → 지수 등락 최신 1건.
+    국가 일일 브리핑도 같은 순서로 기사를 골라 탭 카드와 브리핑 내용이 어긋나지 않게 한다
+    (2026-10-22 US 브리핑은 SpaceX, 탭 카드는 연준 1건). 반환은 _dedup_country_feed와 같다."""
+    ordered = ranking.order(conn, rows, cluster_map=cm)   # 표시 정렬 = 복합 rank_score
+    # 연기·취소·결과 기사가 있으면 그 전 예고성 기사를 내린다(파업 '개시'와 '연기'가 같이 뜨던 문제)
+    ordered = _drop_superseded(conn, ordered)
+    # 근접중복 스토리 축소(같은 사건 여러 각도 → 대표 1건). UPI·Fed 류 홍수 방지.
+    ordered, dedup_n, story_mem = _dedup_country_feed(ordered, cm)
+    return _keep_latest_index_move(ordered), dedup_n, story_mem
+
+
 def export_countries(conn, active_only: bool = True, days: int = 1, write: bool = True) -> dict:
     _ensure_ai_columns(conn)
     dc, dparams = _date_clause(days)   # 현지언론 = 전일+당일 (max-1일 이후)
@@ -918,7 +942,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1, write: bool 
             SELECT a.article_id, a.title, a.title_ko, a.title_en, m.language, a.summary_ko, a.summary_en,
                    a.expanded_summary, a.expanded_summary_en, a.event_type, a.personnel_move, m.tier,
                    a.topics, a.link, a.published_at, a.ai_score, a.source_links, a.korean_fi,
-                   {db.publisher_expr()} AS media_name,
+                   {db.publisher_expr()} AS media_name, a.primary_country,
                    m.primary_country_code cc
             FROM articles_raw a
             JOIN media_sources m ON m.source_id = a.source_id
@@ -929,18 +953,11 @@ def export_countries(conn, active_only: bool = True, days: int = 1, write: bool 
             """,
             (cc, *params_tail, *dparams),
         ).fetchall()
-        # 이 나라를 한 번도 언급하지 않는 기사는 탭에서 뺀다(주제국가 미지정 → 매체 국적 폴백 오분류)
-        rows = [r for r in rows if kb_network.mentions_country(
-            cc, f"{r['title']} {r['title_en'] or ''} {r['summary_en'] or ''}")]
+        rows = [r for r in rows if _on_country_tab(r, cc)]
         dedup_n = {}
         story_mem = {}
         if active_only:
-            ordered = ranking.order(conn, rows, cluster_map=cm)   # 표시 정렬 = 복합 rank_score
-            # 연기·취소·결과 기사가 있으면 그 전 예고성 기사를 내린다(파업 '개시'와 '연기'가 같이 뜨던 문제)
-            ordered = _drop_superseded(conn, ordered)
-            # 근접중복 스토리 축소(같은 사건 여러 각도 → 대표 1건). UPI·Fed 류 홍수 방지.
-            ordered, dedup_n, story_mem = _dedup_country_feed(ordered, cm)
-            ordered = _keep_latest_index_move(ordered)
+            ordered, dedup_n, story_mem = country_tab_order(conn, rows, cm)
             rows = ordered[:config.COUNTRY_MAX_ARTICLES]        # 국가당 노출 상한
             # 상한에서 밀린 사회기사 몇 건 되살림(위 where로 이미 후보에 포함됨).
             have = {a["article_id"] for a in rows}

@@ -11,12 +11,14 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import date, timedelta
 
 import config
 import db
 import kb_network
 import numeric_guard
+import export_json
 import ranking
 from llm_provider import LLMProvider, get_provider
 
@@ -68,9 +70,13 @@ _SYSTEM_DAILY = (
     "Given one country's news items from the last day or two, write a concise briefing "
     "for branch executives — what happened and why it matters to KB's overseas operations "
     "(macro / financial markets / banking / regulation / risk). "
-    "Write 4-5 sentences, in BOTH Korean and English. Base it strictly on the provided items; "
-    "no speculation. If evidence is sparse, write fewer sentences; do not pad. Output ONLY JSON:\n"
-    '{"summary_ko": "4~5문장 한국어 브리핑", "summary_en": "4-5 sentence English briefing"}'
+    "Write at most 5 sentences. Base it strictly on the provided items; "
+    "no speculation. If evidence is sparse, write fewer sentences; do not pad. "
+    "Write the English briefing first. The Korean briefing must be a faithful translation of the "
+    "English one — same facts, figures and order, nothing added or dropped — in formal Korean "
+    "(합쇼체: every sentence ends in '~습니다'), written in Hangul only — no Chinese characters or "
+    "Japanese kana (write 증권감독관리위원회, not 证监会). Output ONLY JSON:\n"
+    '{"summary_en": "4-5 sentence English briefing", "summary_ko": "영어 브리핑의 한국어 번역(~습니다체)"}'
 )
 
 # 오늘의 글로벌 핵심 — 전 거점 횡단 종합(하루 1회 1콜). 겹치는 주제는 하나로 묶는다.
@@ -156,9 +162,17 @@ def _last_completed_week(today: date | None = None) -> tuple[str, str]:
     return week_start.isoformat(), week_end.isoformat()
 
 
+# 한국어 번역에 한자·가나가 섞이는 경우(2026-10-22 CN '证监会'·GB '전略'·ID 'ファ실리티') 재요청 판정·지시
+_FOREIGN_SCRIPT_RE = re.compile(r"[\u3040-\u30ff\u4e00-\u9fff]")
+_SCRIPT_RETRY_NOTE = (
+    "\n\n[재요청] 직전 응답의 한국어 브리핑에 한자·일본어 가나가 섞여 폐기됐다. 한국어 브리핑은 한글로만 쓰고 "
+    "고유명사는 한글 표기 또는 영문 그대로 쓴다."
+)
+
 _AMOUNT_RETRY_NOTE = (
     "\n\n[재요청] 직전 응답의 금액이 기사 목록과 달라 폐기됐다. 금액은 기사 목록에 적힌 숫자·단위·통화를 "
-    "그대로 옮겨 쓰고 직접 단위를 환산하지 마라(crore·billion 등을 억·조로 바꾸며 자릿수를 틀리지 않게)."
+    "그대로 옮겨 쓰고 직접 단위를 환산하지 마라. 한국어 브리핑에서도 금액은 영어 표기 그대로 쓴다"
+    "(예: '₹30,213 crore', '$3.5 trillion' — 억/조 환산 금지, 괄호 병기도 금지). 위의 '금액 한국어 표기' 줄은 무시한다."
 )
 
 
@@ -204,23 +218,30 @@ def run_briefing(
     stats = dict(countries=0, written=0)
     requests, meta, bullets_by_cc = [], {}, {}
     cm = ranking.cluster_sizes(conn)
+    title_en_sql = "a.title_en" if "title_en" in db.table_columns(conn) else "NULL"
     for cc in ccs:
+        # cc = 매체 국가(국가 탭과 같은 rank_score·국가 언급 판정용). 대상 국가는 WHERE의 주제국가 식으로 고른다.
         arts = conn.execute(
             f"""
-            SELECT a.article_id, a.title, a.summary_ko, a.summary_en, a.ai_score, a.link,
-                   a.published_at, a.event_type, a.korean_fi, a.personnel_move, m.tier,
-                   {db.effective_country_expr()} AS cc
+            SELECT a.article_id, a.title, a.title_ko, {title_en_sql} AS title_en, a.summary_ko, a.summary_en,
+                   a.ai_score, a.link, a.published_at, a.event_type, a.korean_fi, a.personnel_move, m.tier,
+                   a.primary_country, m.primary_country_code AS cc
             FROM articles_raw a
             JOIN media_sources m ON m.source_id = a.source_id
             WHERE {db.effective_country_expr()} = ?
               AND a.ai_score >= ?
               AND COALESCE(NULLIF(a.summary_ko, ''), a.summary_en, '') != ''
-              AND a.duplicate_of IS NULL{dc}
+              AND a.duplicate_of IS NULL{dc}{export_json._ARCHIVE_LINK_EXCL if daily else ''}
             ORDER BY a.published_at DESC, a.article_id ASC
             """,
             (cc, config.AI_SCORE_ACTIVE_THRESHOLD, *dp),
         ).fetchall()
-        arts = ranking.order(conn, arts, cluster_map=cm)[:config.BRIEFING_MAX_ARTICLES]
+        if daily:
+            # 국가 탭 카드와 같은 기사·순서로 쓴다(2026-10-22 US 브리핑은 SpaceX, 탭 카드는 연준 1건)
+            arts = [a for a in arts if export_json._on_country_tab(a, cc)]
+            arts = export_json.country_tab_order(conn, arts, cm)[0][:config.COUNTRY_MAX_ARTICLES]
+        else:
+            arts = ranking.order(conn, arts, cluster_map=cm)[:config.BRIEFING_MAX_ARTICLES]
         stats["countries"] += 1
         meta[cc] = arts
         if not arts:
@@ -238,7 +259,8 @@ def run_briefing(
             user += f"\n{hint}"
         # weekly는 한/영 요약+이슈 3~4개+전망+키워드까지 daily보다 필드가 훨씬 많아
         # 900으로는 잘려서 JSON 파싱이 깨진다(생성 도중 max_tokens 도달) — 여유를 둔다.
-        requests.append((cc, system, user, 900 if daily else 2200))
+        # daily 900은 영어 선작성+번역으로 길어진 응답이 잘려 JSON이 깨졌다(2026-10-22 CN) — 여유를 둔다.
+        requests.append((cc, system, user, 1600 if daily else 2200))
 
     results = provider.complete_json_batch(requests) if requests else {}
 
@@ -278,13 +300,19 @@ def run_briefing(
                 # 원문 대조 + 한↔영 대조(화면 감사가 두 언어를 서로 비교 — 2026-10-22 US 브리핑 한국어에만 금액)
                 if (numeric_guard.amount_mismatch(bullets_by_cc.get(cc, ""), generated)
                         or numeric_guard.amount_mismatch(summary_en, summary)):
+                    reason, note = "금액 불일치", _AMOUNT_RETRY_NOTE
+                elif _FOREIGN_SCRIPT_RE.search(summary):
+                    reason, note = "한국어에 한자·가나", _SCRIPT_RETRY_NOTE
+                else:
+                    reason = None
+                if reason:
                     if attempt == 1:
-                        log.warning("브리핑 금액 불일치 — 재요청(국가=%s, %s): %s",
-                                    cc, briefing_type, summary[:80])
-                        retry.append(cc)
+                        log.warning("브리핑 %s — 재요청(국가=%s, %s): %s",
+                                    reason, cc, briefing_type, summary[:80])
+                        retry.append((cc, note))
                         continue
-                    log.warning("브리핑 금액 불일치 — 저장 안 함(국가=%s, %s): %s",
-                                cc, briefing_type, summary[:80])
+                    log.warning("브리핑 %s — 저장 안 함(국가=%s, %s): %s",
+                                reason, cc, briefing_type, summary[:80])
                     continue
 
             cur.execute(
@@ -325,9 +353,9 @@ def run_briefing(
         if attempt == 2 or not retry:
             break
         again = provider.complete_json_batch([
-            (cc, system, req_by_cc[cc][2] + _AMOUNT_RETRY_NOTE, req_by_cc[cc][3]) for cc in retry
+            (cc, system, req_by_cc[cc][2] + note, req_by_cc[cc][3]) for cc, note in retry
         ])
-        pending = [(cc, again.get(cc) or {}) for cc in retry]
+        pending = [(cc, again.get(cc) or {}) for cc, _ in retry]
     conn.commit()
 
     log.info(

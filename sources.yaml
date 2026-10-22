@@ -1203,7 +1203,7 @@ sources:
   - media_name: 제재 모니터
     country: GLOBAL
     language: en
-    tier: 1
+    tier: 2   # 발행사가 제각각인 Google News 검색 피드 — 다른 GN 피드와 같은 2(2026-10-22 BigGo가 tier 1로 대표 선정)
     categories: [GLOBAL_GENERAL]
     feeds:
       - section: sanctions-global
