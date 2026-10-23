@@ -87,7 +87,9 @@ def _system_highlights(count: int) -> str:
         f"news across ALL KB overseas hubs, synthesize EXACTLY {count} headline items a KB bank "
         "executive must read today — merge overlapping stories into a single item where relevant, "
         f"and pick the {count} most important distinct developments overall (not one per hub; "
-        "spread across as many different hubs/topics as the material genuinely supports). "
+        "spread across as many different hubs/topics as the material genuinely supports; "
+        "include cross-hub global risks such as oil shocks, global market sell-offs or critical "
+        "cyber incidents when they are material). "
         "Base strictly on the provided items; no speculation. Output ONLY JSON:\n"
         '{"highlights": [{'
         '"category": "금리|FX|규제|시장|디지털|지정학|인사 중 하나. '
@@ -458,6 +460,63 @@ def _validate_highlight_sources(items: list, rows, limit: int) -> list[dict]:
     return out
 
 
+def _cap_pool(rows, limit: int, per_country: int) -> list:
+    """rank 순 후보에서 국가(주제국가, GLOBAL 포함)당 per_country건까지만 담아 limit건 후보풀을 만든다."""
+    out, used = [], {}
+    for r in rows:
+        cc = r["subject_cc"] or r["cc"]
+        if used.get(cc, 0) >= per_country:
+            continue
+        used[cc] = used.get(cc, 0) + 1
+        out.append(r)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def _select_highlights(items: list, count: int, per_country: int,
+                       min_global: int, max_global: int) -> list:
+    """LLM 중요도 순 항목에서 국가당 상한·GLOBAL 최소/최대 슬롯을 지켜 count건을 고른다.
+
+    상한 때문에 count에 못 미치면 남은 항목을 순서대로 채운다(빈 슬롯보다 쏠림이 낫다).
+    """
+    def is_global(it):
+        return it["country_codes"] == ["GLOBAL"]
+
+    def cap_of(code):
+        return max_global if code == "GLOBAL" else per_country
+
+    chosen, used = [], {}
+    for it in items:
+        if len(chosen) >= count:
+            break
+        codes = it["country_codes"]
+        if any(used.get(c, 0) >= cap_of(c) for c in codes):
+            continue
+        chosen.append(it)
+        for c in codes:
+            used[c] = used.get(c, 0) + 1
+
+    spare = [it for it in items if is_global(it) and it not in chosen]
+    need = min(min_global, max_global) - sum(map(is_global, chosen))
+    while need > 0 and spare:
+        if len(chosen) < count:
+            chosen.append(spare.pop(0))
+        else:
+            idx = next((i for i in range(len(chosen) - 1, -1, -1) if not is_global(chosen[i])), None)
+            if idx is None:
+                break
+            chosen[idx] = spare.pop(0)
+        need -= 1
+
+    for it in items:
+        if len(chosen) >= count:
+            break
+        if it not in chosen:
+            chosen.append(it)
+    return chosen
+
+
 def generate_daily_highlights(
     conn,
     provider: LLMProvider | None = None,
@@ -490,7 +549,9 @@ def generate_daily_highlights(
         (config.AI_SCORE_ACTIVE_THRESHOLD, *dp, *exp, config.HIGHLIGHTS_MAX_ARTICLES * 3),
     ).fetchall()
     # LLM에 넘길 후보풀을 복합 rank_score(ranking.py) 순으로 — ai_score 양자화(동점) 보완.
-    rows = ranking.order(conn, rows)[:config.HIGHLIGHTS_MAX_ARTICLES]
+    # 국가당 상한으로 후보풀 쏠림 방지(현지 피드 물량이 많은 IN·ID가 풀을 채우던 문제).
+    rows = _cap_pool(ranking.order(conn, rows), config.HIGHLIGHTS_MAX_ARTICLES,
+                     config.HIGHLIGHTS_POOL_PER_COUNTRY)
 
     if not rows:
         log.info("글로벌 핵심 — 대상 기사 없음, 스킵")
@@ -504,9 +565,12 @@ def generate_daily_highlights(
     user = f"KB 거점 네트워크: {kb_network.all_context()}\n\n오늘의 상위 기사:\n{bullets}"
 
     count = config.HIGHLIGHTS_COUNT
+    asked = count + config.HIGHLIGHTS_EXTRA
     provider = provider or get_provider("smart", use_batch=False)
-    data = provider.complete_json(_system_highlights(count), user, max_tokens=3200)
-    items = _validate_highlight_sources(data.get("highlights") or [], rows, count)
+    data = provider.complete_json(_system_highlights(asked), user, max_tokens=4000)
+    items = _validate_highlight_sources(data.get("highlights") or [], rows, asked)
+    items = _select_highlights(items, count, config.HIGHLIGHTS_PER_COUNTRY,
+                               config.HIGHLIGHTS_MIN_GLOBAL, config.HIGHLIGHTS_MAX_GLOBAL)
 
     if not items:
         log.info("글로벌 핵심 — LLM이 0개 반환, 스킵")

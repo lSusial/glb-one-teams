@@ -113,6 +113,13 @@ HIGHLIGHTS_MAX_ARTICLES = 40
 
 # '오늘의 글로벌 핵심' 출력 항목 수(2026-08-26: 3 → 10, 전체 진출국 커버리지 확대)
 HIGHLIGHTS_COUNT = 10
+# 탑이슈 국가 쏠림 방지(2026-10-23: 10/23 Top10 9건 중 4건이 ID). 후보풀·최종 선택 모두 국가 상한,
+# 국가 하나에 귀속되지 않는 GLOBAL 공통 리스크(유가·AI 매도 등)는 최소 슬롯 보장.
+HIGHLIGHTS_POOL_PER_COUNTRY = 6   # LLM 후보풀(40건)에서 한 국가(GLOBAL 포함)가 차지할 최대 건수
+HIGHLIGHTS_PER_COUNTRY = 2        # 최종 탑이슈에서 한 국가가 차지할 최대 건수
+HIGHLIGHTS_MIN_GLOBAL = 2         # 최종 탑이슈에 GLOBAL 항목 최소 건수(후보가 있을 때)
+HIGHLIGHTS_MAX_GLOBAL = 3         # 최종 탑이슈에 GLOBAL 항목 최대 건수
+HIGHLIGHTS_EXTRA = 5              # 상한 적용 후 탈락분을 채우도록 LLM에 더 요청할 항목 수
 
 # '오늘의 핵심 뉴스'(Global) 다양성 — 한 나라·같은 사건 도배 방지
 TOP_NEWS_PER_COUNTRY = 2      # 핵심 뉴스 블록에서 한 국가 최대 노출 수
