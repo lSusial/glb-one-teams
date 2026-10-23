@@ -70,6 +70,16 @@ LLM_BATCH_MAX_WAIT_SEC = 24 * 3600   # 배치 최대 대기(초, API SLA=24h)
 PREFILTER_LIMIT = 2400       # 한 번 실행에 처리할 최대 기사 수(prefilter) — 10/14 1600→2400(Haiku 5.5 전환으로 비용 여력 생겨 백로그 흡수 확대)
 PREFILTER_SUMMARY_MAXLEN = 900  # prefilter 프롬프트에 넣는 RSS 요약 최대 길이(자) — 10/14 600→900(비용 여력 재투자, llm_prefilter.py에서 사용)
 RANK_LIMIT      = 900        # 한 번 실행에 처리할 최대 기사 수(ranker) — 10/14 700→900(Haiku 5.5 비용 여력으로 상향, 백로그 흡수)
+
+# Ollama 로컬 LLM 엔드포인트 — rag_search.py(synthesize_answer)에서 사용
+OLLAMA_URL = "http://localhost:11434/api/chat"
+
+# RAG 벡터 저장소(rag_embed.py / rag_search.py) — 2026-10-23
+# 점수/판정 완료된 기사(ai_score 또는 llm_prefilter 보유)를 임베딩해 의미검색.
+RAG_EMBED_MODEL  = "bge-m3"          # Ollama 임베딩 모델 (다국어 KR/EN, 1024차원)
+RAG_EMBED_URL    = "http://localhost:11434/api/embed"
+RAG_EMBED_BATCH  = 32                 # 한 번의 /api/embed 호출에 묶어 보낼 기사 수
+RAG_SEARCH_TOPK  = 10                 # 검색 기본 반환 건수
 AI_BACKLOG_MAX_DAYS = 7      # 수집 공백 뒤 미처리 passed/keep를 자동 복구할 최대 과거 일수
 SPARSE_RESCUE_PER_COUNTRY = 2 # 최근 창에서 keep=0인 진출국의 drop 후보를 rank까지 재검토할 수
 SPARSE_RESCUE_MIN_FILTER_SCORE = 5

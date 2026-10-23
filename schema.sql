@@ -199,3 +199,14 @@ CREATE TABLE IF NOT EXISTS broadcast_log (
     error         TEXT,
     UNIQUE (cc, briefing_date, briefing_type, channel)
 );
+
+-- RAG 벡터 저장소 (rag_embed.py) — 점수/판정 완료된 기사를 임베딩해 의미검색 가능하게 함
+CREATE TABLE IF NOT EXISTS article_embeddings (
+    article_id  INTEGER PRIMARY KEY REFERENCES articles_raw(article_id),
+    chunk_text  TEXT NOT NULL,
+    embedding   BLOB NOT NULL,   -- float32 배열 raw bytes (numpy tobytes())
+    dim         INTEGER NOT NULL,
+    model       TEXT NOT NULL,
+    embedded_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_article_embeddings_model ON article_embeddings(model);
