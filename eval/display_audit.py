@@ -195,6 +195,8 @@ def main() -> int:
     ap.add_argument("--stale-days", type=int, default=3)
     ap.add_argument("--json", action="store_true", help="요약 집계를 JSON 한 줄로도 출력")
     ap.add_argument("--strict", action="store_true", help="BLOCKING 항목이 하나라도 있으면 종료코드 1(배포 차단)")
+    ap.add_argument("--hold-out", help="BLOCKING 항목의 대상(기사 링크·브리핑)을 JSON으로 저장 — "
+                                       "deploy_web.sh가 AI 재보정·보류 export에 쓴다")
     args = ap.parse_args()
 
     export_dir = Path(args.export_dir)
@@ -205,9 +207,17 @@ def main() -> int:
     tabs = [(w, cc, a) for f, w, cc, a in cards if f == "countries" and w.startswith("국가탭")]
 
     issues: dict[str, list[str]] = {}
+    # BLOCKING 대상 — links: {url: [[영문 필드, 한글 필드, 영문, 한글], ...]}, briefs: [[cc, 유형]]
+    hold = {"links": {}, "briefs": []}
 
-    def add(key, msg):
+    def add(key, msg, link=None, pair=None, brief=None):
         issues.setdefault(key, []).append(msg)
+        if link:
+            hold["links"].setdefault(link, [])
+            if pair:
+                hold["links"][link].append(pair)
+        if brief and list(brief) not in hold["briefs"]:
+            hold["briefs"].append(list(brief))
 
     @lru_cache(maxsize=None)
     def db_row(link):
@@ -297,7 +307,7 @@ def main() -> int:
     for f, w, cc, a in cards:
         title = a.get("t_en") or a.get("t") or ""
         if JUNK_RE.search(title.strip()) or JUNK_RE.search(a.get("t") or ""):
-            add("JUNK_TITLE", f"[{f}:{w}] {short(a, 80)}")
+            add("JUNK_TITLE", f"[{f}:{w}] {short(a, 80)}", link=a.get("u"))
         summ = a.get("q_en") or a.get("expanded_summary_en") or ""
         tt, st = L._tokens(title), L._tokens(summ)
         if len(tt) >= 3 and len(st) >= 5 and L.overlap(tt, st) < 0.1:
@@ -397,7 +407,8 @@ def main() -> int:
                                                                                 (db_row(a.get("u")) or {"title": ""})["title"])):
                 continue
             if a.get(en) and a.get(ko) and numeric_guard.amount_mismatch(a[en], a[ko]):
-                add("AMOUNT_MISMATCH", f"{w} {ko}: {short(a)} · {a.get('u', '')[:70]}")
+                add("AMOUNT_MISMATCH", f"{w} {ko}: {short(a)} · {a.get('u', '')[:70]}",
+                    link=a.get("u"), pair=[en, ko, a[en], a[ko]])
 
     def load(name):
         try:
@@ -409,7 +420,7 @@ def main() -> int:
         b = c.get("brief") or {}
         if b.get("ko") and b.get("en") and numeric_guard.amount_mismatch(
                 json.dumps(b["en"], ensure_ascii=False), json.dumps(b["ko"], ensure_ascii=False)):
-            add("AMOUNT_MISMATCH", f"국가 브리핑 {c['cc']}")
+            add("AMOUNT_MISMATCH", f"국가 브리핑 {c['cc']}", brief=(c["cc"], "daily"))
 
     # 15 STALE_WEEKLY / 주간 금액
     for c in load("weekly").get("countries", []):
@@ -417,7 +428,8 @@ def main() -> int:
         en = " ".join([c.get(k) or "" for k in ("summary_en", "outlook_en", "key_stat_en")]
                       + list(c.get("issues_en") or []))
         if numeric_guard.amount_mismatch(en, ko):
-            add("AMOUNT_MISMATCH", f"주간 {c['cc']} ({c.get('week_start')}~{c.get('week_end')})")
+            add("AMOUNT_MISMATCH", f"주간 {c['cc']} ({c.get('week_start')}~{c.get('week_end')})",
+                brief=(c["cc"], "weekly"))
         try:
             lag = (today - date.fromisoformat(c["week_end"])).days
         except (KeyError, TypeError, ValueError):
@@ -509,6 +521,9 @@ def main() -> int:
     if args.json:
         print(json.dumps({k: len(issues.get(k, [])) for k in order}, ensure_ascii=False))
     blocked = [k for k in BLOCKING if issues.get(k)]
+    if args.hold_out:
+        hold["messages"] = [f"{k}: {m}" for k in blocked for m in issues[k]]
+        Path(args.hold_out).write_text(json.dumps(hold, ensure_ascii=False, indent=1), encoding="utf-8")
     if blocked:
         print(f"\n배포 차단 항목: {', '.join(blocked)}" + ("" if args.strict else " (--strict 아님 — 보고만)"))
     return 1 if args.strict and blocked else 0

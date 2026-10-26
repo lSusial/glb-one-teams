@@ -11,6 +11,7 @@ import json
 import os
 import ssl
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -47,16 +48,20 @@ def main() -> int:
     url = f"https://api.telegram.org/bot{token}/sendMessage"
     data = json.dumps({"chat_id": chat_id, "text": message}).encode()
     req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"})
-    try:
-        with urllib.request.urlopen(req, timeout=15, context=_SSL_CTX) as resp:
-            resp.read()
-    except urllib.error.HTTPError as e:
-        print(f"Telegram 전송 실패: HTTP {e.code} {e.read().decode(errors='replace')}", file=sys.stderr)
-        return 1
-    except urllib.error.URLError as e:
-        print(f"Telegram 전송 실패: {e}", file=sys.stderr)
-        return 1
-    return 0
+    # 새벽 실행에서 'Connection reset by peer'로 알림이 사흘 연속 유실(2026-10-23~26) — 네트워크 오류는 재시도
+    for attempt in range(1, 4):
+        try:
+            with urllib.request.urlopen(req, timeout=15, context=_SSL_CTX) as resp:
+                resp.read()
+            return 0
+        except urllib.error.HTTPError as e:
+            print(f"Telegram 전송 실패: HTTP {e.code} {e.read().decode(errors='replace')}", file=sys.stderr)
+            return 1
+        except (urllib.error.URLError, OSError) as e:
+            print(f"Telegram 전송 실패({attempt}/3): {e}", file=sys.stderr)
+            if attempt < 3:
+                time.sleep(10 * attempt)
+    return 1
 
 
 if __name__ == "__main__":

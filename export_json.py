@@ -41,6 +41,26 @@ _PRESENCE_NAMES_EN = {"GB": "UK", "US": "US", "HK": "Hong Kong", "CN": "China", 
                        "SG": "Singapore", "IN": "India", "VN": "Vietnam", "MM": "Myanmar",
                        "ID": "Indonesia", "KH": "Cambodia", "TH": "Thailand", "LA": "Laos"}
 
+# 배포 전 감사(display_audit)의 차단 항목을 AI 재보정해도 못 고치면 그 기사·브리핑만 빼고
+# 내보낸다(2026-10-26 — 1~2건 때문에 화면 전체 배포가 사흘 멈춤). 이 연결에서만 같은 이름의
+# TEMP VIEW가 원본 테이블을 가려 모든 export 쿼리에 자동 적용된다(DB는 바뀌지 않음).
+_HOLD_ACTIVE = False
+
+
+def apply_hold(conn, hold: dict) -> None:
+    global _HOLD_ACTIVE
+    conn.execute("CREATE TEMP TABLE IF NOT EXISTS _hold_links(link TEXT PRIMARY KEY)")
+    conn.execute("CREATE TEMP TABLE IF NOT EXISTS _hold_briefs(cc TEXT, briefing_type TEXT)")
+    conn.executemany("INSERT OR IGNORE INTO _hold_links VALUES (?)", [(u,) for u in hold.get("links") or {}])
+    conn.executemany("INSERT INTO _hold_briefs VALUES (?, ?)", [tuple(b) for b in hold.get("briefs") or []])
+    conn.execute("CREATE TEMP VIEW IF NOT EXISTS articles_raw AS SELECT * FROM main.articles_raw "
+                 "WHERE link NOT IN (SELECT link FROM _hold_links)")
+    conn.execute("CREATE TEMP VIEW IF NOT EXISTS country_briefings AS SELECT * FROM main.country_briefings b "
+                 "WHERE NOT EXISTS (SELECT 1 FROM _hold_briefs h "
+                 "WHERE h.cc = b.cc AND h.briefing_type = b.briefing_type)")
+    _HOLD_ACTIVE = True
+
+
 # MMK/KHR — 시장환율이 아닌 별도 체계임을 보드에 짧게 표시.
 _FX_NOTE = {"MMK": "공식", "KHR": "페그"}
 
@@ -306,6 +326,7 @@ def _daily_highlights(conn) -> list:
             "rl": _related_links(r, None, siblings.get(r["article_id"], []), []),
         }
 
+    kept = []
     for item in items:
         source_articles = []
         for value in item.get("source_article_ids") or []:
@@ -316,7 +337,11 @@ def _daily_highlights(conn) -> list:
             if aid in by_id:
                 source_articles.append(card(by_id[aid]))
         item["source_articles"] = source_articles
-    return items
+        # 보류 export: 근거 기사가 보류됐거나 원래 없던 항목은 출처 없는 핵심이 되므로 뺀다
+        if _HOLD_ACTIVE and (not source_articles or len(source_articles) < len(set(item.get("source_article_ids") or []))):
+            continue
+        kept.append(item)
+    return kept
 
 
 def _daily_quiz(conn) -> dict | None:

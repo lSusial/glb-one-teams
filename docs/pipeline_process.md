@@ -260,7 +260,7 @@ export
 
 ### 7.2 표시 감사
 
-`eval/display_audit.py`는 생성된 화면 데이터를 대상으로 빈 요약, 오래된 기사, 국가 불일치, 중복, 무관 관련 링크, 금액 오류, 한국어 누락, Top Issues 근거 무결성, 지난 만료·시행일(PAST_DEADLINE), 분류-본문 불일치(CATEGORY_MISMATCH) 등 21개 항목을 검사한다. strict 차단 범위(BLOCKING)는 Top Issues 출처 무결성·금액 오류(AMOUNT_MISMATCH)·쓰레기 제목(JUNK_TITLE)이고, 나머지는 검토 경고다.
+`eval/display_audit.py`는 생성된 화면 데이터를 대상으로 빈 요약, 오래된 기사, 국가 불일치, 중복, 무관 관련 링크, 금액 오류, 한국어 누락, Top Issues 근거 무결성, 지난 만료·시행일(PAST_DEADLINE), 분류-본문 불일치(CATEGORY_MISMATCH) 등 21개 항목을 검사한다. strict 차단 범위(BLOCKING)는 Top Issues 출처 무결성·금액 오류(AMOUNT_MISMATCH)·쓰레기 제목(JUNK_TITLE)이고, 나머지는 검토 경고다. 차단 항목이 나와도 화면 전체 배포를 멈추지 않는다(2026-10-26): `deploy_web.sh`가 ① 금액 불일치를 정확한 한국어 금액을 지정해 AI로 1회 재보정(`main.py repair-blocked`, 검증 통과분만 저장) → 재export·재감사 ② 그래도 남은 기사·브리핑·근거가 빠진 핵심 항목만 빼고 export(`main.py export --hold`, DB 불변) → 재감사(여기서도 걸리면 중단) 후 배포하고, 보류 내역을 Telegram으로 알린다(`data/logs/hold-*.json`).
 
 ## 8. 재실행과 장애 처리
 

@@ -34,6 +34,7 @@ AI 레이어(별도 — ANTHROPIC_API_KEY 필요, 미설정 시 즉시 안내 �
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import os
 import shutil
@@ -487,9 +488,21 @@ def cmd_ai(args):
     print(f"   written={s5['written']}")
 
 
+def cmd_repair_blocked(args):
+    import amount_repair
+    hold = json.loads(Path(args.hold).read_text(encoding="utf-8"))
+    conn = db.open_conn()
+    for line in amount_repair.repair(conn, hold):
+        print("  " + line)
+
+
 def cmd_export(args):
     import export_json
     conn = db.open_conn()
+    if getattr(args, "hold", None):
+        hold = json.loads(Path(args.hold).read_text(encoding="utf-8"))
+        export_json.apply_hold(conn, hold)
+        print(f"[export] 보류 적용 — 기사 {len(hold.get('links') or {})}건, 브리핑 {len(hold.get('briefs') or [])}건")
     active_only = not getattr(args, "passed", False)
     s = export_json.export_countries(conn, active_only=active_only)
     mode = "ACTIVE(ai_score≥임계)" if active_only else "passed(AI 없음)"
@@ -640,6 +653,9 @@ def main():
     exp = sub.add_parser("export", help="DB → data/export/*.json (UI 데이터)")
     exp.add_argument("--passed", action="store_true",
                      help="AI 점수 없이 필터 통과 기사로 export (Phase 1)")
+    exp.add_argument("--hold", metavar="JSON", help="display_audit --hold-out 결과의 기사·브리핑을 빼고 export")
+    rpb = sub.add_parser("repair-blocked", help="배포 차단 금액 불일치를 AI로 1회 재보정(display_audit --hold-out JSON)")
+    rpb.add_argument("hold", metavar="JSON")
     sub.add_parser("admin",     help="관리자 페이지 데이터 생성 (data/export/admin.html)")
 
     bcast = sub.add_parser("broadcast", help="브리핑 → Telegram 채널 발송")
@@ -669,7 +685,7 @@ def main():
         "expand": cmd_expand, "ai-dedup": cmd_ai_dedup, "dedup-repair": cmd_dedup_repair,
         "translate": cmd_translate, "brief": cmd_brief, "highlights": cmd_highlights, "quiz": cmd_quiz,
         "ai": cmd_ai, "export": cmd_export, "admin": cmd_admin,
-        "broadcast": cmd_broadcast, "eval": cmd_eval,
+        "broadcast": cmd_broadcast, "eval": cmd_eval, "repair-blocked": cmd_repair_blocked,
     }[args.cmd](args)
 
 

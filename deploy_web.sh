@@ -18,8 +18,25 @@ echo ""
 echo "▶ [1a] 뉴스 품질·소스 수율 점검 (critical 시 배포 중단)..."
 .venv/bin/python main.py quality --strict
 echo ""
-echo "▶ [1b] 표시 감사 (출처 무결성·금액 오류·쓰레기 제목 시 배포 중단, 나머지는 경고)..."
-.venv/bin/python eval/display_audit.py --strict
+echo "▶ [1b] 표시 감사 (출처 무결성·금액 오류·쓰레기 제목은 차단 항목, 나머지는 경고)..."
+# 차단 항목이 있으면 화면 전체를 멈추지 않고(2026-10-26 사흘 연속 중단) ① 금액 불일치를 AI로
+# 1회 재보정 → 재감사 ② 그래도 남으면 그 기사·브리핑만 빼고 export → 재감사(여기서도 걸리면 중단).
+HOLD="data/logs/hold-$(date +%Y%m%d-%H%M%S).json"
+if ! .venv/bin/python eval/display_audit.py --strict --hold-out "$HOLD"; then
+    echo ""
+    echo "▶ [1c] 차단 항목 AI 재보정(1회) 후 재감사..."
+    .venv/bin/python main.py repair-blocked "$HOLD"
+    .venv/bin/python main.py export
+    if ! .venv/bin/python eval/display_audit.py --strict --hold-out "$HOLD"; then
+        echo ""
+        echo "▶ [1d] 재보정 못 한 항목 보류(제외) 후 재export·재감사..."
+        .venv/bin/python main.py export --hold "$HOLD"
+        .venv/bin/python eval/display_audit.py --strict
+        .venv/bin/python scripts/tg_notify.py "[glb-one-teams] 배포 보류 항목 — 해당 건만 빼고 배포함
+$(.venv/bin/python -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]))["messages"]))' "$HOLD")
+상세: $HOLD" || true
+    fi
+fi
 echo ""
 
 # ── Oracle Cloud 동기화 임시 비활성화 (SSH 22번 포트 타임아웃, 2026-08-24) ──
