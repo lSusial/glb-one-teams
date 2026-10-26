@@ -127,9 +127,12 @@ _FX = {
     "BDT": (r"৳|\bBDT|\bTk\.?", r"taka", r"타카"),
 }
 # 방글라데시 타카도 인도처럼 crore·lakh로 쓴다(Tk 20,000 crore = 2,000억 타카).
-_EN_UNIT_RE = r"(lakh crore|quadrillion|trillion|billion|million|crore|lakh|bln|bil|bn|mn|tn|cr|b|m)"
+# 인도네시아어 규모어(triliun·miliar·juta) — 미번역 카드는 원제목이 그대로 비교된다(2026-10-26 Kompas)
+_EN_UNIT_RE = (r"(lakh crore|quadrillion|trillion|triliun|billion|miliar|million|juta|crore|lakh"
+               r"|bln|bil|bn|mn|tn|cr|b|m)")
 _EN_UNITS = {**_UNITS, "mn": 1e6, "tn": 1e12, "b": 1e9,
-             "crore": 1e7, "cr": 1e7, "lakh": 1e5, "lakh crore": 1e12}
+             "crore": 1e7, "cr": 1e7, "lakh": 1e5, "lakh crore": 1e12,
+             "triliun": 1e12, "miliar": 1e9, "juta": 1e6}
 
 
 def fx_values(text: str) -> dict[str, list[float]]:
@@ -144,8 +147,12 @@ def fx_values(text: str) -> dict[str, list[float]]:
         for m in re.finditer(rf"({_NUM})\s*-?\s*(?:{_EN_UNIT_RE}[\s-]+)?(?:{post})\b", text, re.I):
             vals.append(_to_float(m.group(1)) * _EN_UNITS[(m.group(2) or "").lower()])
         for m in re.finditer(rf"{_KO_AMOUNT}(?:{ko})", text):
-            if re.search(r"[가-힣]+당\s*(?:약\s*)?$", text[max(0, m.start() - 40):m.start()]):
+            prefix = text[max(0, m.start() - 40):m.start()]
+            if re.search(r"[가-힣]+당\s*(?:약\s*)?$", prefix):
                 continue   # '달러당 약 1.80만 루피아' 같은 환율 시세(2026-10-22 ID 브리핑)
+            # '루피아는 ... 1만 8,000루피아를 넘었고'처럼 통화가 주어인 문장의 작은 값은 환율 시세(2026-10-26 주간 ID)
+            if _ko_total(m) < 1e6 and re.search(rf"(?:{ko})(?:화)?(?:는|은|가|이)\s[^.]*$", prefix):
+                continue
             vals.append(_ko_total(m))
         for m in re.finditer(rf"{_NOT_KO_TAIL}({_NUM})\s*(?:{ko})", text):
             # "엔·달러 환율은 ... 158엔" 같은 환율 시세는 금액이 아니다 — 단위 없는

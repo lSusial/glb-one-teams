@@ -1751,6 +1751,22 @@ class OtherCurrencyGuardTests(unittest.TestCase):
         self.assertIn('1경 300조 동', numeric_guard.korean_amount_hints(src))
         self.assertTrue(numeric_guard.amount_mismatch('a 10 trillion VND requirement', '1조 동 요건'))
 
+    def test_indonesian_scale_words_in_untranslated_title(self):
+        # 2026-10-26 자동 배포 차단: 한국어 미번역 카드의 원제목 'Rp 400 Triliun'이 Rp 400으로 읽혀
+        # 영어 제목 'Rp 400 trillion'과 불일치로 오판
+        self.assertFalse(numeric_guard.amount_mismatch(
+            'targets Rp 400 trillion in people\'s credit', 'Target Kredit Rakyat Rp 400 Triliun pada 2027'))
+        self.assertEqual(numeric_guard.fx_values('Rp 2 miliar dan Rp 300 juta'),
+                         {'IDR': [2e9, 3e8]})
+
+    def test_currency_subject_rate_level_is_not_an_amount(self):
+        # 2026-10-26 주간 ID: '루피아는 ... 일시 1만 8,000루피아를 넘었고'(환율 시세)가 금액으로 읽혀
+        # 영어 '18,000 per US dollar'와 불일치로 배포 차단
+        self.assertFalse(numeric_guard.amount_mismatch(
+            'fines totaling roughly 2.5 trillion rupiah. The rupiah briefly weakened past 18,000 per US dollar',
+            '약 2조 5,000억 루피아 과태료. 루피아는 외환 압박으로 일시 1만 8,000루피아를 넘었고'))
+        self.assertTrue(numeric_guard.amount_mismatch('Rp 400 trillion', '루피아는 400억 루피아'))
+
     def test_korean_dong_word_is_not_an_amount(self):
         self.assertFalse(numeric_guard.amount_mismatch('VND 50 trillion', '금리를 3.5%로 동결했다'))
         self.assertEqual(numeric_guard.fx_values('정부가 동결 방침을 밝혔다'), {})
