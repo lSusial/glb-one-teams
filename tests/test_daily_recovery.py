@@ -1,6 +1,6 @@
 import sqlite3
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 from contextlib import ExitStack, redirect_stdout
 from collections import defaultdict
 from types import SimpleNamespace
@@ -53,11 +53,17 @@ class DailyRecoveryTests(unittest.TestCase):
         with ExitStack() as stack:
             stack.enter_context(patch.object(main.db, 'open_conn', return_value=self.db))
             stack.enter_context(patch.object(main, '_expanded_ai_days', return_value=7))
+            recover = stack.enter_context(patch.object(main, '_recover_display_fulltext'))
             calls = {t: stack.enter_context(patch(t, return_value=defaultdict(int))) for t in targets}
+            timeline = Mock()
+            timeline.attach_mock(calls['fulltext.resolve_display_links'], 'resolve')
+            timeline.attach_mock(recover, 'recover')
+            timeline.attach_mock(calls['llm_expand.run_expand'], 'expand')
             with redirect_stdout(io.StringIO()):
                 main.cmd_ai(SimpleNamespace(days=2, sync=True))
             self.assertEqual(calls['llm_ranker.run_rank'].call_args.kwargs['days'], 7)
             self.assertEqual(calls['briefing.run_briefing'].call_args.kwargs['days'], 1)
+            self.assertEqual([call[0] for call in timeline.mock_calls], ['resolve', 'recover', 'expand'])
 
     def test_ai_window_expands_to_recent_unprocessed_backlog(self):
         self.add(1, 2, 'Fed policy update in the US', '2026-10-19', 'keep', 60)

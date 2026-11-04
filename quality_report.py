@@ -47,7 +47,9 @@ def build_report(conn, days: int = 1, export_dir: Path | None = None) -> dict:
                    a.ai_score, a.published_at, {col('full_text', "''")} AS full_text,
                    {col('summary_en', "''")} AS summary_en,
                    {col('source_conflict', "''")} AS source_conflict,
-                   {col('publisher_name', "''")} AS publisher_name,
+                   {col('fulltext_status')} AS fulltext_status,
+                   {col('fulltext_failure_reason')} AS fulltext_failure_reason,
+                   {db.publisher_expr() if 'publisher_name' in cols else 'm.media_name'} AS publisher_name,
                    {col('event_type', "''")} AS event_type,
                    {col('korean_fi', "''")} AS korean_fi,
                    {col('personnel_move', '0')} AS personnel_move,
@@ -66,6 +68,14 @@ def build_report(conn, days: int = 1, export_dir: Path | None = None) -> dict:
     concentration = max(active_scores.values(), default=0)
     clusters = ranking.cluster_sizes(conn)
     evidence = [evidence_score(r, clusters.get(int(r["article_id"]), 0)) for r in active]
+    missing_body = [r for r in active if not (r["full_text"] or "").strip()]
+    backup_count = 0
+    if {'title_en', 'summary_en', 'publisher_name', 'full_text'} <= cols:
+        from llm_ranker import _cluster_sources
+        for row in missing_body:
+            sources = _cluster_sources(conn, row['article_id'], row['publisher_name'] or row['media_name'])
+            backup_count += any((source['full_text'] or '').strip() for source in sources)
+    own_body_count = len(active) - len(missing_body)
 
     summary = {
         "raw": len(rows),
@@ -78,6 +88,11 @@ def build_report(conn, days: int = 1, export_dir: Path | None = None) -> dict:
         "scored_fulltext": sum(bool((r["full_text"] or "").strip()) for r in scored),
         "active_fulltext": sum(bool((r["full_text"] or "").strip()) for r in active),
         "active_fulltext_pct": _pct(sum(bool((r["full_text"] or "").strip()) for r in active), len(active)),
+        "active_evidence_fulltext": own_body_count + backup_count,
+        "active_evidence_fulltext_pct": _pct(own_body_count + backup_count, len(active)),
+        "fulltext_missing_reasons": dict(Counter(
+            r['fulltext_failure_reason'] or r['fulltext_status'] or 'unattempted'
+            for r in missing_body)),
         "score_mode": active_scores.most_common(1)[0][0] if active_scores else None,
         "score_mode_count": concentration,
         "score_mode_pct": _pct(concentration, len(active)),
@@ -182,6 +197,9 @@ def to_markdown(report: dict) -> str:
         lines += [
             f"- ACTIVE: **{s['active']}건**, 관심구간: {s['watch_band']}건",
             f"- ACTIVE 본문 확보: **{s['active_fulltext_pct']}%** ({s['active_fulltext']}/{s['active']})",
+            f"- 검증된 관련 출처 본문 포함: **{s['active_evidence_fulltext_pct']}%** "
+            f"({s['active_evidence_fulltext']}/{s['active']}, 대표 원문 확보율과 별도)",
+            f"- 대표 본문 미확보 사유: {s['fulltext_missing_reasons']}",
             f"- 최빈 점수: **{s['score_mode']}점 {s['score_mode_count']}건 ({s['score_mode_pct']}%)**",
             f"- 평균 근거 강도: **{s['evidence_avg']}점**, 50점 미만 {s['evidence_below_50']}건",
             "", "## 경보", "",

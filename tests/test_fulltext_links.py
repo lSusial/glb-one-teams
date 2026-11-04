@@ -104,7 +104,7 @@ class LinkTests(unittest.TestCase):
         self.add(1, f'{GN}1')
         self.add(2, 'https://direct/2')
         dec = FakeDecoder({f'{GN}1': None})           # 확정 실패 → unresolved_url 기록
-        with install(dec), patch.object(fulltext, '_extract', side_effect=lambda u: f'text of {u}') as ex, \
+        with install(dec), patch.object(fulltext, '_extract', side_effect=lambda u: (f'text of {u}', None)) as ex, \
                 patch('requests.get') as get:
             s = fulltext.run_fulltext(self.db, limit=10, days=2)
         ex.assert_called_once_with('https://direct/2')     # GN 링크로는 본문 추출 안 함
@@ -115,17 +115,17 @@ class LinkTests(unittest.TestCase):
 
     def test_recent_extraction_failure_is_not_retried_immediately(self):
         self.add(1, 'https://direct/1')
-        with patch.object(fulltext, '_extract', return_value=None):
+        with patch.object(fulltext, '_extract', return_value=(None, 'empty_body')):
             first = fulltext.run_fulltext(self.db, limit=10, days=2)
             second = fulltext.run_fulltext(self.db, limit=10, days=2)
         self.assertEqual((first['total'], first['failed']), (1, 1))
         self.assertEqual(second['total'], 0)
-        self.assertEqual(tuple(self.fulltext_state(1)), ('extract_failed', 'empty_or_blocked'))
+        self.assertEqual(tuple(self.fulltext_state(1)), ('extract_failed', 'empty_body'))
 
     def test_priority_extraction_uses_score_and_returns_exact_ids(self):
         self.add(1, 'https://direct/1', score=49, fscore=10)
         self.add(2, 'https://direct/2', score=70, fscore=1)
-        with patch.object(fulltext, '_extract', side_effect=lambda u: f'text of {u}'):
+        with patch.object(fulltext, '_extract', side_effect=lambda u: (f'text of {u}', None)):
             result = fulltext.run_fulltext(self.db, limit=10, days=2, min_score=50)
         self.assertEqual(result['extracted_ids'], [2])
         self.assertIsNone(self.db.execute(
@@ -146,7 +146,7 @@ class LinkTests(unittest.TestCase):
         self.db.execute('UPDATE articles_raw SET source_id=1 WHERE article_id IN (1,2)')
         self.db.execute('UPDATE articles_raw SET source_id=2 WHERE article_id=3')
         self.db.commit()
-        with patch.object(fulltext, '_extract', side_effect=lambda u: f'text of {u}'):
+        with patch.object(fulltext, '_extract', side_effect=lambda u: (f'text of {u}', None)):
             result = fulltext.run_fulltext(
                 self.db, limit=2, days=2, min_score=50, balance_countries=True,
             )

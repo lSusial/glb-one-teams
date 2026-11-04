@@ -415,6 +415,41 @@ def _expanded_ai_days(conn, requested_days: int | None) -> int | None:
     return max(requested_days, min(max(age, 0), config.AI_BACKLOG_MAX_DAYS))
 
 
+def _recover_display_fulltext(conn, use_batch):
+    """링크 해소 후 실제 노출 기사와 검증된 출처만 한도 내에서 본문 보강한다."""
+    import export_json
+    import fulltext
+    import llm_ranker
+
+    visible = sorted(export_json.visible_article_ids(conn))
+    candidates, parent_by_id = [], {}
+    for aid in visible:
+        row = conn.execute(
+            f"""SELECT a.full_text, {db.publisher_expr()} AS media_name
+                FROM articles_raw a JOIN media_sources m ON m.source_id=a.source_id
+                WHERE a.article_id=? AND a.duplicate_of IS NULL""", (aid,),
+        ).fetchone()
+        if row is None or (row["full_text"] or "").strip():
+            continue
+        candidates.append(aid)
+        parent_by_id[aid] = aid
+        for source in llm_ranker._cluster_sources(conn, aid, row["media_name"]):
+            if not (source["full_text"] or "").strip():
+                candidates.append(source["article_id"])
+                parent_by_id[source["article_id"]] = aid
+    recovered = fulltext.run_fulltext(
+        conn, article_ids=candidates, limit=config.DISPLAY_FULLTEXT_LIMIT,
+        balance_countries=True, direct_only=True,
+    )
+    rerank_ids = sorted({parent_by_id[aid] for aid in recovered["extracted_ids"]})
+    reranked = (llm_ranker.run_rank(conn, article_ids=rerank_ids, use_batch=use_batch)
+                if rerank_ids else {"ranked": 0, "failed": 0})
+    print(f"   노출={len(visible)} 본문={recovered['extracted']} "
+          f"재분석={reranked['ranked']} 실패보존={reranked.get('failed', 0)} "
+          f"추출실패={recovered['failure_reasons']}")
+    return recovered
+
+
 def cmd_ai(args):
     """prefilter → fulltext/rank → 상위 후보 재분석 → dedup → 후속 생성 순서 실행."""
     import briefing
@@ -466,6 +501,8 @@ def cmd_ai(args):
     print("▶ 노출 기사 원문 링크 해소(Google News → 원문, 점수순·순차)...")
     sl = _ai_guard(lambda: fulltext.resolve_display_links(conn, days=days), "ai")
     print(f"   대상={sl['total']} 해소={sl['resolved']}")
+    print("▶ 링크 해소 후 노출 기사·관련 출처 본문 보강...")
+    _ai_guard(lambda: _recover_display_fulltext(conn, use_batch=ub), "ai")
     print("▶ [4/8] 모달 긴 요약(노출 기사만)...")
     se = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub,
         article_ids=export_json.visible_article_ids(conn)), "ai")

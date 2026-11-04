@@ -10,7 +10,7 @@ prefilter 를 통과(keep)한 기사에 중요도·요약·주제를 부여한�
   - summary_ko      : 한국어 요약 (UI q)
   - topics          : taxonomy 코드 CSV (UI 카테고리 c, 축 C — 현지언론 필터)
   - event_type      : taxonomy event_types 코드 CSV (모니터링 탭 전용, 축 E)
-  - source_links    : 다출처 종합에 실제로 쓰인 소스 목록(JSON, 클러스터<3이면 NULL)
+  - source_links    : 다출처 종합에 실제로 쓰인 소스 목록(JSON, 본문 대체 출처 포함)
   - ai_model        : 생성 프로바이더:모델 식별자
 
 * 분석 모델(role='smart') 사용. topics/event_type 모두 taxonomy 코드로 검증,
@@ -291,24 +291,34 @@ def _system_prompt_light() -> str:
 
 def _cluster_sources(conn, article_id: int, exclude_media: str) -> list:
     """article_id를 duplicate_of로 가리키는 형제 기사 중 대표(exclude_media)와
-    서로 다른 매체만, 매체당 1건(고품질·최신 우선) 최대 SYNTH_MAX_SOURCES-1개.
+    서로 다른 매체만, 매체당 1건(본문 확보·고품질·최신 우선) 최대 SYNTH_MAX_SOURCES-1개.
 
     같은 매체 기사가 제목만 바뀐 채 여러 건 걸리는 경우(라이브 블로그 업데이트 등)를
     별개 언론사로 잘못 세지 않기 위한 안전장치 — "3개 이상 서로 다른 언론사 종합"이라는
     취지를 실제로 지키려면 클러스터 크기가 아니라 distinct 매체 수로 판단해야 한다."""
+    # 화면 관련 링크와 같은 사건 검증을 통과한 출처만 분석 근거로 사용한다.
+    from export_json import _same_story_for_link
+    representative = conn.execute(
+        "SELECT title, title_en, summary_en FROM articles_raw WHERE article_id=?", (article_id,),
+    ).fetchone()
+    if representative is None:
+        return []
     rows = conn.execute(
-        f"""SELECT a.title, a.summary, a.full_text, a.link,
+        f"""SELECT a.article_id, a.title, a.title_en, a.summary_en, a.summary, a.full_text, a.link,
                   {db.publisher_expr()} AS media_name, m.tier
            FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
            WHERE a.duplicate_of = ?
-           ORDER BY m.tier ASC, a.published_at DESC""",
+             AND a.link NOT LIKE '%/tag/%' AND a.link NOT LIKE '%/tags/%'
+             AND a.link NOT LIKE '%/topic/%' AND a.link NOT LIKE '%/topics/%'
+           ORDER BY (LENGTH(TRIM(COALESCE(a.full_text,''))) > 0) DESC,
+                    m.tier ASC, a.published_at DESC, a.article_id ASC""",
         (article_id,),
     ).fetchall()
     seen = {(exclude_media or "").strip().lower()}
     out = []
     for r in rows:
         key = (r["media_name"] or "").strip().lower()
-        if not key or key in seen:
+        if not key or key in seen or not _same_story_for_link(representative, r):
             continue
         seen.add(key)
         out.append(r)
@@ -390,7 +400,9 @@ def run_rank(conn, provider: LLMProvider | None = None,
         siblings = _cluster_sources(conn, r["article_id"], r["media_name"])
         total_n = 1 + len(siblings)   # distinct 매체 수(대표 포함)
 
-        if total_n >= config.SYNTH_MIN_SOURCES:
+        backup_body = not (r["full_text"] or "").strip() and any(
+            (src["full_text"] or "").strip() for src in siblings)
+        if total_n >= config.SYNTH_MIN_SOURCES or backup_body:
             blocks, links = [], []
             sources = [r] + list(siblings)
             conflict = numeric_guard.source_amount_conflicts([

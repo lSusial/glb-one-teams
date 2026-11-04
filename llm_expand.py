@@ -128,6 +128,8 @@ def ensure_columns(conn) -> None:
         ("expanded_summary",    "ALTER TABLE articles_raw ADD COLUMN expanded_summary    TEXT"),
         ("expanded_summary_en", "ALTER TABLE articles_raw ADD COLUMN expanded_summary_en TEXT"),
         ("publisher_name",      "ALTER TABLE articles_raw ADD COLUMN publisher_name      TEXT"),
+        ("title_en",            "ALTER TABLE articles_raw ADD COLUMN title_en            TEXT"),
+        ("summary_en",          "ALTER TABLE articles_raw ADD COLUMN summary_en          TEXT"),
     ])
 
 
@@ -167,7 +169,7 @@ def run_expand(conn, provider: LLMProvider | None = None,
 
     rows = conn.execute(
         f"""SELECT a.article_id, a.title, a.summary, a.full_text, a.link, a.published_at,
-                   m.primary_country_code AS cc, m.media_name
+                   m.primary_country_code AS cc, {db.publisher_expr()} AS media_name
             FROM articles_raw a JOIN media_sources m ON m.source_id = a.source_id
             WHERE {eligible}
               {have_clause}{date_clause}
