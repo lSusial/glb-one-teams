@@ -55,13 +55,14 @@ _SYSTEM = (
     "You are a global intelligence analyst at KB Financial Group. Given one country's news "
     "from the past week, write a WEEKLY briefing for branch executives (macro / markets / "
     "banking / regulation / risk relevant to KB's overseas operations). Base it strictly on "
-    "the provided items; no speculation. Output ONLY JSON with BOTH Korean and English:\n"
-    '{"summary_ko": "5~6문장 주간 종합", "summary_en": "5-6 sentence weekly summary", '
-    '"issues_ko": ["핵심 이슈 3~4개"], "issues_en": ["3-4 key issues"], '
-    '"outlook_ko": "향후 전망 1~2문장", "outlook_en": "1-2 sentence outlook", '
-    '"keywords_ko": ["한국어 키워드 4~6개"], "keywords_en": ["same 4-6 keywords in English"], '
-    '"key_stat_ko": "대표 수치 1개, 한국어(예: BI-Rate 5.75%)", '
-    '"key_stat_en": "the same key stat, in English"}'
+    "the provided items; no speculation. Write English first, then a faithful Korean translation "
+    "of every field, with the same facts, figures and issue order. Do not add or omit amounts "
+    "in either language. Output ONLY JSON with BOTH Korean and English:\n"
+    '{"summary_en": "5-6 sentence weekly summary", "issues_en": ["3-4 key issues"], '
+    '"outlook_en": "1-2 sentence outlook", "keywords_en": ["4-6 keywords in English"], '
+    '"key_stat_en": "one key statistic", "summary_ko": "영문 요약의 충실한 한국어 번역", '
+    '"issues_ko": ["영문 이슈와 같은 순서·수치로 번역"], "outlook_ko": "영문 전망의 번역", '
+    '"keywords_ko": ["영문과 같은 개수·순서로 번역"], "key_stat_ko": "영문과 같은 대표 수치"}'
 )
 
 # 일일(daily) 브리핑 — 현지언론 화면 상단용. 전일+당일 기사를 4~5문장으로 종합(한/영 동시).
@@ -184,6 +185,15 @@ _AMOUNT_RETRY_NOTE = (
     "(예: '₹30,213 crore', '$3.5 trillion' — 억/조 환산 금지, 괄호 병기도 금지). 위의 '금액 한국어 표기' 줄은 무시한다."
 )
 
+_SYSTEM_WEEKLY_KO = (
+    "Provide a faithful Korean translation of the verified English weekly briefing JSON below. "
+    "Translate every field and every array item in exactly the same order. Add or omit no facts "
+    "or figures. Preserve monetary amounts exactly as written in English if unsure about units. "
+    "Use formal Korean (~습니다), no Chinese characters or Japanese kana. "
+    "Return ONLY JSON with summary_ko, issues_ko (array), outlook_ko, keywords_ko (array), key_stat_ko. "
+    "Do not rewrite or return any English fields."
+)
+
 
 def run_briefing(
     conn,
@@ -278,8 +288,9 @@ def run_briefing(
     # 옛 브리핑이 계속 남았다(2026-10-07 IN 브리핑 6일째 미갱신).
     req_by_cc = {r[0]: r for r in requests}
     pending = [(cc, results.get(cc) or {}) for cc in meta]
-    for attempt in (1, 2):
+    for attempt in (1, 2, 3):
         retry = []
+        translation_retry = []
         for cc, data in pending:
             arts = meta[cc]
             if not arts:
@@ -306,13 +317,22 @@ def run_briefing(
             if arts:
                 generated = " ".join((summary, summary_en, issues, issues_en,
                                       outlook, outlook_en, key_stat, key_stat_en))
-                # 원문 대조 + 한↔영 대조(화면 감사가 두 언어를 서로 비교 — 2026-10-22 US 브리핑 한국어에만 금액)
-                if (numeric_guard.amount_mismatch(bullets_by_cc.get(cc, ""), generated)
-                        or numeric_guard.amount_mismatch(summary_en, summary)):
-                    reason, note = "금액 불일치", _AMOUNT_RETRY_NOTE
-                elif _FOREIGN_SCRIPT_RE.search(summary):
+                en_fields, ko_fields = {"summary": summary_en}, {"summary": summary}
+                if not daily:
+                    en_fields.update(issues=json.loads(issues_en), outlook=outlook_en,
+                                     keywords=json.loads(keywords_en), key_stat=key_stat_en)
+                    ko_fields.update(issues=json.loads(issues), outlook=outlook,
+                                     keywords=json.loads(keywords), key_stat=key_stat)
+                differences = numeric_guard.bilingual_amount_issues(en_fields, ko_fields)
+                unsupported = numeric_guard.unsupported_amounts(bullets_by_cc[cc], generated)
+                en_text = json.dumps(en_fields, ensure_ascii=False)
+                if unsupported or differences:
+                    details = differences + ([f"원문에 없는 금액: {unsupported}"] if unsupported else [])
+                    reason = "금액 불일치"
+                    note = _AMOUNT_RETRY_NOTE + "\n불일치 필드·금액: " + "; ".join(details[:12])
+                elif _FOREIGN_SCRIPT_RE.search(json.dumps(ko_fields, ensure_ascii=False)):
                     reason, note = "한국어에 한자·가나", _SCRIPT_RETRY_NOTE
-                elif _HANGUL_RE.search(" ".join((summary_en, issues_en, outlook_en, key_stat_en))):
+                elif _HANGUL_RE.search(en_text):
                     reason, note = "영어에 한글", _EN_HANGUL_RETRY_NOTE
                 else:
                     reason = None
@@ -321,6 +341,14 @@ def run_briefing(
                         log.warning("브리핑 %s — 재요청(국가=%s, %s): %s",
                                     reason, cc, briefing_type, summary[:80])
                         retry.append((cc, note))
+                        continue
+                    # 전체 재요청도 실패하면 원문 검증을 통과한 영문은 고정하고 한국어만 1회 번역한다.
+                    # 영문 자체가 잘못됐거나 한글이 섞였으면 번역 기준본으로 사용하지 않는다.
+                    if (attempt == 2 and not daily and summary_en
+                            and not numeric_guard.unsupported_amounts(bullets_by_cc[cc], en_text)
+                            and not _HANGUL_RE.search(en_text)):
+                        translation_retry.append((cc, en_fields))
+                        log.warning("주간 브리핑 — 검증된 영문 기준 한국어 재번역(국가=%s)", cc)
                         continue
                     log.warning("브리핑 %s — 저장 안 함(국가=%s, %s): %s",
                                 reason, cc, briefing_type, summary[:80])
@@ -361,12 +389,22 @@ def run_briefing(
             )
             stats["written"] += 1
 
-        if attempt == 2 or not retry:
+        if attempt == 1 and retry:
+            again = provider.complete_json_batch([
+                (cc, system, req_by_cc[cc][2] + note, req_by_cc[cc][3]) for cc, note in retry
+            ])
+            pending = [(cc, again.get(cc) or {}) for cc, _ in retry]
+        elif attempt == 2 and translation_retry:
+            again = provider.complete_json_batch([
+                (cc, _SYSTEM_WEEKLY_KO, json.dumps(fields, ensure_ascii=False)
+                 + "\n" + numeric_guard.korean_amount_hints(json.dumps(fields, ensure_ascii=False)), 2200)
+                for cc, fields in translation_retry
+            ])
+            pending = [(cc, {**{k + "_en": v for k, v in fields.items()},
+                             **{k + "_ko": (again.get(cc) or {}).get(k + "_ko") for k in fields}})
+                       for cc, fields in translation_retry]
+        else:
             break
-        again = provider.complete_json_batch([
-            (cc, system, req_by_cc[cc][2] + note, req_by_cc[cc][3]) for cc, note in retry
-        ])
-        pending = [(cc, again.get(cc) or {}) for cc, _ in retry]
     conn.commit()
 
     log.info(

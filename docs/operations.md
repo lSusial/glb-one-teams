@@ -22,6 +22,7 @@ wrangler pages deploy data/export --project-name kb-global-daily --commit-dirty=
 - 평가: `python main.py eval --mode prefilter|ranker` (`eval/`). 품질 회귀: `python -m unittest discover -s tests -v`.
 - 품질 경보: `python main.py quality --strict`. 결과는 `data/quality/latest.{json,md}`이며 배포 스크립트가 자동 실행한다. 경고는 기록만 하고 `critical`만 배포를 중단한다. 개선 과제 상태는 `docs/news_quality_roadmap.md` 참조.
 - **AI 중복판정 신뢰성**: 저장분 소급은 먼저 `python3 main.py dedup-repair --days 1`로 dry-run한 뒤 `--apply --days 1`로 백업·적용한다. 특정 그룹만 고치려면 `--rep-id ARTICLE_ID`를 여러 번 지정할 수 있다. 전체 무범위 적용은 과거 그룹을 대량 변경하므로 피한다. 새 프롬프트 실측은 `python3 eval/eval_dedup_guard.py --labeled-live`(라벨 70쌍) 또는 `--live --days 8`(DB 무변경).
+- **주간 브리핑 금액 검증(11/4)**: 저장 전에 요약·이슈(배열 항목별)·전망·키워드·핵심 수치의 한/영 금액과 누락을 양방향 검사한다. 1차 실패 시 필드·금액을 짚어 전체 재요청하고, 다시 실패하면 원문 검증을 통과한 영문만 고정해 한국어 번역을 1회 추가 요청한다(문제가 생긴 국가만 추가 비용). 최종 검증도 실패하면 기존 저장본을 유지한다. 표시 감사도 같은 규칙을 쓴다. 이미 보류된 주간 브리핑의 복구는 해당 국가를 별도로 재생성해야 한다.
 - 물량 병목 주의: `PREFILTER_LIMIT=1600`, `RANK_LIMIT=700`(2026-09-08 상향). 초과분은 `--days 2` 창 밖으로 밀려 영구 미처리되므로 수집량이 늘면 재점검.
 
 ## 2. 결정 필요 — 주 대상 독자와 채널

@@ -24,6 +24,12 @@ _NOT_KO_TAIL = r"(?<![\d,.경조억만])(?<![경조억만]\s)"
 # US$8.5 billion", "RM100-120 billion"). 안 그러면 앞 숫자가 8달러·100링깃으로 읽혀 정상 번역을
 # 거부한다(2026-10-20 ID BI 개입·말레이 MBSB 기사).
 _CUR_PRE = r"US\$|HK\$|S\$|\$|RM|Rp\.?\s?|Rs\.?\s?|₹|¥|£|€"
+# 모든 통화·접두/접미·범위 패턴에 동일하게 적용한다. 'USD 547 mln'을 547달러로
+# 읽어 정상적인 '5.47억 달러'를 보류한 사례(2026-11-04 주간 감사).
+_SCALE_ALIASES = {"mln": "million", "mn": "million", "bln": "billion",
+                  "bil": "billion", "bn": "billion", "tn": "trillion"}
+_SCALE_ALIAS_RE = re.compile(
+    r"(?<=\d)([\s-]*)(" + "|".join(_SCALE_ALIASES) + r")(?![A-Za-z])", re.I)
 _RANGE_RE = re.compile(
     rf"({_CUR_PRE})?(\d+(?:[,.]\d+)*)\s*(-|–|to)\s*({_CUR_PRE})?(\d+(?:[,.]\d+)*)\s*-?\s*"
     r"(lakh crore|trillion|billion|million|crore|lakh|bln|bil|bn|mn|tn)(?![A-Za-z])", re.I)
@@ -33,6 +39,7 @@ _PRICE_RANGE_RE = re.compile(rf"({_CUR_PRE})\s?(\d+(?:[,.]\d+)*)\s*[-–]\s*(\d+
 
 
 def _expand_ranges(text: str) -> str:
+    text = _SCALE_ALIAS_RE.sub(lambda m: m[1] + _SCALE_ALIASES[m[2].lower()], text)
     def sub(m):
         pre, a, sep, pre2, b, unit = m.groups()
         # "September 2026 to $44.4 billion"처럼 연도 뒤 to는 범위가 아니다 — "to"는 앞 숫자에
@@ -118,7 +125,7 @@ _FX = {
     "CNY": (r"\bRMB|\bCNY", r"yuan|renminbi", r"위안"),
     "JPY": (r"¥|\bJPY", r"yen", r"엔(?!화)"),
     "IDR": (r"\bRp\.?|\bIDR", r"rupiah", r"루피아"),
-    "VND": (r"\bVND", r"dong|VND", r"동(?![가-힣])"),
+    "VND": (r"\bVND", r"dong|VND", r"동(?=\b|(?:으로|에서|보다|까지|을|은|이|의|에|과|도|로|는)(?![가-힣]))"),
     "THB": (r"฿|\bTHB", r"baht", r"바트"),
     "GBP": (r"£|\bGBP", r"pounds?(?: sterling)?", r"파운드"),
     "EUR": (r"€|\bEUR", r"euros?", r"유로"),
@@ -135,16 +142,26 @@ _EN_UNITS = {**_UNITS, "mn": 1e6, "tn": 1e12, "b": 1e9,
              "triliun": 1e12, "miliar": 1e9, "juta": 1e6}
 
 
-def fx_values(text: str) -> dict[str, list[float]]:
+def fx_values(text: str, *, include_quotes: bool = True) -> dict[str, list[float]]:
     """USD·INR 외 거점 통화 금액을 {통화코드: [값]}으로 반환. 영어(HK$500 billion, 10 billion yuan)와
     한국어(5,000억 홍콩달러, 1.2조 엔) 표기를 인식한다. 금액이 없는 통화는 키가 없다."""
     text = _expand_ranges(text or "")
+    def is_quote(match):
+        # 한글 '~달러당'과 같은 영문 환율 표기. 양방향 번역 검사에서도 거래 금액과 섞지 않는다.
+        suffix = text[match.end():match.end() + 45]
+        return re.match(r"\s*(?:/\s*(?:USD|EUR|JPY|GBP|VND|IDR)\b|"
+                        r"(?:per|to|a)\s+(?:the\s+|US\s+|U\.S\.\s+)?dollar\b)", suffix, re.I)
+
     out: dict[str, list[float]] = {}
     for code, (pre, post, ko) in _FX.items():
         vals: list[float] = []
         for m in re.finditer(rf"(?:{pre})\s*({_NUM})(?:\s*-?\s*{_EN_UNIT_RE}(?![A-Za-z]))?", text, re.I):
+            if not include_quotes and is_quote(m):
+                continue
             vals.append(_to_float(m.group(1)) * _EN_UNITS[(m.group(2) or "").lower()])
         for m in re.finditer(rf"({_NUM})\s*-?\s*(?:{_EN_UNIT_RE}[\s-]+)?(?:{post})\b", text, re.I):
+            if not include_quotes and is_quote(m):
+                continue
             vals.append(_to_float(m.group(1)) * _EN_UNITS[(m.group(2) or "").lower()])
         for m in re.finditer(rf"{_KO_AMOUNT}(?:{ko})", text):
             prefix = text[max(0, m.start() - 40):m.start()]
@@ -154,7 +171,9 @@ def fx_values(text: str) -> dict[str, list[float]]:
             if _ko_total(m) < 1e6 and re.search(rf"(?:{ko})(?:화)?(?:는|은|가|이)\s[^.]*$", prefix):
                 continue
             vals.append(_ko_total(m))
-        for m in re.finditer(rf"{_NOT_KO_TAIL}({_NUM})\s*(?:{ko})", text):
+        # 규모어 없는 '동'은 환율·변동폭과 일반 단어의 구분이 어려워 기존 경계를 유지한다.
+        bare_ko = r"동(?![가-힣])" if code == "VND" else ko
+        for m in re.finditer(rf"{_NOT_KO_TAIL}({_NUM})\s*(?:{bare_ko})", text):
             # "엔·달러 환율은 ... 158엔" 같은 환율 시세는 금액이 아니다 — 단위 없는
             # 숫자가 조·억·만 같은 규모어 없이 나오면 거의 항상 환율/주가 같은 시세이고,
             # "환율" 근처(같은 문장)·"달러당 17,938루피아" 같은 "~당" 단위환율 표현에
@@ -188,6 +207,73 @@ def amount_mismatch(source_text: str, output_text: str) -> bool:
         return True
     src, out = fx_values(source_text), fx_values(output_text)
     return any(_mismatch(src.get(code, []), vals) for code, vals in out.items())
+
+
+def amount_values(text: str, *, include_fx_quotes: bool = True) -> dict[str, list[float]]:
+    """통화별 금액. 한쪽 언어에만 있는 통화도 검증할 수 있게 빈 통화는 제외한다."""
+    return {code: vals for code, vals in {
+        "USD": usd_values(text), "INR": inr_values(text), **fx_values(text, include_quotes=include_fx_quotes),
+    }.items() if vals}
+
+
+def unsupported_amounts(source_text: str, output_text: str) -> dict[str, list[float]]:
+    """원문에 같은 통화·값으로 존재하지 않는 출력 금액(원문에 통화 자체가 없어도 검출)."""
+    source = amount_values(source_text)
+    return {code: missing for code, vals in amount_values(output_text).items()
+            if (missing := [v for v in vals if not any(
+                abs(v - s) <= max(1, abs(s)) * 0.02 for s in source.get(code, []))])}
+
+
+def bilingual_amount_issues(english: dict, korean: dict) -> list[str]:
+    """요약·이슈·전망 등의 대응 필드를 양방향 비교한다. 이슈 배열은 항목별로 검사한다."""
+    issues = []
+    for field in sorted(english.keys() | korean.keys()):
+        en, ko = english.get(field, ""), korean.get(field, "")
+        if isinstance(en, list) or isinstance(ko, list):
+            if not isinstance(en, list) or not isinstance(ko, list):
+                issues.append(f"{field}: EN/KO array type differs")
+                continue
+            if len(en) != len(ko):
+                issues.append(f"{field}: EN/KO item count differs ({len(en)}/{len(ko)})")
+            pairs = [(f"{field}[{i}]", e, k) for i, (e, k) in enumerate(zip(en, ko))]
+        else:
+            pairs = [(field, en, ko)]
+        for label, e, k in pairs:
+            e, k = str(e or ""), str(k or "")
+            if bool(e.strip()) != bool(k.strip()):
+                issues.append(f"{label}: missing {'KO' if e.strip() else 'EN'} text")
+            for side, source, output in (("KO-only", e, k), ("EN-only", k, e)):
+                for code, vals in unsupported_amounts(source, output).items():
+                    if side == "EN-only":
+                        # 한글 추출기는 '~달러당' 환율을 금액에서 제외한다. 그에 대응하는 영문
+                        # VND/USD·per dollar 시세의 부재를 금액 누락으로 판단하지 않는다.
+                        monetary = amount_values(output, include_fx_quotes=False).get(code, [])
+                        vals = [v for v in vals if any(abs(v - m) <= max(1, abs(m)) * 0.02 for m in monetary)]
+                        if not vals:
+                            continue
+                    issues.append(f"{label}: {side} {code} " + ", ".join(f"{v:,.12g}" for v in vals))
+    return issues
+
+
+def different_period_titles_supported(source: str, title_en: str, title_ko: str) -> bool:
+    """명시적으로 월간/연간을 다룬 두 제목의 금액이 각각 원문에 있으면 번역 오류가 아니다.
+
+    기간이 없거나 같거나 섞여 있으면 예외로 인정하지 않는다. 요약/본문 번역 검사에는 쓰지 않는다.
+    """
+    def periods(text):
+        found = set()
+        if re.search(r"\bmonthly\b|\bper month\b|\ba month\b|월(?:간|별)?(?![가-힣])", text, re.I):
+            found.add("monthly")
+        if re.search(r"\bannual(?:ly)?\b|\bper year\b|\bthis year\b|\b(?:in|for) 20\d\d\b|연(?:간)?(?![가-힣])|올해", text, re.I):
+            found.add("annual")
+        return found
+
+    en_periods, ko_periods = periods(title_en), periods(title_ko)
+    en_values, ko_values = amount_values(title_en), amount_values(title_ko)
+    return (len(en_periods) == len(ko_periods) == 1 and en_periods != ko_periods
+            and (en_periods | ko_periods) <= periods(source)
+            and bool(en_values) and en_values.keys() == ko_values.keys()
+            and not unsupported_amounts(source, title_en) and not unsupported_amounts(source, title_ko))
 
 
 _KO_CURRENCY = {"USD": "달러", "INR": "루피", "HKD": "홍콩달러", "SGD": "싱가포르달러", "CNY": "위안",

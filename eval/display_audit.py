@@ -122,14 +122,8 @@ def _title_sums_summary(t_en: str, q_en: str) -> bool:
 def _title_amount_from_source(t_en: str, raw_title: str) -> bool:
     """영문 제목 금액이 전부 원문 제목에 같은 통화로 있으면 True — 'The Philippines and the $100 Oil Shock'처럼
     원문 헤드라인의 금액을 옮긴 것은 번역 오류가 아니다(2026-10-23 배포 차단 오탐). (q_en, t_en) 비교에서만 쓴다."""
-    def amounts(text):
-        return {"USD": numeric_guard.usd_values(text), "INR": numeric_guard.inr_values(text),
-                **numeric_guard.fx_values(text)}
-    raw, title = amounts(raw_title or ""), amounts(t_en or "")
-    title = {code: vals for code, vals in title.items() if vals}
-    return bool(title) and all(
-        raw.get(code) and all(any(abs(v - r) <= max(1, abs(r)) * 0.02 for r in raw[code]) for v in vals)
-        for code, vals in title.items())
+    return bool(numeric_guard.amount_values(t_en or "")) and not numeric_guard.unsupported_amounts(
+        raw_title or "", t_en or "")
 
 def category_mismatch(card) -> str | None:
     """지정학(geopolitics) 주·보조 분류인데 영문 본문에 지정학 신호가 하나도 없으면 사유 문자열.
@@ -407,6 +401,12 @@ def main() -> int:
                                                                                 (db_row(a.get("u")) or {"title": ""})["title"])):
                 continue
             if a.get(en) and a.get(ko) and numeric_guard.amount_mismatch(a[en], a[ko]):
+                if (en, ko) == ("t_en", "t"):
+                    source = db_row(a.get("u"))
+                    source_text = " ".join(source[k] or "" for k in ("title", "summary", "full_text")
+                                           if source is not None and k in source.keys())
+                    if numeric_guard.different_period_titles_supported(source_text, a[en], a[ko]):
+                        continue
                 add("AMOUNT_MISMATCH", f"{w} {ko}: {short(a)} · {a.get('u', '')[:70]}",
                     link=a.get("u"), pair=[en, ko, a[en], a[ko]])
 
@@ -418,17 +418,19 @@ def main() -> int:
 
     for c in load("countries").get("countries", []):
         b = c.get("brief") or {}
-        if b.get("ko") and b.get("en") and numeric_guard.amount_mismatch(
-                json.dumps(b["en"], ensure_ascii=False), json.dumps(b["ko"], ensure_ascii=False)):
+        if b.get("ko") and b.get("en") and numeric_guard.bilingual_amount_issues(
+                {"summary": b["en"]}, {"summary": b["ko"]}):
             add("AMOUNT_MISMATCH", f"국가 브리핑 {c['cc']}", brief=(c["cc"], "daily"))
 
     # 15 STALE_WEEKLY / 주간 금액
     for c in load("weekly").get("countries", []):
-        ko = " ".join([c.get(k) or "" for k in ("summary", "outlook", "key_stat")] + list(c.get("issues") or []))
-        en = " ".join([c.get(k) or "" for k in ("summary_en", "outlook_en", "key_stat_en")]
-                      + list(c.get("issues_en") or []))
-        if numeric_guard.amount_mismatch(en, ko):
-            add("AMOUNT_MISMATCH", f"주간 {c['cc']} ({c.get('week_start')}~{c.get('week_end')})",
+        fields = ("summary", "issues", "outlook", "keywords", "key_stat")
+        ko = {k: c.get(k) or ([] if k in ("issues", "keywords") else "") for k in fields}
+        en = {k: c.get(k + "_en") or ([] if k in ("issues", "keywords") else "") for k in fields}
+        differences = numeric_guard.bilingual_amount_issues(en, ko)
+        if differences:
+            add("AMOUNT_MISMATCH", f"주간 {c['cc']} ({c.get('week_start')}~{c.get('week_end')}) — "
+                + "; ".join(differences[:3]),
                 brief=(c["cc"], "weekly"))
         try:
             lag = (today - date.fromisoformat(c["week_end"])).days
