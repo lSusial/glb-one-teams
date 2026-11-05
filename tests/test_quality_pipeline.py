@@ -1397,6 +1397,23 @@ class DailyHighlightsReturnTests(unittest.TestCase):
         self.assertIsNotNone(
             self.db.execute('SELECT items FROM daily_highlights').fetchone())
 
+    def test_unparseable_response_is_retried_once_with_larger_budget(self):
+        # 2026-11-05 새벽: 응답 해석 실패({})로 'LLM이 0개 반환' 스킵 — 홈 핵심·퀴즈가 전날 그대로
+        good = {'highlights': [{'category': '금리', 'headline_ko': '연준 금리 인상', 'headline_en': 'Fed raises rates',
+                                'country_codes': ['US'], 'source_article_ids': [1]}]}
+        calls = []
+
+        class Flaky:
+            model_id = 'test:model'
+
+            def complete_json(self, system, user, **kw):
+                calls.append(kw.get('max_tokens'))
+                return {} if len(calls) == 1 else good
+
+        self.assertEqual(briefing.generate_daily_highlights(self.db, provider=Flaky()), {'written': 1})
+        self.assertEqual(len(calls), 2)
+        self.assertGreaterEqual(min(calls), 8000)
+
 
 class NumericGuardTests(unittest.TestCase):
     def test_usd_prefix_and_korean_man_units_are_parsed(self):

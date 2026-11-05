@@ -605,7 +605,12 @@ def generate_daily_highlights(
     count = config.HIGHLIGHTS_COUNT
     asked = count + config.HIGHLIGHTS_EXTRA
     provider = provider or get_provider("smart", use_batch=False)
-    data = provider.complete_json(_system_highlights(asked), user, max_tokens=4000)
+    # 15개 항목(한·영) 응답이 길어 4000토큰에서 잘리거나 JSON이 깨지면 {}가 돼 조용히 스킵됐다
+    # (2026-11-05 홈 핵심·퀴즈가 전날 그대로) — 한도를 넉넉히 두고 해석 실패 시 1회 재요청.
+    data = provider.complete_json(_system_highlights(asked), user, max_tokens=8000)
+    if not data.get("highlights"):
+        log.warning("글로벌 핵심 — 응답 해석 실패(항목 없음), 1회 재요청")
+        data = provider.complete_json(_system_highlights(asked), user, max_tokens=8000)
     items = _validate_highlight_sources(data.get("highlights") or [], rows, asked)
     items = _select_highlights(items, count, config.HIGHLIGHTS_PER_COUNTRY,
                                config.HIGHLIGHTS_MIN_GLOBAL, config.HIGHLIGHTS_MAX_GLOBAL)
