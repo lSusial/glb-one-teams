@@ -503,6 +503,9 @@ def cmd_ai(args):
     print(f"   대상={sl['total']} 해소={sl['resolved']}")
     print("▶ 링크 해소 후 노출 기사·관련 출처 본문 보강...")
     _ai_guard(lambda: _recover_display_fulltext(conn, use_batch=ub), "ai")
+    # 마지막 재분석으로 점수·제목이 바뀌었으므로, 후속 생성 대상 선택 전에 대표를 다시 고른다.
+    reps = llm_dedup.refresh_representatives(conn, days=days or 7, apply=True)
+    print(f"   본문 보강 후 그룹 대표 교체={reps['rep_changed']}건")
     print("▶ [4/8] 모달 긴 요약(노출 기사만)...")
     se = _ai_guard(lambda: llm_expand.run_expand(conn, use_batch=ub,
         article_ids=export_json.visible_article_ids(conn)), "ai")

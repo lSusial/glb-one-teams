@@ -56,6 +56,7 @@ class DailyRecoveryTests(unittest.TestCase):
             recover = stack.enter_context(patch.object(main, '_recover_display_fulltext'))
             calls = {t: stack.enter_context(patch(t, return_value=defaultdict(int))) for t in targets}
             timeline = Mock()
+            timeline.attach_mock(calls['llm_dedup.refresh_representatives'], 'refresh')
             timeline.attach_mock(calls['fulltext.resolve_display_links'], 'resolve')
             timeline.attach_mock(recover, 'recover')
             timeline.attach_mock(calls['llm_expand.run_expand'], 'expand')
@@ -63,7 +64,63 @@ class DailyRecoveryTests(unittest.TestCase):
                 main.cmd_ai(SimpleNamespace(days=2, sync=True))
             self.assertEqual(calls['llm_ranker.run_rank'].call_args.kwargs['days'], 7)
             self.assertEqual(calls['briefing.run_briefing'].call_args.kwargs['days'], 1)
-            self.assertEqual([call[0] for call in timeline.mock_calls], ['resolve', 'recover', 'expand'])
+            self.assertEqual([call[0] for call in timeline.mock_calls],
+                             ['refresh', 'resolve', 'recover', 'refresh', 'expand'])
+            self.assertTrue(all(call.kwargs == {'days': 7, 'apply': True}
+                                for call in calls['llm_dedup.refresh_representatives'].call_args_list))
+
+    def test_post_recovery_rep_is_visible_before_expansion_and_group_links_are_preserved(self):
+        self.db.executescript('''
+            ALTER TABLE articles_raw ADD COLUMN dup_by_ai INTEGER DEFAULT 0;
+            ALTER TABLE articles_raw ADD COLUMN title_ko TEXT;
+            ALTER TABLE articles_raw ADD COLUMN title_en TEXT;
+        ''')
+        targets = [
+            'llm_prefilter.run_prefilter', 'llm_prefilter.rescue_sparse_countries',
+            'fulltext.run_fulltext', 'llm_ranker.run_rank', 'llm_dedup.run_dedup',
+            'fulltext.resolve_display_links', 'llm_expand.run_expand',
+            'category_guard.fix_ungrounded_geo', 'llm_translate.run_translate',
+            'briefing.run_briefing', 'briefing.generate_daily_highlights',
+            'briefing.generate_daily_quiz',
+        ]
+        for final_score, expected_rep in ((47, 2), (72, 1)):
+            with self.subTest(final_score=final_score):
+                self.db.execute('DELETE FROM articles_raw')
+                self.add(1, 2, 'Fed holds interest rates', '2026-11-04', 'keep', 72)
+                self.add(2, 2, 'Fed holds interest rates after meeting', '2026-11-03', 'keep', 61)
+                self.add(3, 2, 'Syndicated copy', '2026-11-03')
+                self.add(4, 2, 'Unrelated bank acquisition', '2026-11-04', 'keep', 80)
+                self.db.execute('UPDATE articles_raw SET duplicate_of=1,dup_by_ai=1 WHERE article_id=2')
+                self.db.execute('UPDATE articles_raw SET duplicate_of=1 WHERE article_id=3')
+                self.db.commit()
+
+                def recover(conn, use_batch):
+                    # 본문 보강 뒤 대표가 55점 아래로 내려간 실제 유형을 재현한다.
+                    conn.execute('UPDATE articles_raw SET ai_score=? WHERE article_id=1', (final_score,))
+                    conn.commit()
+
+                def visible(conn):
+                    return {r[0] for r in conn.execute(
+                        'SELECT article_id FROM articles_raw WHERE duplicate_of IS NULL AND ai_score>=55')}
+
+                with ExitStack() as stack:
+                    stack.enter_context(patch.object(main.db, 'open_conn', return_value=self.db))
+                    stack.enter_context(patch.object(main, '_expanded_ai_days', return_value=7))
+                    stack.enter_context(patch.object(main, '_recover_display_fulltext', side_effect=recover))
+                    stack.enter_context(patch('export_json.visible_article_ids', side_effect=visible))
+                    calls = {t: stack.enter_context(patch(t, return_value=defaultdict(int))) for t in targets}
+                    with redirect_stdout(io.StringIO()):
+                        main.cmd_ai(SimpleNamespace(days=2, sync=True))
+                    self.assertEqual(calls['llm_expand.run_expand'].call_args.kwargs['article_ids'],
+                                     {expected_rep, 4})
+                    # 대표 재선정은 기존 함수의 로컬 계산이며 LLM 재분석·중복판정을 추가 호출하지 않는다.
+                    self.assertEqual(calls['llm_ranker.run_rank'].call_count, 1)
+                    self.assertEqual(calls['llm_dedup.run_dedup'].call_count, 1)
+                links = dict(self.db.execute('SELECT article_id,duplicate_of FROM articles_raw'))
+                self.assertEqual(links[expected_rep], None)
+                self.assertEqual(links[3], expected_rep)
+                self.assertEqual(links[1 if expected_rep == 2 else 2], expected_rep)
+                self.assertIsNone(links[4])
 
     def test_ai_window_expands_to_recent_unprocessed_backlog(self):
         self.add(1, 2, 'Fed policy update in the US', '2026-10-19', 'keep', 60)
