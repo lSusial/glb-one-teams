@@ -1,8 +1,8 @@
 """
 배포 차단 금액 불일치 AI 재보정 (amount_repair.py)
 
-display_audit --hold-out이 남긴 차단 항목 중 한국어 금액이 영문과 다른 필드만, 코드가 계산한
-정확한 한국어 금액(numeric_guard.korean_amount_hints)을 지정해 AI에 1회 고치게 한다. 고친 결과가
+display_audit --hold-out이 남긴 차단 항목 중 한국어 금액이 영문과 다른 필드만,
+영문 금액 표기를 그대로 복사하도록 AI에 1회 고치게 한다. 고친 결과가
 금액 검증을 통과할 때만 저장하고, 못 고친 건은 deploy_web.sh가 보류(제외) export로 넘긴다.
 (2026-10-26 — 금액 감사 1~2건 때문에 화면 전체 배포가 사흘 멈춤)
 """
@@ -18,23 +18,25 @@ _KO_COL = {"t": "title_ko", "q": "summary_ko", "expanded_summary": "expanded_sum
 _BRIEF_FIELDS = {"daily": ("summary",), "weekly": ("summary", "outlook", "key_stat", "issues", "keywords")}
 
 SYSTEM = ("You fix monetary amounts in a Korean text so they match the English source. "
-          "Use the exact Korean amount notations given. Change only the wrong amount expressions and keep "
-          "every other part of the Korean text exactly as it is. Output only the corrected Korean text.")
+          "Copy the English monetary expressions exactly. Change only the wrong amount expressions and keep "
+          "every other part of the Korean text exactly as it is. Output only the corrected Korean text."
+          + numeric_guard.PRESERVE_MONEY_PROMPT)
 
 _BRIEF_SYSTEM = (
     "Translate the provided English briefing fields faithfully into Korean. English is canonical. "
     "The current Korean text has missing/extra monetary amounts or mismatched array items. "
     "Add or omit no facts or figures from English; remove Korean-only facts and amounts. "
     "Keep already matching Korean array items unchanged. Preserve array length and item order. "
-    "Use formal Korean and the supplied monetary hints; keep English monetary notation if unsure. "
+    "Use formal Korean and copy the English monetary expressions exactly. "
     "Return ONLY JSON with the requested field names (no _ko/_en suffixes). "
     "Never return or modify English fields."
+    + numeric_guard.PRESERVE_MONEY_PROMPT
 )
 
 
 def fix_korean(provider, en: str, ko: str) -> str | None:
     """금액만 고친 한국어. 결과가 여전히 영문과 금액이 다르거나 본문이 크게 달라지면 None."""
-    user = f"English source:\n{en}\n\n{numeric_guard.korean_amount_hints(en)}\n\nKorean text:\n{ko}"
+    user = f"English source:\n{en}\n\nKorean text:\n{ko}"
     out = (provider.complete(SYSTEM, user, max_tokens=max(512, len(ko) * 3)) or "").strip()
     if not out or not re.search(r"[가-힣]", out) or not 0.7 <= len(out) / max(1, len(ko)) <= 1.3:
         return None
@@ -88,7 +90,6 @@ def repair(conn, hold: dict, provider=None) -> list[str]:
         user = json.dumps({'english': source,
                            'current_korean': {field: korean[field] for field in bad_fields},
                            'validation_errors': differences}, ensure_ascii=False)
-        user += '\n' + numeric_guard.korean_amount_hints(json.dumps(source, ensure_ascii=False))
         result = provider.complete_json(_BRIEF_SYSTEM, user, max_tokens=6000) or {}
         candidate = dict(korean)
         valid = isinstance(result, dict)

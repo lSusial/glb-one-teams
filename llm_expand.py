@@ -71,6 +71,7 @@ _SYS = (
     "meta-commentary about the article itself, no stacked hedging qualifiers.\n"
     "expanded_summary_en in English; expanded_summary_ko is a natural Korean rendering of the "
     "SAME content (not a separate re-summary) — '~다' 체, 신문 기사 톤."
+    + numeric_guard.PRESERVE_MONEY_PROMPT
 )
 
 # 소스가 헤드라인+한두 문장뿐인 얇은 경우(페이월로 스니펫만 남은 Bloomberg/WSJ 등) 전용.
@@ -97,6 +98,7 @@ _SYS_THIN = (
     "meta-commentary about the article itself, no stacked hedging qualifiers.\n"
     "expanded_summary_en in English; expanded_summary_ko is a natural Korean rendering of the "
     "SAME content (not a separate re-summary) — '~다' 체, 신문 기사 톤."
+    + numeric_guard.PRESERVE_MONEY_PROMPT
 )
 
 # 긴 요약 한국어 금액 재요청 — 검증 통과한 영문만 주고 번역만 다시 받는다. 같은 소스로
@@ -104,13 +106,12 @@ _SYS_THIN = (
 _SYS_KO_RETRY = (
     "Translate the English briefing below into natural Korean ('~다' 체, 신문 기사 톤), keeping "
     "every paragraph and fact. A previous Korean version converted money amounts with the wrong "
-    "unit scale (e.g. crore/billion → 억/조 off by 10x). For every amount, copy the exact Korean "
-    "form from the provided hint list instead of converting units yourself. "
+    "unit scale. Correct this by copying the English monetary expressions exactly. "
     'Output ONLY this JSON: {"expanded_summary_ko": "..."}'
+    + numeric_guard.PRESERVE_MONEY_PROMPT
 )
 
-# 힌트 재요청도 오환산하면(Haiku가 힌트를 무시, 2026-10-21 Jio·Pubali 등 매일 반복) 금액만 원문 표기
-# 그대로 두게 한다. 단위 환산을 하지 않으니 금액 검증을 통과한다.
+# 두 번째 재요청도 원문 표기 유지 지시를 강조한다(기존 최대 재요청 횟수 유지).
 _SYS_KO_KEEP = (
     "Translate the English briefing below into natural Korean ('~다' 체, 신문 기사 톤), keeping "
     "every paragraph and fact. Do NOT convert any money amount: copy each amount exactly as "
@@ -118,6 +119,7 @@ _SYS_KO_KEEP = (
     "'$10.8 billion', 'Tk 800 crore') and do not add any Korean conversion of it "
     "(no '억'/'조' amounts, not even in parentheses). "
     'Output ONLY this JSON: {"expanded_summary_ko": "..."}'
+    + numeric_guard.PRESERVE_MONEY_PROMPT
 )
 
 _THIN_SOURCE_MAXLEN = 300  # 이 길이(자) 이하면 _SYS_THIN 사용
@@ -194,9 +196,6 @@ def run_expand(conn, provider: LLMProvider | None = None,
         if siblings:
             stats["synthesized"] += 1
         user = _published_line(r) + f"매체: {r['media_name']}  국가: {r['cc']}\n" + "\n\n".join(blocks)
-        hint = numeric_guard.korean_amount_hints("\n".join(blocks))
-        if hint:
-            user += f"\n\n{hint}"
         sys_prompt = _SYS_THIN if sum(len(s) for s in snippets) <= _THIN_SOURCE_MAXLEN else _SYS
         requests.append((cid, sys_prompt, user, 4000))
         row_by_id[cid] = r
@@ -226,15 +225,12 @@ def run_expand(conn, provider: LLMProvider | None = None,
         )
         stats["written"] += 1
 
-    # 1차: 코드 환산 힌트를 주고 재번역 → 2차: 금액은 원문 표기 그대로 두고 재번역
+    # 두 재요청 모두 검증된 영문만 주고 금액 표기를 그대로 복사하도록 한다.
     for sys_prompt in (_SYS_KO_RETRY, _SYS_KO_KEEP):
         if not retry:
             break
-        def user(en):
-            hint = numeric_guard.korean_amount_hints(en) if sys_prompt is _SYS_KO_RETRY else ""
-            return f"{en}\n\n{hint}" if hint else en
         again = provider.complete_json_batch(
-            [(cid, sys_prompt, user(en), 4000) for cid, (_, en) in retry.items()])
+            [(cid, sys_prompt, en, 4000) for cid, (_, en) in retry.items()])
         failed = {}
         for cid, (r, en) in retry.items():
             ko = str((again.get(cid) or {}).get("expanded_summary_ko") or "").strip()[:7000]

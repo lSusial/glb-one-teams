@@ -63,6 +63,7 @@ _SYSTEM = (
     '"key_stat_en": "one key statistic", "summary_ko": "영문 요약의 충실한 한국어 번역", '
     '"issues_ko": ["영문 이슈와 같은 순서·수치로 번역"], "outlook_ko": "영문 전망의 번역", '
     '"keywords_ko": ["영문과 같은 개수·순서로 번역"], "key_stat_ko": "영문과 같은 대표 수치"}'
+    + numeric_guard.PRESERVE_MONEY_PROMPT
 )
 
 # 일일(daily) 브리핑 — 현지언론 화면 상단용. 전일+당일 기사를 4~5문장으로 종합(한/영 동시).
@@ -78,6 +79,7 @@ _SYSTEM_DAILY = (
     "(합쇼체: every sentence ends in '~습니다'), written in Hangul only — no Chinese characters or "
     "Japanese kana (write 증권감독관리위원회, not 证监会). Output ONLY JSON:\n"
     '{"summary_en": "4-5 sentence English briefing", "summary_ko": "영어 브리핑의 한국어 번역(~습니다체)"}'
+    + numeric_guard.PRESERVE_MONEY_PROMPT
 )
 
 # 오늘의 글로벌 핵심 — 전 거점 횡단 종합(하루 1회 1콜). 겹치는 주제는 하나로 묶는다.
@@ -105,6 +107,7 @@ def _system_highlights(count: int) -> str:
         f'The "highlights" array must have exactly {count} items, ordered by importance. '
         'Every item must cite at least one source_article_id; never invent an ID. '
         'Copy every number and monetary unit exactly from the cited source; do not convert units.'
+        + numeric_guard.PRESERVE_MONEY_PROMPT
     )
 
 
@@ -123,6 +126,7 @@ _SYSTEM_QUIZ = (
     '"explanation_ko": "정답 근거 1문장", "explanation_en": "1-sentence reason for the answer", '
     '"source_article_id": 123}\n'
     '"source_article_id" must be exactly one of the article_id values shown in the input.'
+    + numeric_guard.PRESERVE_MONEY_PROMPT
 )
 
 
@@ -182,16 +186,17 @@ _EN_HANGUL_RETRY_NOTE = (
 _AMOUNT_RETRY_NOTE = (
     "\n\n[재요청] 직전 응답의 금액이 기사 목록과 달라 폐기됐다. 금액은 기사 목록에 적힌 숫자·단위·통화를 "
     "그대로 옮겨 쓰고 직접 단위를 환산하지 마라. 한국어 브리핑에서도 금액은 영어 표기 그대로 쓴다"
-    "(예: '₹30,213 crore', '$3.5 trillion' — 억/조 환산 금지, 괄호 병기도 금지). 위의 '금액 한국어 표기' 줄은 무시한다."
+    "(예: '₹30,213 crore', '$3.5 trillion' — 억/조 환산 금지, 괄호 병기도 금지)."
 )
 
 _SYSTEM_WEEKLY_KO = (
     "Provide a faithful Korean translation of the verified English weekly briefing JSON below. "
     "Translate every field and every array item in exactly the same order. Add or omit no facts "
-    "or figures. Preserve monetary amounts exactly as written in English if unsure about units. "
+    "or figures. Preserve monetary amounts exactly as written in English. "
     "Use formal Korean (~습니다), no Chinese characters or Japanese kana. "
     "Return ONLY JSON with summary_ko, issues_ko (array), outlook_ko, keywords_ko (array), key_stat_ko. "
     "Do not rewrite or return any English fields."
+    + numeric_guard.PRESERVE_MONEY_PROMPT
 )
 
 
@@ -265,17 +270,13 @@ def run_briefing(
         meta[cc] = arts
         if not arts:
             continue
-        # 영어 기준본을 입력으로 쓰고 금액 한국어 힌트를 붙인다. 한국어 요약을 넣으면 영어 출력에서
-        # '3,021억 루피'를 '₹3,021 crore'로 되옮기며 10배 틀렸다(2026-10-21 IN 브리핑 미저장).
+        # 영어 기준본을 입력으로 쓰고 금액 표기를 유지한다. 환산된 한국어 입력·힌트는 넣지 않는다.
         bullets = "\n".join(
             f"- [{a['published_at']}] ({a['ai_score']}) {a['title']} :: {((a['summary_en'] or a['summary_ko']) or '')}"
             for a in arts
         )
         bullets_by_cc[cc] = bullets
         user = f"국가: {cc} ({kb_network.context_for(cc)})\n기사 목록:\n{bullets}"
-        hint = numeric_guard.korean_amount_hints(bullets)
-        if hint:
-            user += f"\n{hint}"
         # weekly는 한/영 요약+이슈 3~4개+전망+키워드까지 daily보다 필드가 훨씬 많아
         # 900으로는 잘려서 JSON 파싱이 깨진다(생성 도중 max_tokens 도달) — 여유를 둔다.
         # daily 900은 영어 선작성+번역으로 길어진 응답이 잘려 JSON이 깨졌다(2026-10-22 CN) — 여유를 둔다.
@@ -396,8 +397,7 @@ def run_briefing(
             pending = [(cc, again.get(cc) or {}) for cc, _ in retry]
         elif attempt == 2 and translation_retry:
             again = provider.complete_json_batch([
-                (cc, _SYSTEM_WEEKLY_KO, json.dumps(fields, ensure_ascii=False)
-                 + "\n" + numeric_guard.korean_amount_hints(json.dumps(fields, ensure_ascii=False)), 2200)
+                (cc, _SYSTEM_WEEKLY_KO, json.dumps(fields, ensure_ascii=False), 2200)
                 for cc, fields in translation_retry
             ])
             pending = [(cc, {**{k + "_en": v for k, v in fields.items()},

@@ -223,6 +223,7 @@ _STYLE_AND_SYNTH_BLOCK = (
     "\"Source 2:\", ...), synthesize ONE independent summary combining facts from ALL of them — do "
     "not just paraphrase a single source, and do not copy any one source's exact sentence structure "
     "or wording. If only one source is given, summarize that source normally."
+    + numeric_guard.PRESERVE_MONEY_PROMPT
 )
 
 

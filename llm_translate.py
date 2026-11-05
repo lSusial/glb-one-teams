@@ -36,10 +36,11 @@ _SYS = {
            "Keep KB branch names (예: 뉴욕지점, 프라삭은행). "
            "Preserve trading-session qualifiers: first-session close = 오전장 마감, "
            "intraday = 장중, full-day close = 종가. Never drop the session qualifier. "
-           'Output ONLY JSON: {"title_ko": "...", "summary": "..."}'),
+           'Output ONLY JSON: {"title_ko": "...", "summary": "..."}'
+           + numeric_guard.PRESERVE_MONEY_PROMPT),
     "en": ("Translate the 'summary' below into natural English "
            "(financial/business register). Keep KB branch/entity names. "
-           'Output ONLY JSON: {"summary": "..."}'),
+           'Output ONLY JSON: {"summary": "..."}' + numeric_guard.PRESERVE_MONEY_PROMPT),
 }
 
 
@@ -55,11 +56,6 @@ def _user(summary, title=""):
     if title:
         lines.append(f"title: {title[:200]}")
     lines.append(f"summary: {(summary or '')[:1500]}")
-    # 금액은 코드가 환산한 한국어 표기를 함께 준다(LLM이 crore·billion을 억·조로 옮기다 10배 틀림).
-    # 출력 금액 가드가 summary와 대조하므로 힌트도 summary 기준.
-    hint = numeric_guard.korean_amount_hints((summary or "")[:1500])
-    if hint:
-        lines.append(hint)
     return "\n".join(lines)
 
 

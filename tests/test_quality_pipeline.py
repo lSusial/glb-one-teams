@@ -954,21 +954,21 @@ class QualityTests(unittest.TestCase):
         row = self.db.execute('SELECT summary FROM country_briefings').fetchone()
         self.assertEqual(row[0], '연준이 300억 달러 규모 기구를 발표했다.')
 
-    def test_briefing_input_uses_english_canonical_with_korean_amount_hints(self):
+    def test_briefing_input_uses_english_canonical_without_converted_amount_hints(self):
         # 2026-10-21: 한국어 요약('3,021억 루피')을 입력으로 받아 영어를 '₹3,021 crore'로 되옮기며
         # 10배 틀려 재요청까지 실패, IN 일일 브리핑이 저장되지 않았다
         self.add(1, cc='IN', score=65)
         self.db.execute("UPDATE articles_raw SET summary_ko=?, summary_en=? WHERE article_id=1",
                         ('지오가 3,021억 루피 IPO를 연다.', 'Jio opens a ₹30,213 crore IPO.'))
         self.db.commit()
-        p = Provider({'summary_ko': '지오가 3,021억 루피 IPO를 연다.',
+        p = Provider({'summary_ko': '지오가 ₹30,213 crore IPO를 연다.',
                       'summary_en': 'Jio opens a ₹30,213 crore IPO.'})
         briefing.run_briefing(self.db, p, briefing_type='daily', countries=['IN'])
         user = p.requests[0][2]
         self.assertIn('₹30,213 crore', user)
-        hint = user.splitlines()[-1]                          # 코드가 환산한 금액 힌트가 마지막 줄
-        self.assertTrue(hint.startswith('금액 한국어 표기'))
-        self.assertIn('3,021억 루피', hint)
+        self.assertNotIn('금액 한국어 표기', user)
+        self.assertNotIn('3,021억 루피', user)
+        self.assertIn('Copy monetary expressions verbatim', p.requests[0][1])
         self.assertIsNotNone(self.db.execute('SELECT 1 FROM country_briefings').fetchone())
 
     def test_briefing_korean_amount_absent_from_english_is_retried(self):
@@ -1540,7 +1540,7 @@ class NumericGuardTests(unittest.TestCase):
         self.assertIsNone(row['expanded_summary_en'])
         self.assertIsNone(row['expanded_summary'])
 
-    def test_expanded_korean_summary_is_retranslated_once_with_amount_hints(self):
+    def test_expanded_korean_summary_retry_copies_english_amount(self):
         # 2026-10-21 라이브: 긴 요약 21건이 crore 10배 오환산으로 매일 같은 기사에서 거부됨
         db = sqlite3.connect(':memory:')
         db.row_factory = sqlite3.Row
@@ -1563,18 +1563,19 @@ class NumericGuardTests(unittest.TestCase):
                 if len(self.requests) == 1:   # 1차: 10배 오환산
                     return {r[0]: {'expanded_summary_en': en,
                                    'expanded_summary_ko': '공모 규모는 3조 213억 루피다.'} for r in requests}
-                return {r[0]: {'expanded_summary_ko': '공모 규모는 3,021억 루피다.'} for r in requests}
+                return {r[0]: {'expanded_summary_ko': '공모 규모는 Rs 30,213 crore다.'} for r in requests}
 
         p = Seq()
         llm_expand.run_expand(db, p)
         row = db.execute('SELECT expanded_summary, expanded_summary_en FROM articles_raw').fetchone()
-        self.assertEqual(row['expanded_summary'], '공모 규모는 3,021억 루피다.')
+        self.assertEqual(row['expanded_summary'], '공모 규모는 Rs 30,213 crore다.')
         self.assertEqual(row['expanded_summary_en'], en)
         self.assertEqual(len(p.requests), 2)
-        self.assertIn('3,021억 루피', p.requests[1][2])   # 재요청에 코드 환산 힌트 포함
+        self.assertEqual(p.requests[1][2], en)
+        self.assertIn('Copy monetary expressions verbatim', p.requests[1][1])
 
-    def test_expanded_korean_falls_back_to_source_amount_notation_after_hint_retry_fails(self):
-        # 2026-10-21: Haiku가 힌트를 무시하고 매번 10배 오환산 → 3건이 매일 한국어 없이 노출
+    def test_expanded_korean_keeps_source_notation_after_first_copy_retry_fails(self):
+        # 원문 복사 지시를 어긴 첫 재시도 뒤에도, 마지막 재요청은 동일한 원문 금액을 사용한다.
         db = sqlite3.connect(':memory:')
         db.row_factory = sqlite3.Row
         self.addCleanup(db.close)
@@ -1596,7 +1597,7 @@ class NumericGuardTests(unittest.TestCase):
                 if len(self.requests) == 1:
                     return {r[0]: {'expanded_summary_en': en,
                                    'expanded_summary_ko': '공모 규모는 3조 213억 루피다.'} for r in requests}
-                if len(self.requests) == 2:   # 힌트 재요청도 오환산
+                if len(self.requests) == 2:   # 첫 원문 복사 재요청도 오환산
                     return {r[0]: {'expanded_summary_ko': '공모 규모는 3조 213억 루피다.'} for r in requests}
                 return {r[0]: {'expanded_summary_ko': '공모 규모는 Rs 30,213 crore다.'} for r in requests}
 
@@ -1737,10 +1738,12 @@ class OtherCurrencyGuardTests(unittest.TestCase):
         src = 'a Tk20,000 crore fund'
         self.assertFalse(numeric_guard.amount_mismatch(src, '2,000억 타카 규모 기금'))
 
-    def test_translation_prompt_carries_korean_amount_hints(self):
+    def test_translation_prompt_keeps_source_amount_without_conversion_hints(self):
         import llm_translate
         user = llm_translate._user('Businesses seek loans from a Tk20,000 crore fund.', 'Tk20,000cr fund')
-        self.assertIn('2,000억 타카', user)
+        self.assertIn('Tk20,000 crore', user)
+        self.assertNotIn('2,000억 타카', user)
+        self.assertIn('Copy monetary expressions verbatim', llm_translate._SYS['ko'])
 
     def test_vnd_quadrillion_market_cap_is_checked_and_hinted_as_gyeong(self):
         # 2026-10-22 VN 브리핑: '10.3 quadrillion VND' 시가총액이 '10조 동'으로 1,000배 축소 —

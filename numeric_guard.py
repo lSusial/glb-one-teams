@@ -9,6 +9,19 @@ from __future__ import annotations
 
 import re
 
+# 생성·번역·보정의 첫 요청부터 같은 지시를 적용한다. 환산 힌트는 새 프롬프트에 넣지 않는다.
+PRESERVE_MONEY_PROMPT = (
+    "\n\nMonetary notation policy (overrides headline-length and style rules): "
+    "Copy monetary expressions verbatim from the supplied source: keep the currency symbol/code, "
+    "digits, decimal/grouping separators and scale unit together, including abbreviations. "
+    "Examples: ₹14,500 crore, Rp 831.55 billion, £190 million, $3.7B. "
+    "Do not calculate exchange-rate conversions, round amounts, translate currency/unit words, "
+    "expand abbreviations or rewrite scales into 원/억/조. Never add a converted amount in parentheses. "
+    "For bilingual output, write English first and copy its monetary expressions exactly into Korean; "
+    "translate only the surrounding sentences. In a short headline, omit an amount entirely or "
+    "exceed the target length rather than dropping its currency/unit or changing its notation."
+)
+
 _UNITS = {"": 1, "m": 1e6, "million": 1e6, "bn": 1e9, "bil": 1e9, "bln": 1e9,
           "billion": 1e9, "trillion": 1e12, "quadrillion": 1e15}
 _KO_UNITS = {"경": 1e16, "조": 1e12, "억": 1e8, "천만": 1e7, "백만": 1e6, "만": 1e4}

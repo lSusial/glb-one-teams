@@ -46,11 +46,12 @@ class AmountRepairTests(unittest.TestCase):
         conn = make_db()
         hold = {'links': {'https://m/a': [['q_en', 'q', 'Adani raised $133 billion', '아다니가 133억 달러를 조달했다']]},
                 'briefs': []}
-        p = FakeProvider('아다니가 1,330억 달러를 조달했다')
+        p = FakeProvider('아다니가 $133 billion을 조달했다')
         amount_repair.repair(conn, hold, provider=p)
-        self.assertIn('1,330억 달러', p.calls[0])     # 코드가 계산한 정확한 한국어 금액을 지정
+        self.assertIn('$133 billion', p.calls[0])
+        self.assertNotIn('금액 한국어 표기', p.calls[0])
         self.assertEqual(conn.execute("SELECT summary_ko FROM articles_raw WHERE article_id=1").fetchone()[0],
-                         '아다니가 1,330억 달러를 조달했다')
+                         '아다니가 $133 billion을 조달했다')
         self.assertEqual(conn.execute("SELECT summary_ko FROM articles_raw WHERE article_id=2").fetchone()[0],
                          '아다니가 133억 달러를 조달했다')
 
