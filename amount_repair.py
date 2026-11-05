@@ -15,11 +15,21 @@ import numeric_guard
 
 # 카드 필드 → DB 한국어 컬럼. (q_en, t_en)처럼 영어끼리 비교한 건 고칠 한국어가 없어 제외.
 _KO_COL = {"t": "title_ko", "q": "summary_ko", "expanded_summary": "expanded_summary"}
-_BRIEF_FIELDS = {"daily": ("summary",), "weekly": ("summary", "outlook", "key_stat", "issues")}
+_BRIEF_FIELDS = {"daily": ("summary",), "weekly": ("summary", "outlook", "key_stat", "issues", "keywords")}
 
 SYSTEM = ("You fix monetary amounts in a Korean text so they match the English source. "
           "Use the exact Korean amount notations given. Change only the wrong amount expressions and keep "
           "every other part of the Korean text exactly as it is. Output only the corrected Korean text.")
+
+_BRIEF_SYSTEM = (
+    "Translate the provided English briefing fields faithfully into Korean. English is canonical. "
+    "The current Korean text has missing/extra monetary amounts or mismatched array items. "
+    "Add or omit no facts or figures from English; remove Korean-only facts and amounts. "
+    "Keep already matching Korean array items unchanged. Preserve array length and item order. "
+    "Use formal Korean and the supplied monetary hints; keep English monetary notation if unsure. "
+    "Return ONLY JSON with the requested field names (no _ko/_en suffixes). "
+    "Never return or modify English fields."
+)
 
 
 def fix_korean(provider, en: str, ko: str) -> str | None:
@@ -63,19 +73,43 @@ def repair(conn, hold: dict, provider=None) -> list[str]:
                            "ORDER BY briefing_date DESC, generated_at DESC LIMIT 1", (cc, typ)).fetchone()
         if not row:
             continue
-        for f in _BRIEF_FIELDS.get(typ, ()):
-            ko, en = row[f] or "", row[f + "_en"] or ""
-            if f == "issues":
-                ko_l, en_l = json.loads(ko or "[]"), json.loads(en or "[]")
-                fixed = [attempt(f"{typ} {cc} issues[{i}]", e, k)
-                         if numeric_guard.amount_mismatch(e, k) else None for i, (k, e) in enumerate(zip(ko_l, en_l))]
-                if any(fixed):
-                    new = json.dumps([x or k for x, k in zip(fixed, ko_l)] + ko_l[len(fixed):], ensure_ascii=False)
-                else:
-                    new = None
+        fields = _BRIEF_FIELDS.get(typ, ())
+        english, korean = {}, {}
+        for field in fields:
+            for target, column in ((english, field + '_en'), (korean, field)):
+                raw = row[column] or ''
+                target[field] = json.loads(raw or '[]') if field in ('issues', 'keywords') else raw
+        differences = numeric_guard.bilingual_amount_issues(english, korean)
+        bad_fields = [field for field in fields if numeric_guard.bilingual_amount_issues(
+            {field: english[field]}, {field: korean[field]})]
+        if not bad_fields:
+            continue
+        source = {field: english[field] for field in bad_fields}
+        user = json.dumps({'english': source,
+                           'current_korean': {field: korean[field] for field in bad_fields},
+                           'validation_errors': differences}, ensure_ascii=False)
+        user += '\n' + numeric_guard.korean_amount_hints(json.dumps(source, ensure_ascii=False))
+        result = provider.complete_json(_BRIEF_SYSTEM, user, max_tokens=6000) or {}
+        candidate = dict(korean)
+        valid = isinstance(result, dict)
+        for field in bad_fields:
+            value = result.get(field) if isinstance(result, dict) else None
+            if isinstance(english[field], list):
+                valid = valid and isinstance(value, list) and all(isinstance(item, str) for item in value)
+                if valid and isinstance(korean[field], list) and len(value) == len(korean[field]) == len(english[field]):
+                    # 같은 배열에서 이미 검증된 항목은 모델이 다시 써도 기존 문구를 유지한다.
+                    value = [old if not numeric_guard.bilingual_amount_issues({'item': en}, {'item': old}) else new
+                             for en, old, new in zip(english[field], korean[field], value)]
             else:
-                new = attempt(f"{typ} {cc} {f}", en, ko) if numeric_guard.amount_mismatch(en, ko) else None
-            if new:
-                conn.execute(f"UPDATE country_briefings SET {f}=? WHERE briefing_id=?", (new, row["briefing_id"]))
+                valid = valid and isinstance(value, str)
+            candidate[field] = value
+        if not valid or numeric_guard.bilingual_amount_issues(english, candidate):
+            log.append(f"실패 {typ} {cc} — 재번역 검증 불일치, 기존 브리핑 보존")
+            continue
+        for field in bad_fields:
+            value = candidate[field]
+            stored = json.dumps(value, ensure_ascii=False) if isinstance(value, list) else value
+            conn.execute(f"UPDATE country_briefings SET {field}=? WHERE briefing_id=?", (stored, row['briefing_id']))
+            log.append(f"수정 {typ} {cc} {field} — 영문 기준 재번역·전체 필드 검증 통과")
     conn.commit()
     return log
