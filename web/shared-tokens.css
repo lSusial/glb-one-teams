@@ -432,25 +432,24 @@ ul{margin:0;padding:0;list-style:none}
 }
 
 /* ── 하단 브랜드 배너(GLOBAL NETWORK) ─────────────────
-   2026-09-08 교체 — 크림 카드형에서 KB 브라운 그라데이션으로(제공 시안 bottom_banner_3).
    · CTA 버튼 제거: 배너 전체가 링크다(aria-label 로 목적지를 알린다).
-   · 어두운 바탕이라 글자는 흰색, 심볼·연결호는 --gold-2 로 대비를 잡는다.
-   · 시안의 --kb-gold(#FFBC00) 대신 사이트 토큰 --gold-2(#FFB300) 사용. */
+   · 흰색에 가까운 크림 바탕에 회색 글자, KB Yellow(#FFBC00) 심볼을 사용한다.
+   · 지도·연결호는 옅은 골드로 표현한다. */
 .gbn{
   position:relative;overflow:hidden;isolation:isolate;
   display:flex;align-items:center;min-height:clamp(84px,12.6cqi,112px);
   margin:10px 0 2px;padding:clamp(16px,2.4cqi,22px) var(--pad);
-  border:0;border-radius:var(--r-lg);box-shadow:var(--shadow);
-  background:linear-gradient(112deg,#4A3728 0%,#695647 52%,#8B7355 100%);
-  color:#fff;
+  border:1px solid #EEECE6;border-radius:var(--r-lg);box-shadow:0 2px 8px rgba(25,34,52,.03);
+  background:linear-gradient(110deg,#FFFFFF 0%,#FFFCF3 100%);
+  color:#626366;
 }
-.gbn-art{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;opacity:.85}
+.gbn-art{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;color:#CCAA58;opacity:.75}
 .gbn-in{position:relative;z-index:1;width:100%;display:flex;align-items:center;
         gap:clamp(11px,1.8cqi,18px);flex-wrap:wrap}
 .gbn-l{display:flex;align-items:center;gap:clamp(11px,1.8cqi,18px);min-width:0}
 .gbn-mark{height:clamp(38px,5.6cqi,52px);width:auto;aspect-ratio:47/34;flex:none;
-          color:var(--gold-2);filter:drop-shadow(0 2px 6px rgba(0,0,0,.45))}
-.gbn-l p{font-family:var(--f-en);font-weight:600;color:#fff;
+          color:#FFBC00}
+.gbn-l p{font-family:var(--f-en);font-weight:600;color:inherit;
          font-size:clamp(13px,2.2cqi,19px);line-height:1.35;letter-spacing:.005em}
 @media (max-width:420px){
   .gbn-l p{font-size:12.5px}

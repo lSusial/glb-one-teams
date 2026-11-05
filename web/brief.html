@@ -562,12 +562,12 @@
     }).join('');
     const nodes = HUBS.map((h) => {
       const q = P(h[0], h[1]);
-      return `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="5" fill="#FFB300" opacity=".22"/>`
-           + `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="2.2" fill="#FFB300"/>`;
+      return `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="5" fill="currentColor" opacity=".22"/>`
+           + `<circle cx="${q[0].toFixed(1)}" cy="${q[1].toFixed(1)}" r="2.2" fill="currentColor"/>`;
     }).join('');
     el.innerHTML =
-      `<g fill="#C4B09A" opacity=".55">${dots}</g>`
-      + `<g fill="none" stroke="#FFB300" stroke-width="1.1" opacity=".85" stroke-linecap="round">${arcs}</g>`
+      `<g fill="currentColor" opacity=".32">${dots}</g>`
+      + `<g fill="none" stroke="currentColor" stroke-width="1.1" opacity=".7" stroke-linecap="round">${arcs}</g>`
       + nodes;
   }
 
