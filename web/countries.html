@@ -183,7 +183,7 @@
     }).join('');
     document.querySelectorAll('.pk').forEach(p => p.addEventListener('click', () => {
       if (p.dataset.cc === fCC) return;
-      fCC = p.dataset.cc; fCat = ''; lkPresOpen = false; renderPresence();
+      fCC = p.dataset.cc; fCat = ''; lkPresOpen = false; renderPresence(); keepCC(fCC);
     }));
     document.querySelectorAll('.pk .pin').forEach(el => el.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -191,7 +191,7 @@
       if (PINS.has(cc)) PINS.delete(cc); else PINS.add(cc);
       savePins(PINS); initPicker(); renderPresence();
     }));
-    if (!fCC && cs.length) {
+    if ((!fCC || !cs.some(c => c.cc === fCC)) && cs.length) {   // 모니터링에서 고른 미진출국 ?cc 등은 기본 거점으로
       const withNews = cs.filter(c => (c.count||0) > 0);
       fCC = (withNews[0] || cs[0]).cc;
     }
@@ -387,14 +387,24 @@
   if (EN) document.querySelectorAll('[data-en-label]').forEach(el => el.setAttribute('aria-label', el.getAttribute('data-en-label')));
 
   // ?date/?lang 보존한 채 하단 내비 이동(자체 쿼리 있는 링크는 그 값 유지)
-  const carry = new URLSearchParams(location.search); carry.delete('tab');
-  document.querySelectorAll('.botnav a').forEach(a => {
-    const [path, ownQuery] = a.getAttribute('href').split('?');
-    const merged = new URLSearchParams(ownQuery || '');
-    for (const [k,v] of carry) merged.set(k, v);
-    const qs = merged.toString();
-    a.href = path + (qs ? '?' + qs : '');
-  });
+  function syncNav(){
+    const carry = new URLSearchParams(location.search); carry.delete('tab');
+    document.querySelectorAll('.botnav a').forEach(a => {
+      const [path, ownQuery] = (a.dataset.href || (a.dataset.href = a.getAttribute('href'))).split('?');
+      const merged = new URLSearchParams(ownQuery || '');
+      for (const [k,v] of carry) merged.set(k, v);
+      const qs = merged.toString();
+      a.href = path + (qs ? '?' + qs : '');
+    });
+  }
+  // 고른 국가를 URL·하단 내비에 반영 — 처음 연 ?cc가 그대로 넘어가 다른 탭에서 엉뚱한 국가가 열리던 문제(2026-11-05)
+  function keepCC(cc){
+    const u = new URL(location.href);
+    if (cc) u.searchParams.set('cc', cc); else u.searchParams.delete('cc');
+    history.replaceState(null, '', u);
+    syncNav();
+  }
+  syncNav();
 })();
 </script>
 </body>

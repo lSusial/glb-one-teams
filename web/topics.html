@@ -143,7 +143,7 @@
     const chip=(cc,flag,label,n,sel)=>`<button class="cc-pk" data-cc="${cc}" aria-selected="${sel}">${flag?`<span class="fg">${esc(flag)}</span>`:''}${label?`<span class="cc-nm">${esc(label)}</span>`:''}<span class="n">${n}</span></button>`;
     const codes=[...ccm.keys()].sort((x,y)=>ccm.get(y).n-ccm.get(x).n);
     $('#twcc').innerHTML = chip('','',EN?'All':'전체',t.arts.length,fCC==='') + codes.map(cc=>chip(cc,ccm.get(cc).flag,ccm.get(cc).label,ccm.get(cc).n,fCC===cc)).join('');
-    $('#twcc').querySelectorAll('.cc-pk').forEach(b=>b.addEventListener('click',()=>{ fCC=b.dataset.cc; render(curCode); }));
+    $('#twcc').querySelectorAll('.cc-pk').forEach(b=>b.addEventListener('click',()=>{ fCC=b.dataset.cc; render(curCode); keepCC(fCC); }));
     return ccm;
   }
 
@@ -199,15 +199,25 @@
 
   // 날짜/언어 보존한 채 다른 탭·하단 내비로 이동. 각 링크 고유 쿼리(예: ?tab=non)는
   // 유지하고 그 위에 현재 ?date/?lang만 덧붙인다.
-  const carry = new URLSearchParams(location.search); carry.delete('tab'); carry.delete('topic');
-  document.querySelectorAll('.botnav a').forEach(a => {
-    const raw = a.getAttribute('href');
-    const [path, ownQuery] = raw.split('?');
-    const merged = new URLSearchParams(ownQuery || '');
-    for (const [k,v] of carry) merged.set(k, v);
-    const qs = merged.toString();
-    a.href = path + (qs ? '?' + qs : '');
-  });
+  function syncNav(){
+    const carry = new URLSearchParams(location.search); carry.delete('tab'); carry.delete('topic');
+    document.querySelectorAll('.botnav a').forEach(a => {
+      const raw = a.dataset.href || (a.dataset.href = a.getAttribute('href'));
+      const [path, ownQuery] = raw.split('?');
+      const merged = new URLSearchParams(ownQuery || '');
+      for (const [k,v] of carry) merged.set(k, v);
+      const qs = merged.toString();
+      a.href = path + (qs ? '?' + qs : '');
+    });
+  }
+  // 고른 국가를 URL·하단 내비에 반영(countries.html과 같은 이유, 2026-11-05)
+  function keepCC(cc){
+    const u = new URL(location.href);
+    if (cc) u.searchParams.set('cc', cc); else u.searchParams.delete('cc');
+    history.replaceState(null, '', u);
+    syncNav();
+  }
+  syncNav();
 })();
 </script>
 </body>
