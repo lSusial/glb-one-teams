@@ -280,7 +280,8 @@ def run_briefing(
         # weekly는 한/영 요약+이슈 3~4개+전망+키워드까지 daily보다 필드가 훨씬 많아
         # 900으로는 잘려서 JSON 파싱이 깨진다(생성 도중 max_tokens 도달) — 여유를 둔다.
         # daily 900은 영어 선작성+번역으로 길어진 응답이 잘려 JSON이 깨졌다(2026-10-22 CN) — 여유를 둔다.
-        requests.append((cc, system, user, 1600 if daily else 2200))
+        # weekly 2200도 2026-11-09 HK·ID 응답이 잘렸다(다른 국가도 1,600~2,145 사용) — 4000.
+        requests.append((cc, system, user, 1600 if daily else 4000))
 
     results = provider.complete_json_batch(requests) if requests else {}
 
@@ -299,6 +300,12 @@ def run_briefing(
                         "summary_en": "No articles met the briefing criteria for this period."}
             if not data:
                 continue
+                # 응답이 잘려 JSON을 못 읽으면 빈 결과다. 조용히 넘기면 옛 브리핑이 그대로 남는다.
+                if attempt == 1:
+                    log.warning("브리핑 응답 해석 실패 — 재요청(국가=%s, %s)", cc, briefing_type)
+                    retry.append((cc, ""))
+                else:
+                    log.warning("브리핑 응답 해석 실패 — 저장 안 함(국가=%s, %s)", cc, briefing_type)
             if daily:
                 summary    = str(data.get("summary_ko") or data.get("summary") or "")[:2000]
                 summary_en = str(data.get("summary_en") or "")[:2000]

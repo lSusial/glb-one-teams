@@ -133,6 +133,15 @@ class WeeklyGenerationTests(unittest.TestCase):
         self.assertEqual(tuple(self.conn.execute('SELECT summary,issues FROM country_briefings').fetchone()), original)
 
 
+    def test_truncated_reply_is_retried_with_larger_budget(self):
+        # 2026-11-09 HK·ID 주간 응답이 2200토큰에서 잘려 빈 결과 → 경고 없이 지난주 브리핑이 남았다.
+        good = weekly_response()
+        good['issues_en'] = ['Bank surcharge doubled, with a £190 million loss risk.']
+        p = Provider([{}, good])
+        self.assertEqual(self.run_weekly(p)['written'], 1)
+        self.assertEqual(len(p.requests), 2)
+        self.assertGreaterEqual(p.requests[0][3], 4000)
+
 class AuditTests(unittest.TestCase):
     def setUp(self):
         spec = importlib.util.spec_from_file_location('amount_consistency_audit', ROOT / 'eval/display_audit.py')
