@@ -299,13 +299,13 @@ def run_briefing(
                 data = {"summary_ko": "해당 기간에 브리핑 기준을 충족한 기사가 없습니다.",
                         "summary_en": "No articles met the briefing criteria for this period."}
             if not data:
-                continue
                 # 응답이 잘려 JSON을 못 읽으면 빈 결과다. 조용히 넘기면 옛 브리핑이 그대로 남는다.
                 if attempt == 1:
                     log.warning("브리핑 응답 해석 실패 — 재요청(국가=%s, %s)", cc, briefing_type)
                     retry.append((cc, ""))
                 else:
                     log.warning("브리핑 응답 해석 실패 — 저장 안 함(국가=%s, %s)", cc, briefing_type)
+                continue
             if daily:
                 summary    = str(data.get("summary_ko") or data.get("summary") or "")[:2000]
                 summary_en = str(data.get("summary_en") or "")[:2000]
