@@ -352,11 +352,12 @@ def run_briefing(
                         continue
                     # 전체 재요청도 실패하면 원문 검증을 통과한 영문은 고정하고 한국어만 1회 번역한다.
                     # 영문 자체가 잘못됐거나 한글이 섞였으면 번역 기준본으로 사용하지 않는다.
-                    if (attempt == 2 and not daily and summary_en
+                    # daily도 같다 — 2026-11-11 VN 'VND 1.28 quadrillion'을 매번 '1.28경'으로 환산해 사흘째 미갱신.
+                    if (attempt == 2 and summary_en
                             and not numeric_guard.unsupported_amounts(bullets_by_cc[cc], en_text)
                             and not _HANGUL_RE.search(en_text)):
                         translation_retry.append((cc, en_fields))
-                        log.warning("주간 브리핑 — 검증된 영문 기준 한국어 재번역(국가=%s)", cc)
+                        log.warning("%s 브리핑 — 검증된 영문 기준 한국어 재번역(국가=%s)", briefing_type, cc)
                         continue
                     log.warning("브리핑 %s — 저장 안 함(국가=%s, %s): %s",
                                 reason, cc, briefing_type, summary[:80])

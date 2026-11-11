@@ -172,7 +172,8 @@ def fx_values(text: str, *, include_quotes: bool = True) -> dict[str, list[float
             if not include_quotes and is_quote(m):
                 continue
             vals.append(_to_float(m.group(1)) * _EN_UNITS[(m.group(2) or "").lower()])
-        for m in re.finditer(rf"({_NUM})\s*-?\s*(?:{_EN_UNIT_RE}[\s-]+)?(?:{post})\b", text, re.I):
+        # 통화 뒤 경계는 영숫자만 막는다 — \b면 '739.597 trillion VND로'처럼 한글 조사가 붙은 금액을 놓친다(2026-11-11 VN).
+        for m in re.finditer(rf"({_NUM})\s*-?\s*(?:{_EN_UNIT_RE}[\s-]+)?(?:{post})(?![A-Za-z0-9])", text, re.I):
             if not include_quotes and is_quote(m):
                 continue
             vals.append(_to_float(m.group(1)) * _EN_UNITS[(m.group(2) or "").lower()])

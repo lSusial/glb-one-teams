@@ -9,6 +9,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from datetime import date
 from unittest.mock import patch
 
 import briefing
@@ -59,6 +60,14 @@ class AmountParsingTests(unittest.TestCase):
         self.assertTrue(N.bilingual_amount_issues({'summary': '£190 million'}, {'summary': '1.9억 달러'}))
         self.assertTrue(N.bilingual_amount_issues({'issues': ['A', 'B']}, {'issues': ['가']}))
         self.assertEqual(N.bilingual_amount_issues({'issues': ['£190 million loss']}, {'issues': ['1.9억 파운드 손실']}), [])
+
+    def test_currency_code_followed_by_korean_particle_is_parsed(self):
+        # 2026-11-11 VN 일일 — '739.597 trillion VND로'를 금액으로 못 읽어 영문 그대로 옮긴 번역도 거부됐다.
+        self.assertEqual(N.fx_values('적자는 739.597 trillion VND로'), {'VND': [739.597e12]})
+        self.assertEqual(N.fx_values('총지출은 4.074 quadrillion VND입니다'), {'VND': [4.074e15]})
+        self.assertEqual(N.bilingual_amount_issues(
+            {'summary': 'A deficit of 739.597 trillion VND, or 4.5% of GDP.'},
+            {'summary': '적자는 739.597 trillion VND로 GDP의 4.5%입니다.'}), [])
 
     def test_bidirectional_validation_handles_dong_particles_and_fx_quotes(self):
         self.assertEqual(N.bilingual_amount_issues(
@@ -141,6 +150,21 @@ class WeeklyGenerationTests(unittest.TestCase):
         self.assertEqual(len(p.requests), 2)
         self.assertGreaterEqual(p.requests[0][3], 4000)
 
+
+    def test_daily_final_retry_translates_verified_english_summary(self):
+        # 2026-11-11 VN 일일 — 모델이 'VND 1.28 quadrillion'을 매번 '1.28경'(10배)으로 환산해 사흘째 미갱신.
+        today = date.today().isoformat()
+        self.conn.execute("UPDATE articles_raw SET published_at=?", (today,))
+        bad = {'summary_en': 'The UK budget raises £1.5 billion.', 'summary_ko': '예산으로 150억 파운드를 확보합니다.'}
+        translated = {'summary_ko': '영국 예산은 £1.5 billion을 확보합니다.', 'summary_en': 'INJECTED £50 billion'}
+        p = Provider([bad, bad, translated])
+        stats = briefing.run_briefing(self.conn, p, briefing_type='daily', countries=['GB'], briefing_date=today)
+        self.assertEqual(stats['written'], 1)
+        self.assertEqual(len(p.requests), 3)
+        self.assertIn('translation', p.requests[2][1])
+        row = self.conn.execute('SELECT summary,summary_en FROM country_briefings').fetchone()
+        self.assertEqual(row['summary_en'], bad['summary_en'])
+        self.assertEqual(row['summary'], translated['summary_ko'])
 
 class AuditTests(unittest.TestCase):
     def setUp(self):
