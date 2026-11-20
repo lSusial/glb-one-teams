@@ -45,6 +45,8 @@
 .pk .pin.on{color:var(--gold)}
 .watch-badge{display:inline-flex;align-items:center;margin-right:6px;padding:2px 7px;border-radius:999px;
         background:var(--gold-soft);color:#9A640C;font-size:10px;font-weight:700;vertical-align:2px}
+.brief-status{display:inline-block;margin-left:8px;padding:3px 8px;border-radius:6px;
+        background:var(--gold-soft);color:#79520A;font-size:11px;font-weight:600}
 </style>
 </head>
 <body>
@@ -281,6 +283,12 @@
     const bns = (co.indicators || []).map(bignum).join('');
     const brief = co.brief || {};
     const briefTxt = EN ? (brief.en || brief.ko) : (brief.ko || brief.en);
+    const snapshotDate = QD || DATA.snapshot_date;
+    const delayedBrief = brief.status === 'delayed' || (brief.date && snapshotDate && brief.date !== snapshotDate);
+    const briefStatus = delayedBrief ? (EN?'Update delayed · previous briefing':'갱신 지연 · 이전 브리핑')
+      : brief.status === 'insufficient_evidence' ? (EN?'Insufficient evidence':'근거 부족')
+      : brief.status === 'unavailable' || !briefTxt ? (EN?'Awaiting update':'갱신 대기') : '';
+    const briefNote = briefTxt || (EN?'The briefing has not been updated yet.':'브리핑을 아직 갱신하지 못했습니다.');
     const rows = (co.articles || []).filter(a => !fCat || (a.c||'').includes(fCat));
     let feed;
     if (rows.length) {
@@ -296,7 +304,7 @@
     }
     $('#detail').innerHTML = dhead + `
       <div class="bignums">${bns}</div>
-      ${briefTxt ? `<div class="dsec-t"><span class="bar"></span>${EN?'Daily Briefing':'국가 일일 브리핑'}${brief.date?` · ${esc(md(brief.date))}`:''}</div><p class="dbrief">${esc(briefTxt)}</p>` : ''}
+      <div class="dsec-t"><span class="bar"></span>${EN?'Daily Briefing':'국가 일일 브리핑'}${brief.date?` · ${esc(md(brief.date))}`:''}${briefStatus?`<span class="brief-status" role="status">${esc(briefStatus)}</span>`:''}</div><p class="dbrief">${esc(briefNote)}</p>
       <div class="dsec-t"><span class="bar"></span>${EN?'Local Press':'현지언론 피드'}</div>
       ${feed}`;
     $('#detail')._rows = rows;

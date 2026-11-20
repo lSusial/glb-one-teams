@@ -11,7 +11,7 @@
         거점이 없어 점수 루브릭이 낮게 잡히므로 랭킹만 됐으면 노출)
     2026-09-08: 이 둘이 어긋나 미진출국 저점수 기사가 summary_ko 없이 노출됐고,
     UI 폴백(q || q_en)이 걸려 한국어 화면에 영어 요약이 그대로 보였다. 대상을 맞춘다.
-  - 이미 양 언어가 있으면 스킵(캐시) → 기사당 1회
+  - 양 언어가 정상인 기사는 스킵. 수치·기간·가나 혼입 오류는 해당 한국어 필드만 재번역
   - 레거시(한국어만 있고 영어 없음)는 역방향(KO→EN)도 채워 토글이 양쪽 동작
   - 저비용 모델(role='fast', Haiku)
 
@@ -24,6 +24,7 @@ import logging
 import config
 import db
 import numeric_guard
+import text_quality
 from llm_provider import LLMProvider, get_provider
 
 log = logging.getLogger("llm_translate")
@@ -48,6 +49,7 @@ def ensure_columns(conn) -> None:
     db.ensure_columns(conn, "articles_raw", [
         ("summary_en", "ALTER TABLE articles_raw ADD COLUMN summary_en TEXT"),
         ("title_ko",   "ALTER TABLE articles_raw ADD COLUMN title_ko   TEXT"),
+        ("title_en",   "ALTER TABLE articles_raw ADD COLUMN title_en   TEXT"),
     ])
 
 
@@ -113,7 +115,7 @@ def run_translate(conn, provider: LLMProvider | None = None,
 
     rows = conn.execute(
         f"""
-        SELECT a.article_id, a.title, a.summary_en,
+        SELECT a.article_id, a.title, a.title_en, a.summary_en,
                a.summary_ko, a.title_ko
         FROM articles_raw a
         JOIN media_sources m ON m.source_id = a.source_id
@@ -128,20 +130,17 @@ def run_translate(conn, provider: LLMProvider | None = None,
             -- 긴 기간 화면은 상한·중복 제거 뒤 실제 선택된 카드만 번역한다.
             OR a.article_id IN ({long_in})
           )
-          AND ( (COALESCE(a.summary_en,'')  <> '' AND COALESCE(a.summary_ko,'') = '')
-             OR (COALESCE(a.summary_ko,'')  <> '' AND COALESCE(a.summary_en,'') = '')
-             OR (COALESCE(a.summary_ko,'')  <> '' AND COALESCE(a.title_ko,'')   = '') )
+          AND (COALESCE(a.summary_en,'') <> '' OR COALESCE(a.summary_ko,'') <> '')
         ORDER BY a.ai_score DESC
-        LIMIT ?
         """,
         (config.AI_SCORE_ACTIVE_THRESHOLD, *config.NON_PRESENCE_CODES, config.SOCIETY_ACTIVE_FLOOR,
-         *watch_ids, *long_ids, limit),
+         *watch_ids, *long_ids),
     ).fetchall()
-    if article_ids:
+    if article_ids is not None:
         allowed = {int(x) for x in article_ids}
         rows = [r for r in rows if int(r["article_id"]) in allowed]
 
-    stats = dict(total=len(rows), ko=0, en=0)
+    stats = dict(total=0, ko=0, en=0)
 
     # 요청 일괄 구성(방향은 custom_id 에 인코딩) → 배치 제출(50% 할인) 또는 동기 폴백
     requests, meta = [], {}
@@ -149,7 +148,12 @@ def run_translate(conn, provider: LLMProvider | None = None,
         has_en = bool((r["summary_en"] or "").strip())
         has_ko = bool((r["summary_ko"] or "").strip())
         has_title_ko = bool((r["title_ko"] or "").strip())
-        if has_en and (not has_ko or not has_title_ko):   # EN(기준본) → KO + title_ko
+        en_title = r['title_en'] or r['title'] or ''
+        bad_summary = (not has_ko or text_quality.korean_issues(r['summary_en'] or '', r['summary_ko'] or '')
+                       or numeric_guard.amount_mismatch(r['summary_en'] or '', r['summary_ko'] or ''))
+        bad_title = (not has_title_ko or text_quality.korean_issues(en_title, r['title_ko'] or '', headline=True)
+                     or numeric_guard.amount_mismatch(en_title+' '+(r['summary_en'] or ''), r['title_ko'] or ''))
+        if has_en and (bad_summary or bad_title):   # 정상 필드는 유지하고 문제 필드만 교체한다.
             cid, target = str(i), "ko"
             src_s = r["summary_en"]
         elif has_ko and not has_en:                        # KO(레거시) → EN
@@ -157,25 +161,41 @@ def run_translate(conn, provider: LLMProvider | None = None,
             src_s = r["summary_ko"]
         else:
             continue
-        requests.append((cid, _SYS[target], _user(src_s, r["title"]), 400))
-        meta[cid] = (r["article_id"], target, src_s)
+        requests.append((cid, _SYS[target], _user(src_s, en_title), 600))
+        meta[cid] = (r, target, src_s, en_title, bad_summary, bad_title)
+        if len(requests) >= limit:
+            break
+
+    stats['total'] = len(requests)
 
     results = provider.complete_json_batch(requests) if requests else {}
 
     cur = conn.cursor()
-    for cid, (article_id, target, src_s) in meta.items():
+    retry = []
+
+    def korean_candidate(data, row, src, title, bad_summary, bad_title):
+        s = str(data.get('summary') or '')[:1500] if bad_summary else row['summary_ko']
+        t = str(data.get('title_ko') or '')[:100] if bad_title else row['title_ko']
+        errors = (not s or not t or numeric_guard.amount_mismatch(src+' '+title, s+' '+t)
+                  or text_quality.korean_issues(src, s)
+                  or text_quality.korean_issues(title, t, headline=True))
+        return None if errors else (s,t)
+
+    for cid, (r, target, src_s, title, bad_summary, bad_title) in meta.items():
+        article_id = r['article_id']
         data = results.get(cid) or {}
         s = str(data.get("summary") or "")[:1500]
         if not s:
             log.warning("번역 응답 없음/무효 — 저장 안 함(article_id=%s)", article_id)
             continue
         if target == "ko":
-            t_ko = str(data.get("title_ko") or "")[:60]
-            if numeric_guard.amount_mismatch(src_s, s + " " + t_ko):
-                log.warning("번역 금액 불일치 — 저장 안 함(article_id=%s): %s", article_id, t_ko[:40])
+            candidate = korean_candidate(data,r,src_s,title,bad_summary,bad_title)
+            if candidate is None:
+                retry.append((cid,_SYS['ko'],_user(src_s,title)+'\nPrevious output failed validation. '
+                              'Preserve exchange-rate units and percentage periods; remove Japanese kana.',600))
                 continue
             cur.execute("UPDATE articles_raw SET summary_ko=?, title_ko=? WHERE article_id=?",
-                        (s, t_ko or None, article_id))
+                        (*candidate, article_id))
             stats["ko"] += 1
         else:
             if numeric_guard.amount_mismatch(src_s, s):
@@ -184,6 +204,15 @@ def run_translate(conn, provider: LLMProvider | None = None,
             cur.execute("UPDATE articles_raw SET summary_en=? WHERE article_id=?",
                         (s, article_id))
             stats["en"] += 1
+    again = provider.complete_json_batch(retry) if retry else {}
+    for cid, *_ in retry:
+        r, _, src, title, bad_summary, bad_title = meta[cid]
+        candidate = korean_candidate(again.get(cid) or {},r,src,title,bad_summary,bad_title)
+        if candidate is None:
+            log.warning('번역 재검증 실패 — 기존 필드 보존(article_id=%s)', r['article_id'])
+            continue
+        cur.execute('UPDATE articles_raw SET summary_ko=?,title_ko=? WHERE article_id=?',(*candidate,r['article_id']))
+        stats['ko'] += 1
     conn.commit()
 
     log.info("번역 완료 — 대상=%d  KO채움=%d  EN채움=%d", stats["total"], stats["ko"], stats["en"])

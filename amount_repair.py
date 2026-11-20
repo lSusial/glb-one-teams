@@ -12,6 +12,7 @@ import json
 import re
 
 import numeric_guard
+import text_quality
 
 # 카드 필드 → DB 한국어 컬럼. (q_en, t_en)처럼 영어끼리 비교한 건 고칠 한국어가 없어 제외.
 _KO_COL = {"t": "title_ko", "q": "summary_ko", "expanded_summary": "expanded_summary"}
@@ -40,7 +41,7 @@ def fix_korean(provider, en: str, ko: str) -> str | None:
     out = (provider.complete(SYSTEM, user, max_tokens=max(512, len(ko) * 3)) or "").strip()
     if not out or not re.search(r"[가-힣]", out) or not 0.7 <= len(out) / max(1, len(ko)) <= 1.3:
         return None
-    return None if numeric_guard.amount_mismatch(en, out) else out
+    return None if (numeric_guard.amount_mismatch(en, out) or text_quality.korean_issues(en,out)) else out
 
 
 def repair(conn, hold: dict, provider=None) -> list[str]:
@@ -104,7 +105,8 @@ def repair(conn, hold: dict, provider=None) -> list[str]:
             else:
                 valid = valid and isinstance(value, str)
             candidate[field] = value
-        if not valid or numeric_guard.bilingual_amount_issues(english, candidate):
+        if (not valid or numeric_guard.bilingual_amount_issues(english, candidate)
+                or text_quality.KANA_RE.search(json.dumps(candidate,ensure_ascii=False))):
             log.append(f"실패 {typ} {cc} — 재번역 검증 불일치, 기존 브리핑 보존")
             continue
         for field in bad_fields:

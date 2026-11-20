@@ -101,10 +101,12 @@ def build_report(conn, days: int = 1, export_dir: Path | None = None) -> dict:
     }
 
     displayed_counts = {}
+    export_snapshot_date = None
     if export_dir:
         try:
             exported = json.loads((export_dir / "countries.json").read_text(encoding="utf-8"))
-            if exported.get("snapshot_date") == latest:
+            if exported.get("content_date", exported.get("snapshot_date")) == latest:
+                export_snapshot_date = exported.get('snapshot_date')
                 displayed_counts = {
                     item["cc"]: len(item.get("articles", []))
                     for item in exported.get("countries", [])
@@ -129,6 +131,7 @@ def build_report(conn, days: int = 1, export_dir: Path | None = None) -> dict:
             "scored": sum(r["ai_score"] is not None for r in group),
             "active": len(cc_active), "watch": len(cc_watch),
             "eligible": eligible, "displayed": displayed,
+            "displayed_source": "export" if cc in displayed_counts else "eligible_estimate",
             "fulltext": sum(bool((r["full_text"] or "").strip()) for r in group if r["ai_score"] is not None),
         })
 
@@ -180,6 +183,7 @@ def build_report(conn, days: int = 1, export_dir: Path | None = None) -> dict:
     return {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "snapshot_date": latest,
+        "export_snapshot_date": export_snapshot_date,
         "window_days": days + 1,
         "summary": summary,
         "score_distribution": dict(sorted(active_scores.items())),
@@ -193,6 +197,8 @@ def build_report(conn, days: int = 1, export_dir: Path | None = None) -> dict:
 def to_markdown(report: dict) -> str:
     s = report.get("summary", {})
     lines = [f"# 뉴스 품질 리포트 — {report.get('snapshot_date') or '데이터 없음'}", ""]
+    if report.get('export_snapshot_date'):
+        lines += [f"- 화면 스냅샷: **{report['export_snapshot_date']}** · 기사 기준일: {report['snapshot_date']}", ""]
     if s:
         lines += [
             f"- ACTIVE: **{s['active']}건**, 관심구간: {s['watch_band']}건",

@@ -18,6 +18,7 @@ import config
 import db
 import kb_network
 import numeric_guard
+import text_quality
 import export_json
 import ranking
 from llm_provider import LLMProvider, get_provider
@@ -74,11 +75,13 @@ _SYSTEM_DAILY = (
     "(macro / financial markets / banking / regulation / risk). "
     "Write at most 5 sentences. Base it strictly on the provided items; "
     "no speculation. If evidence is sparse, write fewer sentences; do not pad. "
+    "With only one source item, write at most two factual sentences. Omit generic business "
+    "implications unless a specific impact is supported by that item. "
     "Write the English briefing first. The Korean briefing must be a faithful translation of the "
     "English one — same facts, figures and order, nothing added or dropped — in formal Korean "
     "(합쇼체: every sentence ends in '~습니다'), written in Hangul only — no Chinese characters or "
     "Japanese kana (write 증권감독관리위원회, not 证监会). Output ONLY JSON:\n"
-    '{"summary_en": "4-5 sentence English briefing", "summary_ko": "영어 브리핑의 한국어 번역(~습니다체)"}'
+    '{"summary_en": "1-5 sentence English briefing", "summary_ko": "영어 브리핑의 한국어 번역(~습니다체)"}'
     + numeric_guard.PRESERVE_MONEY_PROMPT
 )
 
@@ -266,6 +269,11 @@ def run_briefing(
             arts = export_json.country_tab_order(conn, arts, cm)[0][:config.COUNTRY_MAX_ARTICLES]
         else:
             arts = ranking.order(conn, arts, cluster_map=cm)[:config.BRIEFING_MAX_ARTICLES]
+        before = len(arts)
+        arts = [a for a in arts if text_quality.has_briefing_evidence(
+            a['title_en'] or a['title'], a['summary_en'] or a['summary_ko'])]
+        if before != len(arts):
+            log.info("브리핑 정보 부족 기사 제외 — 국가=%s %d건", cc, before-len(arts))
         stats["countries"] += 1
         meta[cc] = arts
         if not arts:
@@ -296,8 +304,8 @@ def run_briefing(
         for cc, data in pending:
             arts = meta[cc]
             if not arts:
-                data = {"summary_ko": "해당 기간에 브리핑 기준을 충족한 기사가 없습니다.",
-                        "summary_en": "No articles met the briefing criteria for this period."}
+                data = {"summary_ko": "해당 기간에 브리핑 기준을 충족할 충분한 근거가 없습니다.",
+                        "summary_en": "There is insufficient evidence for a briefing in this period."}
             if not data:
                 # 응답이 잘려 JSON을 못 읽으면 빈 결과다. 조용히 넘기면 옛 브리핑이 그대로 남는다.
                 if attempt == 1:
@@ -489,6 +497,13 @@ def _validate_highlight_sources(items: list, rows, limit: int) -> list[dict]:
         source_text = " ".join(row_text(allowed[aid]) for aid in valid)
         if numeric_guard.amount_mismatch(source_text, generated):
             log.warning("글로벌 핵심 금액 불일치 — 항목 제외: %s", item.get("headline_ko", "")[:80])
+            continue
+        en_head = item.get('headline_en') or ''
+        ko_head = item.get('headline_ko') or ''
+        if (text_quality.korean_issues(en_head, ko_head, headline=True)
+                or text_quality.period_issues(source_text, en_head)
+                or text_quality.period_issues(source_text, ko_head)):
+            log.warning('글로벌 핵심 기간/언어 검증 실패 — 항목 제외: %s',ko_head[:80])
             continue
         clean = dict(item)
         clean["source_article_ids"] = valid

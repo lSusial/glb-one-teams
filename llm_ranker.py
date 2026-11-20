@@ -30,6 +30,7 @@ import config
 import db
 import kb_network
 import numeric_guard
+import text_quality
 import taxonomy
 from llm_provider import LLMProvider, get_provider
 
@@ -116,7 +117,8 @@ _SCORE_FACTOR_WEIGHTS = {"directness": 8, "magnitude": 6, "urgency": 5, "novelty
 def _checked_title_en(title_en: str, title: str, summary_en: str) -> str:
     """영문 제목의 금액(USD·INR)이 원문 제목·영문 요약과 어긋나면 버린다(export는 원문 제목으로 폴백).
     예: Rp 9.1조(약 $5.7억)를 "$9.1 trillion"으로 통화만 바꿔 쓴 제목."""
-    if title_en and numeric_guard.amount_mismatch(" ".join((title, summary_en)), title_en):
+    if title_en and (numeric_guard.amount_mismatch(" ".join((title, summary_en)), title_en)
+                     or text_quality.period_issues(summary_en, title_en)):
         log.warning("영문 제목 금액 불일치 — title_en 버림: %s", title_en)
         return ""
     return title_en
@@ -125,7 +127,8 @@ def _checked_title_en(title_en: str, title: str, summary_en: str) -> str:
 def _checked_title_ko(title_ko: str, title: str, title_en: str, summary_en: str) -> str:
     """한국어 제목의 금액(USD·INR)이 원문 제목·영문 제목·요약과 어긋나면 버린다.
     빈 title_ko는 llm_translate가 금액 검증을 거쳐 다시 채운다(예: Rs 10,000 crore → "1조 루피")."""
-    if title_ko and numeric_guard.amount_mismatch(" ".join((title, title_en, summary_en)), title_ko):
+    if title_ko and (numeric_guard.amount_mismatch(" ".join((title, title_en, summary_en)), title_ko)
+                     or text_quality.korean_issues(title_en or summary_en, title_ko, headline=True)):
         log.warning("제목 금액 불일치 — title_ko 버림: %s", title_ko)
         return ""
     return title_ko

@@ -20,6 +20,9 @@ PRESERVE_MONEY_PROMPT = (
     "For bilingual output, write English first and copy its monetary expressions exactly into Korean; "
     "translate only the surrounding sentences. In a short headline, omit an amount entirely or "
     "exceed the target length rather than dropping its currency/unit or changing its notation."
+    " Preserve exchange-rate direction: 'rupee at 95.22 per dollar' means 달러당 95.22루피, never 95.22달러. "
+    "For percentage moves, preserve the stated month, year-on-year/month-on-month basis and trading session, "
+    "even if a headline becomes longer. Korean fields must contain natural Korean, with no Japanese kana."
 )
 
 _UNITS = {"": 1, "m": 1e6, "million": 1e6, "bn": 1e9, "bil": 1e9, "bln": 1e9,
@@ -92,7 +95,8 @@ def usd_values(text: str) -> list[float]:
     # 단위 없이 $1로만 읽혀 10억 달러와 비교돼 오탐난 사례로 발견.
     # "USD 5-year sukuk"(5년물)처럼 기간이 붙은 숫자는 금액이 아니다(2026-10-21 아라다 수쿠크 오탐)
     for m in re.finditer(rf"(?:\bUS\$|(?<![A-Za-z])\$|\bUSD)\s*({_NUM})(?![-\s]*(?:years?|yr|months?|days?|weeks?)\b)"
-                         rf"(?:\s*-?\s*(trillion|billion|million|bln|bil|bn|m)(?![A-Za-z])|\b)",
+                         rf"(?:\s*-?\s*(trillion|billion|million|bln|bil|bn|m)(?![A-Za-z])|\b|"
+                         r"(?=(?:을|를|은|는|이|가|에|의|로|와|과|도|부터|까지|에서|보다)(?![가-힣])))",
                          text, re.I):
         values.append(_to_float(m.group(1)) * _UNITS[(m.group(2) or "").lower()])
     for m in re.finditer(
@@ -118,14 +122,20 @@ def inr_values(text: str) -> list[float]:
     values: list[float] = []
     # Rs 10,000 crore / ₹2,000 / Rs 22,568-crore
     for m in re.finditer(rf"(?:\bRs\.?|₹|\bINR)\s*({_NUM})(?:\s*-?\s*{_INR_UNIT_RE}(?![A-Za-z]))?", text, re.I):
+        if re.match(r'\s*(?:per|to)\s+(?:US\s+|the\s+)?dollar\b', text[m.end():], re.I):
+            continue
         values.append(_to_float(m.group(1)) * _INR_UNITS[(m.group(2) or "").lower()])
     # 통화기호 없이 쓰는 인도식 단위(10,000 crore rupees, 38.5 lakh) — 인도 기사에서 사실상 루피
     for m in re.finditer(rf"(?<![\w₹.,])({_NUM})\s*-?\s*(lakh crore|crore|lakh)(?![A-Za-z])", text, re.I):
         if not re.search(r"(?:Rs\.?|₹|INR)\s*$", text[:m.start()], re.I):
             values.append(_to_float(m.group(1)) * _INR_UNITS[m.group(2).lower()])
     for m in re.finditer(rf"{_KO_AMOUNT}루피(?!아)", text):
+        if re.search(r'달러당\s*(?:약\s*)?$', text[max(0,m.start()-20):m.start()]):
+            continue
         values.append(_ko_total(m))
     for m in re.finditer(rf"{_NOT_KO_TAIL}({_NUM})\s*루피(?!아)", text):
+        if re.search(r'달러당\s*(?:약\s*)?$', text[max(0,m.start()-20):m.start()]):
+            continue
         values.append(_to_float(m.group(1)))
     return values
 
@@ -138,7 +148,7 @@ _FX = {
     "CNY": (r"\bRMB|\bCNY", r"yuan|renminbi", r"위안"),
     "JPY": (r"¥|\bJPY", r"yen", r"엔(?!화)"),
     "IDR": (r"\bRp\.?|\bIDR", r"rupiah", r"루피아"),
-    "VND": (r"\bVND", r"dong|VND", r"동(?=\b|(?:으로|에서|보다|까지|을|은|이|의|에|과|도|로|는)(?![가-힣]))"),
+    "VND": (r"\bVND", r"dong|VND", r"동(?=\b|(?:으로|에서|보다|까지|을|은|이|의|에|과|도|로|는|이며|이고|이다|입니다|이었다|이라는)(?![가-힣]))"),
     "THB": (r"฿|\bTHB", r"baht", r"바트"),
     "GBP": (r"£|\bGBP", r"pounds?(?: sterling)?", r"파운드"),
     "EUR": (r"€|\bEUR", r"euros?", r"유로"),
@@ -216,11 +226,30 @@ def usd_mismatch(source_text: str, output_text: str) -> bool:
 
 def amount_mismatch(source_text: str, output_text: str) -> bool:
     """USD·INR·거점 통화 금액을 통화별로 각각 대조한다(usd_mismatch 확장). 한쪽이라도 어긋나면 True."""
-    if (usd_mismatch(source_text, output_text)
+    if (fx_quote_issues(source_text, output_text)
+            or usd_mismatch(source_text, output_text)
             or _mismatch(inr_values(source_text), inr_values(output_text))):
         return True
     src, out = fx_values(source_text), fx_values(output_text)
     return any(_mismatch(src.get(code, []), vals) for code, vals in out.items())
+
+
+def fx_quote_issues(source: str, output: str) -> list[str]:
+    """현지통화/USD 시세가 같은 숫자의 USD 금액으로 바뀐 경우를 검출한다."""
+    errors = []
+    currencies = r'rupees?|\bINR\b|rupiah|\bIDR\b|yen|\bJPY\b|yuan|\bCNY\b|dong|\bVND\b|baht|\bTHB\b'
+    for m in re.finditer(rf'({_NUM})\s*(?:per|to)\s+(?:the\s+|US\s+|U\.S\.\s+)?dollar\b', source or '', re.I):
+        prefix = source[max(0, m.start()-150):m.start()]
+        if not re.search(currencies, prefix, re.I):
+            continue
+        value = _to_float(m[1])
+        # 원문이 같은 수의 독립 USD 금액도 명시했다면 단위 오역으로 단정하지 않는다.
+        if any(abs(v-value) < .0001 for v in usd_values(source)):
+            continue
+        for quoted in re.finditer(rf'(?:\$\s*({_NUM})|({_NUM})\s*(?:달러|USD\b|dollars?\b))', output or '', re.I):
+            if abs(_to_float(quoted[1] or quoted[2])-value) < .0001:
+                errors.append(f'FX quote {m[1]} per USD became a USD amount')
+    return list(dict.fromkeys(errors))
 
 
 def amount_values(text: str, *, include_fx_quotes: bool = True) -> dict[str, list[float]]:
@@ -254,6 +283,7 @@ def bilingual_amount_issues(english: dict, korean: dict) -> list[str]:
             pairs = [(field, en, ko)]
         for label, e, k in pairs:
             e, k = str(e or ""), str(k or "")
+            issues.extend(f'{label}: {issue}' for issue in fx_quote_issues(e, k))
             if bool(e.strip()) != bool(k.strip()):
                 issues.append(f"{label}: missing {'KO' if e.strip() else 'EN'} text")
             for side, source, output in (("KO-only", e, k), ("EN-only", k, e)):

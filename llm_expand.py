@@ -22,6 +22,7 @@ import re
 import config
 import db
 import numeric_guard
+import text_quality
 from llm_provider import LLMProvider, get_provider
 from llm_ranker import _cluster_sources, _published_line, _source_snippet
 
@@ -214,7 +215,7 @@ def run_expand(conn, provider: LLMProvider | None = None,
             # 영어 요약에 한국어 금액 힌트가 '(4.52억 달러)'로 섞였다(2026-10-22) — 저장하지 않고 다음 실행에서 재생성
             log.warning("긴 요약 영어에 한글 — 저장 안 함(article_id=%s)", r["article_id"])
             continue
-        if en and ko and numeric_guard.amount_mismatch(en, ko):
+        if en and ko and (numeric_guard.amount_mismatch(en, ko) or text_quality.korean_issues(en, ko)):
             # 한국어 금액 단위 오변환($18.65 billion → "$18.65억") — 영문만 저장, 한국어는 다음 실행에서 재생성
             log.warning("긴 요약 금액 불일치 — 한국어 재요청(article_id=%s)", r["article_id"])
             retry[cid] = (r, en)
@@ -234,7 +235,7 @@ def run_expand(conn, provider: LLMProvider | None = None,
         failed = {}
         for cid, (r, en) in retry.items():
             ko = str((again.get(cid) or {}).get("expanded_summary_ko") or "").strip()[:7000]
-            if not ko or numeric_guard.amount_mismatch(en, ko):
+            if not ko or numeric_guard.amount_mismatch(en, ko) or text_quality.korean_issues(en, ko):
                 failed[cid] = (r, en)
                 continue
             cur.execute("UPDATE articles_raw SET expanded_summary = ? WHERE article_id = ?",

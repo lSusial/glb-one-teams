@@ -13,13 +13,15 @@
   .btn:hover,.btn:focus-visible{background:rgba(0,0,0,.72);border-color:#F1A33A;color:#F1A33A;outline:none}
   #skip{top:18px;right:18px}
   #sound{bottom:18px;right:18px}
+  #tap{position:fixed;inset:0;z-index:5;display:grid;place-items:center;background:rgba(0,0,0,.35);border:0;
+       color:#fff;font:600 16px/1 -apple-system,BlinkMacSystemFont,"Malgun Gothic",sans-serif;cursor:pointer}
+  #tap[hidden]{display:none}
   .nojs{position:fixed;inset:0;display:grid;place-items:center;font-family:sans-serif}
 </style>
 </head>
 <body>
-  <video id="v" autoplay muted playsinline preload="auto">
-    <source src="intro.mp4" type="video/mp4">
-  </video>
+  <video id="v" autoplay muted playsinline preload="auto"></video>
+  <button id="tap" type="button" hidden>▶ 탭하여 재생</button>
   <button class="btn" id="skip" type="button" aria-label="인트로 건너뛰기">SKIP ›</button>
   <button class="btn" id="sound" type="button">🔊 소리 켜기</button>
   <noscript><div class="nojs"><a href="brief.html" style="color:#F1A33A">KB 글로벌 브리프 열기 ›</a></div></noscript>
@@ -29,23 +31,38 @@
     var done = false;
     function go(){ if (done) return; done = true; location.replace(TARGET); }
     var v = document.getElementById('v');
+    v.muted = true;  // iOS는 muted 속성만으로는 무음 판정이 안 될 때가 있어 속성값도 직접 둔다
+    // 자동재생이 막히면(iOS 저전력 모드 등) 화면 아무 곳이나 한 번 탭하면 재생되게 한다.
+    var tap = document.getElementById('tap');
+    function play() { var q = v.play(); if (q && q.catch) q.catch(function () { tap.hidden = false; }); }
+    tap.addEventListener('click', function () { tap.hidden = true; v.play().catch(function(){}); });
+    v.addEventListener('playing', function () { tap.hidden = true; });
     document.getElementById('skip').addEventListener('click', go);
     v.addEventListener('ended', go);
     v.addEventListener('error', go);
-    // 안전장치: ended 미발화·재생 불가 대비 (영상 10초 + 여유)
-    setTimeout(go, 13000);
+    // 안전장치: ended 미발화·재생 불가 대비 (영상 17.6초 + 여유, 2026-11-11 인트로 교체)
+    // 재생이 시작되면 다시 잰다 — Apple 기기는 영상을 먼저 다 받은 뒤 시작하므로 그만큼 늦어진다.
+    var t = setTimeout(go, 21000);
+    v.addEventListener('playing', function () { clearTimeout(t); t = setTimeout(go, 21000); }, { once: true });
+    // Cloudflare Pages는 Range 요청에 206 대신 전체(200)를 돌려줘 iOS Safari가 재생을 거부한다(2026-11-11).
+    // Apple(WebKit) 브라우저는 파일을 통째로 받아 blob URL로 재생하고, 받기 실패 시 원래 주소로 시도한다.
+    if (/Apple/.test(navigator.vendor || '') && window.fetch && window.URL) {
+      fetch('intro.mp4').then(function (r) { if (!r.ok) throw r; return r.blob(); })
+        .then(function (b) { v.src = URL.createObjectURL(b); play(); })
+        .catch(function () { if (!v.src) v.src = 'intro.mp4'; play(); });
+    } else {
+      v.src = 'intro.mp4';
+      play();
+    }
     // 소리 토글 — 사용자 제스처로 unmute(자동재생 정책 대응)
     var s = document.getElementById('sound');
-    if (EN) { s.textContent = '🔊 Sound on'; document.getElementById('skip').setAttribute('aria-label', 'Skip intro'); document.documentElement.lang = 'en'; }
+    if (EN) { tap.textContent = '▶ Tap to play'; s.textContent = '🔊 Sound on'; document.getElementById('skip').setAttribute('aria-label', 'Skip intro'); document.documentElement.lang = 'en'; }
     s.addEventListener('click', function (e) {
       e.stopPropagation();
       v.muted = !v.muted;
       if (!v.muted) { v.play().catch(function(){}); }
       s.textContent = EN ? (v.muted ? '🔊 Sound on' : '🔈 Sound off') : (v.muted ? '🔊 소리 켜기' : '🔈 소리 끄기');
     });
-    // 자동재생 시도(무음)
-    var pr = v.play && v.play();
-    if (pr && pr.catch) { pr.catch(function(){}); }
   </script>
 </body>
 </html>

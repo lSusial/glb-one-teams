@@ -35,6 +35,7 @@ LLM 호출·DB 쓰기 없음. export 직후 돌린다:
  21 CATEGORY_MISMATCH  지정학(geopolitics) 분류인데 본문에 지정학 신호(전쟁·제재·관세·선거·군사 등)가 없음
                        (2026-10-08 KB은행 협동조합 인수설 부인 = 지배구조·규제 기사가 markets+geopolitics)
 등급: BLOCKING(--strict 시 배포 차단) = 탑이슈 출처 무결성·금액 오류·쓰레기 제목. 나머지는 검토 경고.
+STALE_DAILY_BRIEFING / DAILY_BRIEFING_MISSING: 화면 기준일과 다른 일일 브리핑·미갱신 상태 경고.
 '점검 통과'가 '정확함'을 뜻하진 않는다 — 규칙으로 잡히는 결함만 센다.
 """
 from __future__ import annotations
@@ -56,6 +57,7 @@ import db  # noqa: E402
 import export_json  # noqa: E402
 import llm_dedup as L  # noqa: E402
 import numeric_guard  # noqa: E402
+import text_quality  # noqa: E402
 
 JUNK_RE = re.compile(
     r"^index of /|wp-content|^404\b|not found|just a moment|access denied|attention required|"
@@ -254,6 +256,27 @@ def main() -> int:
                 seen.add(k)
                 add("EMPTY_SUMMARY", f"[{f}:{w}] {short(a)} (score={a.get('score')})")
 
+    checked_quality = set()
+    for f,w,cc,a in cards:
+        if a.get('u') in checked_quality:
+            continue
+        checked_quality.add(a.get('u'))
+        for field in ('t','q','expanded_summary'):
+            if text_quality.KANA_RE.search(a.get(field) or ''):
+                add('LANGUAGE_LEAK',f'[{f}:{w}] {field}: {short(a)}')
+        periods = text_quality.period_issues(a.get('t_en') or '', a.get('t') or '')
+        if periods:
+            add('PERIOD_MISSING',f'[{f}:{w}] {periods}: {short(a)}')
+    for i,h in enumerate(pulse.get('daily_highlights') or [],1):
+        source = ' '.join((a.get('t_en') or '')+' '+(a.get('q_en') or '')
+                          for a in h.get('source_articles') or [])
+        for field in ('headline_en','headline_ko'):
+            periods = text_quality.period_issues(source,h.get(field) or '')
+            if periods:
+                add('PERIOD_MISSING',f'Top {i} {field}: {periods}')
+        if text_quality.KANA_RE.search(h.get('headline_ko') or ''):
+            add('LANGUAGE_LEAK',f'Top {i} headline_ko')
+
     # 2 STALE / 3 PREVIEW_SHOWN (국가 탭)
     for w, cc, a in tabs:
         try:
@@ -418,6 +441,12 @@ def main() -> int:
 
     for c in load("countries").get("countries", []):
         b = c.get("brief") or {}
+        if b.get('date') and b['date'] != today.isoformat():
+            add('STALE_DAILY_BRIEFING', f'{c["cc"]} 화면 {today} · 브리핑 {b["date"]}')
+        elif b.get('status') == 'unavailable' or not (b.get('date') and (b.get('ko') or b.get('en'))):
+            add('DAILY_BRIEFING_MISSING', f'{c["cc"]} 일일 브리핑 미갱신')
+        if text_quality.KANA_RE.search(b.get('ko') or ''):
+            add('LANGUAGE_LEAK',f'국가 브리핑 {c["cc"]}')
         if b.get("ko") and b.get("en") and numeric_guard.bilingual_amount_issues(
                 {"summary": b["en"]}, {"summary": b["ko"]}):
             add("AMOUNT_MISMATCH", f"국가 브리핑 {c['cc']}", brief=(c["cc"], "daily"))
@@ -428,6 +457,8 @@ def main() -> int:
         ko = {k: c.get(k) or ([] if k in ("issues", "keywords") else "") for k in fields}
         en = {k: c.get(k + "_en") or ([] if k in ("issues", "keywords") else "") for k in fields}
         differences = numeric_guard.bilingual_amount_issues(en, ko)
+        if text_quality.KANA_RE.search(json.dumps(ko,ensure_ascii=False)):
+            add('LANGUAGE_LEAK',f'주간 {c["cc"]}')
         if differences:
             add("AMOUNT_MISMATCH", f"주간 {c['cc']} ({c.get('week_start')}~{c.get('week_end')}) — "
                 + "; ".join(differences[:3]),
@@ -503,7 +534,8 @@ def main() -> int:
              "JUNK_TITLE", "UNRELATED_LINKS", "TITLE_SUMMARY_GAP", "HIDDEN_NEWER_REP", "THIN_TABS",
              "SELF_TITLE_MISMATCH", "HIGHLIGHT_SOURCE_MISSING", "HIGHLIGHT_SOURCE_INVALID",
              "AMOUNT_MISMATCH", "STALE_WEEKLY", "STALE_SPARK", "SUPERSEDED", "KO_MISSING",
-             "SOURCE_AMOUNT_CONFLICT", "PAST_DEADLINE", "CATEGORY_MISMATCH"]
+             "SOURCE_AMOUNT_CONFLICT", "PAST_DEADLINE", "CATEGORY_MISMATCH", "LANGUAGE_LEAK", "PERIOD_MISSING",
+             "STALE_DAILY_BRIEFING", "DAILY_BRIEFING_MISSING"]
     print(f"표시 감사 — 기준일 {today} · 카드 {len(cards)}장 (국가탭 {len(tabs)}장) · export={export_dir}")
     print("-" * 78)
     for k in order:

@@ -21,6 +21,7 @@ import kb_network
 import llm_dedup
 import ranking
 import taxonomy
+import text_quality
 
 log = logging.getLogger("export_json")
 
@@ -162,7 +163,7 @@ def _ensure_ai_columns(conn) -> None:
 
 
 def _daily_briefs(conn, snapshot: str | None = None) -> dict:
-    """country_briefings(daily) 최신본을 {cc: {ko, en, date}} 로 반환. 없으면 {}.
+    """기준일까지의 일일 브리핑을 반환하고 전일 재사용·근거 부족 상태를 명시한다.
 
     snapshot(기준일)보다 하루 넘게 지난 브리핑은 내보내지 않는다 — 생성 실패·금액 검증 거부가
     이어지면 옛 브리핑이 그대로 남아 보였다(2026-10-07 IN 탭에 10/1자 '준비 중' 문구가 6일째 노출)."""
@@ -174,6 +175,7 @@ def _daily_briefs(conn, snapshot: str | None = None) -> dict:
         return {}
     has_en = "summary_en" in cols
     sel = "cc, summary, briefing_date" + (", summary_en" if has_en else "")
+    sel += ", model" if "model" in cols else ""
     rows = conn.execute(
         f"SELECT {sel} FROM country_briefings WHERE briefing_type='daily' "
         "ORDER BY briefing_date DESC, generated_at DESC"
@@ -185,6 +187,8 @@ def _daily_briefs(conn, snapshot: str | None = None) -> dict:
     seen = set()
     for r in rows:
         cc = r["cc"]
+        if snapshot and (r["briefing_date"] or "") > snapshot:
+            continue  # 과거 스냅샷에 미래 브리핑을 쓰거나, 정상 과거 행을 가리지 않는다.
         if cc in seen:           # 국가별 최신 1건만
             continue
         seen.add(cc)
@@ -194,7 +198,17 @@ def _daily_briefs(conn, snapshot: str | None = None) -> dict:
             "ko": r["summary"] or "",
             "en": (r["summary_en"] if has_en else "") or "",
             "date": r["briefing_date"],
+            "status": "delayed" if snapshot and r["briefing_date"] != snapshot else "current",
         }
+        if not (out[cc]['ko'] or out[cc]['en']) and (r['model'] if 'model' in cols else '') != 'rules:insufficient-evidence':
+            del out[cc]
+            continue
+        if (r['model'] if 'model' in cols else '') == 'rules:insufficient-evidence' or not text_quality.has_briefing_evidence(
+                '', out[cc]['en'] or out[cc]['ko']):
+            out[cc].update(ko='해당 기간에 브리핑을 작성할 충분한 근거가 없습니다.',
+                           en='There is insufficient evidence for a briefing in this period.')
+            if out[cc]['status'] == 'current':
+                out[cc]['status'] = 'insufficient_evidence'
     return out
 
 
@@ -440,6 +454,45 @@ def _compute_non_presence(conn, days: int = 1, limit: int = 40) -> list[dict]:
     return out
 
 
+def _release_key(row):
+    """같은 날의 금리·실업수당·실명 사이버경고 발표를 식별하는 제한적인 사건 키."""
+    keys = row.keys()
+    get = lambda k: (row[k] or '') if k in keys else ''
+    title = get('title_en') or get('title')
+    if not get('published_at'):
+        return None
+    if llm_dedup.is_preview(title):
+        return None
+    tokens = llm_dedup._tokens(title)
+    if {'jobless', 'claims'} <= tokens:
+        metric = 'continuing' if tokens & {'continuing','continued','insured'} else 'initial'
+        return ('jobless', get('primary_country') or get('cc'), metric, (get('published_at'))[:10])
+    if 'cert' in tokens and tokens & {'warns','warning','advisory'}:
+        campaign = re.search(r'''\b(?:group|campaign|operation),?\s+(?:(?:it calls|called|known as|dubbed|named)\s+)?['"]([^'"]{4,50})['"]''',
+                             get('summary_en'), re.I)
+        if campaign:
+            return ('cyber_advisory',get('cc'),campaign[1].lower(),get('published_at')[:10])
+    banks = tokens & {'boe', 'boj', 'rbi', 'fed', 'bankindonesia', 'hkma'}
+    if len(banks) == 1 and 'rate' in tokens and not tokens & {'reserve','mortgage','capital','deposit'}:
+        action = next((action for action, forms in (
+            ('raise', {'raise','hike'}), ('cut', {'cut','reduce'}), ('hold', {'hold','holds','held'}))
+            if tokens & forms), None)
+        match = re.search(r'rates?\s+(?:to|at)\s+(\d+(?:\.\d+)?)%', title+' '+get('summary_en'), re.I)
+        if action:
+            return ('rates', next(iter(banks)), action, float(match[1]) if match else None, get('published_at')[:10])
+    return None
+
+
+def _same_release(a, b):
+    ka, kb = _release_key(a), _release_key(b)
+    if ka and kb and ka[0] == kb[0] == 'rates' and ka[1:3] == kb[1:3] and ka[-1] == kb[-1] and ka[-1]:
+        if ka[3] is None or kb[3] is None:
+            # 수치가 없는 재보도는 같은 날·기관·방향과 제목 겹침까지 확인한다.
+            return llm_dedup.overlap(llm_dedup._tokens(a['title_en'] or a['title']),
+                                     llm_dedup._tokens(b['title_en'] or b['title'])) >= .4
+    return bool(ka and kb and ka == kb and ka[-1])
+
+
 def _dedup_country_feed(rows, cm):
     """국가 피드 근접중복 축소 — 같은 스토리 여러 각도를 대표 1건으로 접는다.
     rows는 rank_score 내림차순 정렬 가정(대표=버킷 첫=최고 rank).
@@ -448,9 +501,17 @@ def _dedup_country_feed(rows, cm):
     세 번째 값은 모달 '관련 기사 링크'에 쓴다(같은 사건을 다룬 실제 기사만)."""
     buckets = []
     for r in rows:
+        if text_quality.informationless_index_recap(r['title_en'] or r['title'], r['summary_en']):
+            continue
         tk = _story_sig(r)
         for b in buckets:
-            if _overlap_ratio(tk, b["tk"]) >= config.COUNTRY_STORY_DEDUP_SIM:
+            first = b['mem'][0]
+            kr, kb = _release_key(r), _release_key(first)
+            if kr and kb and kr[0] == kb[0]:
+                same = _same_release(r, first)
+            else:
+                same = _overlap_ratio(tk, b["tk"]) >= config.COUNTRY_STORY_DEDUP_SIM
+            if same:
                 b["mem"].append(r); break
         else:
             buckets.append({"tk": tk, "mem": [r]})
@@ -540,6 +601,9 @@ def _same_story_for_link(rep, child) -> bool:
     AI 중복판정이 BOJ라는 기관·금리 인상이라는 주제만 같은 별개 보도를 한 그룹으로
     묶더라도, 모달에서는 근거가 다른 기사를 같은 사건의 출처처럼 보여주지 않는다.
     """
+    if _same_release(rep, child):
+        return True
+
     def value(row, key):
         try:
             return row[key] or ""
@@ -1061,7 +1125,8 @@ def export_countries(conn, active_only: bool = True, days: int = 1, write: bool 
             "status": "WATCH" if watch_ids else "ACTIVE" if articles else "SOURCE WATCH",
             "count": len(articles),
             "kfi_count": kfi_count,              # 한국계 금융기관 태깅된 기사 수(거점 커버리지 배지용)
-            "brief": briefs.get(cc),            # 전일+당일 AI 브리핑(한/영) — 없으면 null
+            "brief": briefs.get(cc) or {"ko": "브리핑을 아직 갱신하지 못했습니다.",
+                "en": "The briefing has not been updated yet.", "date": None, "status": "unavailable"},
             "articles": articles,
             "indicators": indicators.get(cc, []),  # 환율·주가지수 최신 스냅샷 — 없으면 빈 리스트
         })
@@ -1073,6 +1138,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1, write: bool 
     payload = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "snapshot_date": _snapshot_date(conn),
+        "content_date": conn.execute("SELECT MAX(substr(published_at,1,10)) FROM articles_raw").fetchone()[0],
         "mode": "active" if active_only else "passed",
         "active_threshold": config.AI_SCORE_ACTIVE_THRESHOLD if active_only else None,
         "countries": countries,

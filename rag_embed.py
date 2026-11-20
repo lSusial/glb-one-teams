@@ -108,6 +108,9 @@ def run_embed(conn, *, model: str | None = None, batch_size: int | None = None,
                a.published_at, a.ai_score, a.llm_prefilter, a.local_rescue_grade
         FROM articles_raw a
         WHERE (a.ai_score IS NOT NULL OR a.llm_prefilter IS NOT NULL)
+          AND a.title NOT LIKE "- %" AND a.title != "-"
+          AND COALESCE(a.summary_ko, "") NOT LIKE "%정보 없음%"
+          AND COALESCE(a.summary_ko, "") NOT LIKE "%요약이 없음%"
           AND a.article_id NOT IN (
               SELECT article_id FROM article_embeddings WHERE model = ?
           )

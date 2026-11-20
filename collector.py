@@ -58,7 +58,8 @@ _JUNK_TITLE_RE = _re_mod.compile(
     r"^index of /|wp-content|^404\b|not found|just a moment|access denied|attention required|"
     r"enable javascript|captcha|cloudflare|are you a robot|^subscribe|^sign in|^log in|"
     r"page unavailable|\barchives?\s*$|\barchives?\s*-|"
-    r"-\s*page\s*\d+\s*(of\s*\d+)?\s*-|^videos?\s*-\s*page\s*\d+",
+    r"-\s*page\s*\d+\s*(of\s*\d+)?\s*-|^videos?\s*-\s*page\s*\d+|"
+    r"^-\s*\S",  # 2026-10-23: 실제 헤드라인 없이 '- 소스명'만 남은 피드 항목(Kyodo 등) — 정상 제목은 '-'로 시작 안 함
     _re_mod.I)
 
 
