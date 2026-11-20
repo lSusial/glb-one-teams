@@ -1024,6 +1024,9 @@ def export_countries(conn, active_only: bool = True, days: int = 1, write: bool 
     cm = ranking.cluster_sizes(conn)   # 표시 정렬용 복합 rank_score 재료(export 1회 계산)
     siblings_map = _story_links_map(conn)   # 모달 관련 기사(같은 사건) 재료
     watch_candidates = country_watch_candidate_ids(conn, days) if active_only else {}
+    # 국가 상태(안정/주의/경계)는 홈 지도와 같은 판정을 그대로 쓴다 — 2026-11 설문에서
+    # 캄보디아 상태가 화면마다 달라 보인다는 지적(뉴스 화면엔 상태가 없고 "Watch" 문구만 겹침).
+    signal_by_cc = {s["cc"]: s["state"] for s in _compute_country_signals(conn, days=days)} if active_only else {}
     for cc, flag in _FLAGS.items():
         watch_ids = set()
         rows = conn.execute(
@@ -1123,6 +1126,7 @@ def export_countries(conn, active_only: bool = True, days: int = 1, write: bool 
             "flag": flag,
             "presence": "진출",                 # KB 진출국 — docs/design_미진출국.md
             "status": "WATCH" if watch_ids else "ACTIVE" if articles else "SOURCE WATCH",
+            "signal": signal_by_cc.get(cc, "unknown"),   # go/warn/stop/unknown — brief.html 지도와 동일
             "count": len(articles),
             "kfi_count": kfi_count,              # 한국계 금융기관 태깅된 기사 수(거점 커버리지 배지용)
             "brief": briefs.get(cc) or {"ko": "브리핑을 아직 갱신하지 못했습니다.",

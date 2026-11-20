@@ -261,10 +261,16 @@
     };
 
     const active = (co.count || 0) > 0, watchOnly = co.status === 'WATCH';
-    const st = watchOnly
-      ? `<span class="dstatus off">${EN?'Watch news 1':'관심 뉴스 1건'}</span>`
+    // 국가 상태 배지 — 홈 지도(country_signals)와 같은 판정·같은 문구. "Watch"는 이 배지에만 쓴다.
+    const SIG_LV = {go:'positive', warn:'watch', stop:'risk', unknown:'unknown'};
+    const SIG_TXT = EN ? {go:'STABLE', warn:'WATCH', stop:'RISK', unknown:'NO DATA'}
+                       : {go:'안정', warn:'주의', stop:'경계', unknown:'데이터 없음'};
+    const sig = co.signal || 'unknown';
+    const sigBadge = `<span class="badge" data-level="${SIG_LV[sig]||'unknown'}" style="margin-left:6px">${SIG_TXT[sig]||SIG_TXT.unknown}</span>`;
+    const st = (watchOnly
+      ? `<span class="dstatus off">${EN?'Notable news 1':'관심 뉴스 1건'}</span>`
       : active ? `<span class="dstatus on">${EN?'News':'뉴스'} ${co.count}${EN?'':'건'}</span>`
-      : `<span class="dstatus off">${EN?'Watch':'관찰'}</span>`;
+      : `<span class="dstatus off">${EN?'No major news':'주요 뉴스 없음'}</span>`) + sigBadge;
     const dhead = `
       <div class="dhead">
         <span class="fbar" style="border-left-color:${active?'var(--gold)':'var(--line-2)'}">${svg('flr-'+co.cc.toLowerCase(),40,40,'rflag')}</span>
@@ -294,7 +300,7 @@
     if (rows.length) {
       feed = `<ul class="feed">` + rows.map((a,i) => `
         <li class="fitem" data-i="${i}">
-          <div class="fi-t">${a.watch?`<span class="watch-badge">${EN?'WATCH':'관심 뉴스'}</span>`:''}${esc(tt(a))}</div>
+          <div class="fi-t">${a.watch?`<span class="watch-badge">${EN?'NOTABLE':'관심 뉴스'}</span>`:''}${esc(tt(a))}</div>
           ${tq(a)?`<div class="fi-q">${esc(tq(a))}</div>`:''}
           <div class="fi-m"><span class="src">${esc(a.src||'')}</span>${a.d?`<span>${esc(md(a.d))}</span>`:''}
             <span style="margin-left:auto">${svg('ico-chev-r',15,15)}</span></div>

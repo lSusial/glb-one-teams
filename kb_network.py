@@ -21,7 +21,7 @@ KB_NETWORK: dict[str, dict] = {
     "SG": {"city": "싱가포르",  "type": "지점",   "entity": "KB 싱가포르지점"},
     "IN": {"city": "구르구람",  "type": "지점",   "entity": "KB 구르구람지점"},
     "VN": {"city": "하노이",    "type": "법인",   "entity": "KB 베트남법인"},
-    "MM": {"city": "양곤",      "type": "사무소", "entity": "KB 양곤사무소"},
+    "MM": {"city": "양곤",      "type": "법인",   "entity": "KB미얀마은행·KB MFI법인"},  # 2026-11 설문: 양곤사무소 아님
     "ID": {"city": "자카르타",  "type": "자회사", "entity": "PT Bank KB Indonesia Tbk (KBI은행)"},
     "KH": {"city": "프놈펜",    "type": "자회사", "entity": "KB 프라삭은행 (KB Prasac Bank)"},
     # TH·LA: 2026-08-28 진출국 편입(제품 기준) — 실제 KB 지점·법인 없음, 관심시장으로 관찰만.

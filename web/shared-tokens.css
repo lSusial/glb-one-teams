@@ -125,6 +125,8 @@ ul{margin:0;padding:0;list-style:none}
   background:currentColor;opacity:.45;animation:ripple 2.8s cubic-bezier(.2,.6,.3,1) infinite;
 }
 .mk-dot::after{animation-delay:1.4s}
+/* 파동은 scale(3.6)까지 커져 이웃 국가 점을 덮는다 — 호버·클릭은 점 자체만(2026-11 설문: 밀집 지역 오선택) */
+.mk-dot::before,.mk-dot::after,.mk-hq::before{pointer-events:none}
 @keyframes ripple{0%{transform:scale(1);opacity:.42}70%{opacity:0}100%{transform:scale(3.6);opacity:0}}
 .mk[data-level="risk"] .mk-dot{background:var(--risk);color:var(--risk)}
 .mk[data-level="watch"] .mk-dot{background:var(--watch);color:var(--watch)}

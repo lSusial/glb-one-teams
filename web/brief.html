@@ -404,6 +404,24 @@
     }
     wrap.addEventListener('pointerdown', () => { paused = true; });
     wrap.addEventListener('pointerup', () => { resumeAt = performance.now() + 2500; });
+    // 마우스는 스와이프가 안 돼 화면 폭만큼(3~4개)만 보였다(2026-11 설문) — 드래그로 넘긴다.
+    const wrapAround = () => { const half = track.scrollWidth / 2;
+      if (half > 0 && wrap.scrollLeft >= half) wrap.scrollLeft -= half;
+      else if (wrap.scrollLeft <= 0) wrap.scrollLeft += half; };
+    let dragX = null, dragFrom = 0;
+    wrap.style.cursor = 'grab';
+    wrap.addEventListener('pointerdown', (e) => {
+      if (e.pointerType !== 'mouse') return;
+      dragX = e.clientX; dragFrom = wrap.scrollLeft; wrap.style.cursor = 'grabbing'; e.preventDefault();
+    });
+    window.addEventListener('pointermove', (e) => {
+      if (dragX === null) return;
+      wrap.scrollLeft = dragFrom - (e.clientX - dragX); wrapAround();
+    });
+    window.addEventListener('pointerup', () => {
+      if (dragX === null) return;
+      dragX = null; wrap.style.cursor = 'grab'; if (!canHover) return; paused = wrap.matches(':hover');
+    });
     function step(now){
       if (paused && resumeAt && now >= resumeAt) { paused = false; resumeAt = 0; }
       if (!paused) {
