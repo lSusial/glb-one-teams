@@ -116,20 +116,39 @@ def _system_highlights(count: int) -> str:
 
 # 오늘의 탑이슈 퀴즈 — daily_highlights 항목 중 하나를 골라 2~4지선다 1문항 생성(하루 1회 1콜).
 _SYSTEM_QUIZ = (
-    "You are creating ONE short, easy multiple-choice quiz question for KB bank employees, "
-    "based strictly on today's top global financial news items below. Pick ONE simple, "
-    "concrete, verifiable fact explicitly stated in the items (a number, a country, a bank "
-    "name, a rate, a policy action) — not analysis or opinion. Write the question so an "
-    "employee who skimmed today's headlines can answer it. Provide 2-4 answer choices "
-    "(exactly one correct), in BOTH Korean and English, in the SAME order so index i means "
-    "the same choice in both languages. Output ONLY JSON:\n"
+    "You are creating ONE multiple-choice quiz question for KB bank employees based strictly on "
+    "today's top global financial news items below. Goal: an employee who read today's headlines "
+    "can answer it AND learns something useful for banking work.\n"
+    "Rules:\n"
+    "1. Prefer questions about WHO/WHERE/WHAT ACTION/WHY IT MATTERS (which country, which central "
+    "bank or regulator, what measure was taken, what it means for banks) over recalling a number. "
+    "Follow the numeric-question instruction in the input.\n"
+    "2. Exactly one choice is correct and is stated in the source item. The question must have only "
+    "one defensible answer.\n"
+    "3. Distractors must be the SAME kind and unit as the answer (all countries, all institutions, "
+    "all percentages, all amounts in the same currency and magnitude) and plausible — never reuse an "
+    "unrelated number from the article with a different unit.\n"
+    "4. Do not put a date or year in the question unless it appears in the source item.\n"
+    "5. Korean fields must be natural Korean: write money as 조/억 원·달러 (never trillion/billion "
+    "in Korean), no Japanese kana.\n"
+    "6. Do not repeat or paraphrase any recently asked question listed in the input.\n"
+    "7. 2-4 choices, the SAME order in Korean and English.\n"
+    "Output ONLY JSON:\n"
     '{"question_ko": "퀴즈 질문(한국어)", "question_en": "the question (English)", '
     '"choices_ko": ["선택지1", "선택지2", "..."], "choices_en": ["choice1", "choice2", "..."], '
     '"correct_index": 0, '
-    '"explanation_ko": "정답 근거 1문장", "explanation_en": "1-sentence reason for the answer", '
+    '"explanation_ko": "정답 근거 1문장 + KB(은행) 관점 시사점 1문장", '
+    '"explanation_en": "1-sentence reason + 1-sentence implication for a bank like KB", '
     '"source_article_id": 123}\n'
     '"source_article_id" must be exactly one of the article_id values shown in the input.'
     + numeric_guard.PRESERVE_MONEY_PROMPT
+)
+
+# 퀴즈 검증용 — 정답을 숨긴 채 출처만 보고 풀게 한다(오답 보기·모호한 문제·사실 오류 차단).
+_SYSTEM_QUIZ_CHECK = (
+    "Answer the multiple-choice question using ONLY the SOURCE text. "
+    "If the source does not state the answer, or more than one choice could be correct, say so. "
+    'Output ONLY JSON: {"answer_index": 0, "answerable": true, "ambiguous": false, "reason": "short"}'
 )
 
 
@@ -714,15 +733,121 @@ def _validate_quiz(data: dict, allowed_ids: set[int]) -> dict | None:
     }
 
 
+# 2026-11-20 퀴즈 품질 점검(39문항): 정답이 1·2번에만 몰림(4번 0회), 같은 기사 재출제 5건,
+# 오답 보기를 기사 속 다른 숫자에서 단위째 가져와 정답이 드러남("69.72달러 / 5,050.43포인트"),
+# 숫자 암기형 80%, 번역 안 된 단위("1.04 trillion 달러")·연도 오류. 아래 규칙은 그 대응이다.
+_QUIZ_RECENT_DAYS = 14          # 이 기간에 출제한 기사는 후보에서 뺀다
+_QUIZ_NUMERIC_PER_WEEK = 2      # 최근 7일 숫자형 문제가 이만큼이면 오늘은 숫자형 금지
+_QUIZ_MAX_ATTEMPTS = 3
+_UNTRANSLATED_UNIT = re.compile(r"\b(?:trillion|billion|million|bn|mn)\b", re.I)
+_YEAR = re.compile(r"(?<!\d)(20\d\d)(?!\d)")
+
+
+_UNIT_FAMILIES = [  # (패턴, 계열) — 앞에서부터 매칭. 자릿수(만·억·조·billion)는 계열에 넣지 않는다.
+    (r"S\$|SGD|싱가포르\s*달러", "SGD"), (r"HK\$|HKD|홍콩\s*달러", "HKD"),
+    (r"US\$|\$|USD|달러(?!당)", "USD"), (r"달러당|per\s+dollar", "FX"),
+    (r"루피아|IDR", "IDR"), (r"루피|INR|₹", "INR"), (r"위안|CNY|RMB", "CNY"), (r"엔|JPY|¥", "JPY"),
+    (r"바트|THB", "THB"), (r"동(?![가-힣])|VND", "VND"), (r"원(?![가-힣])|KRW", "KRW"), (r"리엘|KHR", "KHR"),
+    (r"%p|%|bp|퍼센트", "PCT"), (r"포인트|points?|pt", "PTS"), (r"배럴|barrels?", "BBL"),
+    (r"\d\s*(?:년|월|일)|\b(?:19|20)\d\d\b", "DATE"),
+    (r"개|명|건|곳|조항|차례|times?", "COUNT"),
+]
+_UNIT_STRIP = re.compile(r"[\d.,\s~+\-:/()]|약|대략|about|approx\.?|만|억|조|천|trillion|billion|million|bn|mn|주당|per\s+share",
+                         re.I)
+
+
+def _choice_signature(choice: str) -> str:
+    """보기의 단위 계열 — 숫자가 없으면 'text', 단위 밖 글자가 많으면 문장형 'desc'."""
+    if not re.search(r"\d", choice):
+        return "text"
+    fams, rest = set(), choice
+    for pat, fam in _UNIT_FAMILIES:
+        if re.search(pat, rest, re.I):
+            fams.add(fam)
+            if fam == "FX":   # '달러당 94루피'는 FX+통화 조합 — 뒤 통화도 계열에 넣는다
+                continue
+            rest = re.sub(pat, "", rest, flags=re.I)
+    rest = _UNIT_STRIP.sub("", rest)
+    if len(re.findall(r"[가-힣A-Za-z]", rest)) > 4:
+        return "desc"
+    return "+".join(sorted(fams)) or "num"
+
+
+def _is_numeric_quiz(choices: list[str]) -> bool:
+    return all(_choice_signature(c) not in ("text", "desc") for c in choices)
+
+
+def _quiz_issues(quiz: dict, source_text: str, source_date: str | None,
+                 numeric_allowed: bool = True) -> list[str]:
+    """코드로 잡을 수 있는 퀴즈 결함 목록(비어 있으면 통과)."""
+    issues = []
+    sigs = {_choice_signature(c) for c in quiz["choices_ko"]}
+    if "desc" in sigs:   # 문장형 보기('25bp 인상했다' vs '동결했다')는 단위 비교 대상이 아니다
+        sigs = set()
+    if len(sigs) > 1:
+        issues.append(f"보기 단위·종류 불일치 {sorted(sigs)}")
+    if len(set(quiz["choices_ko"])) != len(quiz["choices_ko"]):
+        issues.append("중복 보기")
+    ko_text = " ".join([quiz["question_ko"], *quiz["choices_ko"], quiz["explanation_ko"]])
+    if _UNTRANSLATED_UNIT.search(ko_text):
+        issues.append("한국어에 번역 안 된 단위")
+    if text_quality.KANA_RE.search(ko_text):
+        issues.append("한국어에 가나 혼입")
+    allowed_years = set(_YEAR.findall(source_text or "")) | ({source_date[:4]} if source_date else set())
+    bad_years = set(_YEAR.findall(quiz["question_ko"] + " " + quiz["question_en"])) - allowed_years
+    if bad_years:
+        issues.append(f"출처에 없는 연도 {sorted(bad_years)}")
+    correct = quiz["choices_ko"][quiz["correct_index"]] + " " + quiz["choices_en"][quiz["correct_index"]]
+    if numeric_guard.amount_mismatch(source_text or "", correct):
+        issues.append("정답 금액이 출처와 불일치")
+    if not numeric_allowed and _is_numeric_quiz(quiz["choices_ko"]):
+        issues.append("숫자형 문제 제한 초과")
+    return issues
+
+
+def _shuffle_quiz(quiz: dict, seed: str) -> dict:
+    """보기 순서를 섞어 정답 위치 편향을 없앤다. 한·영 순서는 함께 움직인다(날짜 고정 시드)."""
+    import random
+    order = list(range(len(quiz["choices_ko"])))
+    random.Random(seed).shuffle(order)
+    out = dict(quiz)
+    out["choices_ko"] = [quiz["choices_ko"][i] for i in order]
+    out["choices_en"] = [quiz["choices_en"][i] for i in order]
+    out["correct_index"] = order.index(quiz["correct_index"])
+    return out
+
+
+def _verify_quiz(provider, quiz: dict, source_text: str) -> str | None:
+    """정답을 숨긴 채 출처만 보고 풀게 한다. 실패 사유(없으면 None)."""
+    choices = "\n".join(f"{i}. {c}" for i, c in enumerate(quiz["choices_en"]))
+    user = f"SOURCE:\n{source_text}\n\nQUESTION: {quiz['question_en']}\nCHOICES:\n{choices}"
+    try:
+        res = provider.complete_json(_SYSTEM_QUIZ_CHECK, user, max_tokens=300)
+    except Exception as e:  # 검증 호출 실패는 '검증 못 함'으로 처리해 저장하지 않는다
+        return f"검증 호출 실패: {e}"
+    if not isinstance(res, dict):
+        return "검증 응답 무효"
+    if res.get("ambiguous") or res.get("answerable") is False:
+        return f"모호/출처로 답 불가: {res.get('reason', '')}"[:200]
+    try:
+        ans = int(res.get("answer_index"))
+    except (TypeError, ValueError):
+        return "검증 답 없음"
+    if ans != quiz["correct_index"]:
+        return f"검증 답({ans})과 정답({quiz['correct_index']}) 불일치: {res.get('reason', '')}"[:200]
+    return None
+
+
 def generate_daily_quiz(
     conn,
     provider: LLMProvider | None = None,
     target_date: str | None = None,
 ) -> dict:
-    """오늘의 글로벌 핵심(daily_highlights) 기사 중 하나를 골라 2~4지선다 퀴즈 1개 생성.
+    """오늘의 글로벌 핵심(daily_highlights) 기사 중 하나로 2~4지선다 퀴즈 1개 생성.
     main.py ai 파이프라인상 generate_daily_highlights 바로 다음 단계 — 그 결과물을 입력으로 쓴다.
-    LLM은 하루 1회 1콜(배치 아님). highlights가 없거나 응답이 무효면 저장하지 않는다
-    (화면은 퀴즈 블록을 숨김).
+    생성 → 코드 검증(_quiz_issues) → 보기 섞기 → 정답 가린 풀이 검증(_verify_quiz) 순서로,
+    통과하지 못하면 사유를 알려주며 최대 _QUIZ_MAX_ATTEMPTS번 다시 만든다. 끝내 실패하면
+    저장하지 않는다(화면은 퀴즈 블록을 숨김).
     """
     ensure_quiz_table(conn)
     tdate = target_date or date.today().isoformat()
@@ -743,29 +868,67 @@ def generate_daily_quiz(
         log.info("퀴즈 — 핵심 항목에 출처 없음, 스킵")
         return {"written": 0}
 
+    since = (date.fromisoformat(tdate) - timedelta(days=_QUIZ_RECENT_DAYS)).isoformat()
+    recent = conn.execute(
+        "SELECT date, question_ko, choices_ko, source_article_id FROM daily_quiz "
+        "WHERE date >= ? AND date < ? ORDER BY date DESC", (since, tdate)).fetchall()
+    used = {r["source_article_id"] for r in recent}
+    week_ago = (date.fromisoformat(tdate) - timedelta(days=7)).isoformat()
+    numeric_recent = sum(1 for r in recent if r["date"] >= week_ago
+                         and _is_numeric_quiz(json.loads(r["choices_ko"] or "[]")))
+    numeric_allowed = numeric_recent < _QUIZ_NUMERIC_PER_WEEK
+
     placeholders = ",".join("?" for _ in source_ids)
     arts = conn.execute(
-        f"SELECT article_id, title, summary_ko, summary_en FROM articles_raw "
+        f"SELECT article_id, title, title_en, summary_ko, summary_en, published_at FROM articles_raw "
         f"WHERE article_id IN ({placeholders})",
         source_ids,
     ).fetchall()
-    allowed_ids = {r["article_id"] for r in arts}
-    if not allowed_ids:
+    fresh = [r for r in arts if r["article_id"] not in used]
+    arts = fresh or arts   # 전부 최근 출제분이면 어쩔 수 없이 전체 사용
+    by_id = {r["article_id"]: r for r in arts}
+    if not by_id:
         return {"written": 0}
+
+    def src_text(r) -> str:
+        return " ".join(x for x in (r["title"], r["title_en"], r["summary_en"], r["summary_ko"]) if x)
 
     bullets = "\n".join(
         f"- [article_id={r['article_id']}] {r['title']} :: "
-        f"{((r['summary_ko'] or r['summary_en']) or '')[:200]}"
+        f"{((r['summary_en'] or r['summary_ko']) or '')[:400]}"
         for r in arts
     )
-    user = f"오늘의 글로벌 핵심 기사 목록:\n{bullets}"
+    recent_qs = "\n".join(f"- {r['question_ko']}" for r in recent[:10]) or "- (없음)"
+    rule = ("오늘은 숫자를 맞히는 문제 금지 — 국가·기관·조치·의미를 묻는 문제로."
+            if not numeric_allowed else "숫자 문제도 가능하나 다른 유형을 우선 고려.")
+    base_user = (f"오늘의 글로벌 핵심 기사 목록:\n{bullets}\n\n"
+                 f"최근 출제한 문제(같은 사건·주제 재출제 금지):\n{recent_qs}\n\n{rule}")
 
     provider = provider or get_provider("smart", use_batch=False)
-    data = provider.complete_json(_SYSTEM_QUIZ, user, max_tokens=700)
-    quiz = _validate_quiz(data, allowed_ids)
+    rejected: list[str] = []
+    quiz = None
+    for attempt in range(1, _QUIZ_MAX_ATTEMPTS + 1):
+        user = base_user + ("\n\n이전 시도 탈락 사유(반복 금지):\n" + "\n".join(rejected) if rejected else "")
+        cand = _validate_quiz(provider.complete_json(_SYSTEM_QUIZ, user, max_tokens=900), set(by_id))
+        if not cand:
+            rejected.append("- 형식 무효")
+            continue
+        src = by_id[cand["source_article_id"]]
+        issues = _quiz_issues(cand, src_text(src), src["published_at"], numeric_allowed)
+        if not issues:
+            cand = _shuffle_quiz(cand, f"{tdate}:{attempt}")
+            fail = _verify_quiz(provider, cand, src_text(src))
+            if fail:
+                issues = [fail]
+        if issues:
+            log.info("퀴즈 시도 %d 탈락 — %s: %s", attempt, "; ".join(issues), cand["question_ko"][:50])
+            rejected.append(f"- \"{cand['question_ko'][:60]}\" → {'; '.join(issues)}")
+            continue
+        quiz = cand
+        break
     if not quiz:
-        log.info("퀴즈 — LLM 응답 무효, 스킵")
-        return {"written": 0}
+        log.info("퀴즈 — %d회 시도 모두 탈락, 스킵", _QUIZ_MAX_ATTEMPTS)
+        return {"written": 0, "rejected": rejected}
 
     conn.execute(
         """
@@ -788,8 +951,5 @@ def generate_daily_quiz(
          quiz["source_article_id"], provider.model_id),
     )
     conn.commit()
-    log.info("퀴즈 생성 완료 — %s", quiz["question_ko"][:60])
-    return {"written": 1}
-
-    log.info("글로벌 핵심 완료 — 항목=%d  (%s)", len(items), tdate)
-    return {"written": len(items)}
+    log.info("퀴즈 생성 완료(시도 %d) — %s", attempt, quiz["question_ko"][:60])
+    return {"written": 1, "rejected": rejected}
